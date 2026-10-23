@@ -1,0 +1,17 @@
+name: sitepulse-tests
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sitepulse_test
+      POSTGRES_PASSWORD: sitepulse_test
+      POSTGRES_DB: sitepulse_test
+    ports:
+      - '127.0.0.1:5433:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sitepulse_test -d sitepulse_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30

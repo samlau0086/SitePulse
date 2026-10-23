@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - '@node-rs/argon2'
+  - esbuild
+  - sharp
+
+# Patch the unused legacy development-server dependency pulled by Drizzle tooling.
+overrides:
+  '@esbuild-kit/core-utils>esbuild': '0.25.12'

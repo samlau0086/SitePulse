@@ -1,0 +1,27 @@
+# Security controls and launch gaps
+
+Implemented controls:
+
+- Maintained Better Auth session/password flow; Argon2id passwords, minimum 12 characters, bounded 128-character input, no password logging.
+- Database-backed, revocable, expiring sessions; HttpOnly/SameSite cookies, Secure in production. Production startup requires an HTTPS public origin and a non-placeholder auth secret of at least 32 characters.
+- Exact trusted-Origin checks on all mutations protect against CSRF, including login CSRF. No permissive CORS. Client session tokens are excluded from response JSON.
+- Server-side tenant membership and owner/admin role checks, immediate membership revocation, transactional organization creation and changes.
+- Strict request schemas, SQL parameterization, UUID validation, bounded JSON body sizes, per-IP auth throttling, generic errors, generated request IDs, no request-body logging.
+- Sanitized security audit records; no password, email, session token, cookie, or authorization-header metadata. Authentication events are global (no tenant yet) and are not exposed through tenant audit routes.
+- Production DB has no published ports, a private network, non-root application containers, and reproducible dependency locks. CI scans production dependencies.
+
+Password recovery and email verification use Better Auth: reset links expire in 30 minutes, are consumed atomically with the adapter transaction enabled, and revoke existing sessions. Verification links expire in one hour; repeat confirmation is idempotent and never creates a session. New accounts receive verification mail. Basic workspace access remains available before verification; connector management requires verified email. Mail links use fragments and confirmation is an Origin-protected POST. Public email requests are generic and rate limited. Development outbox files contain secrets and must remain private. Production uses Resend over HTTPS and refuses file transport. Mail is sent inline; latency may differ between known and unknown recovery addresses and delivery has no durable retry queue yet.
+
+Launch gaps: no MFA, compromised-password check, account/session management UI, account deletion, shared rate-limit storage, or trusted end-user IP propagation exists. Direct host API binds all interfaces for container compatibility; restrict port 4000 at the host firewall when developing on untrusted networks. Production Compose does not publish the API.
+
+The initial API process rate limiter must remain single-instance; behind the Next proxy, visitors can share its connection IP. Before public deployment, add shared throttling with a defined proxy trust boundary, add account-targeted abuse controls, and validate limits against real traffic. Login audit writes are separate from Better Auth's account/session transaction: an audit failure fails the request, but an auth database operation may already have completed. Organization mutations and their audit records are atomic.
+
+No browser end-to-end test suite, independent penetration test, production TLS proxy test, backup scheduler, session cleanup scheduler, audit retention policy, or incident on-call integration is included. Expired sessions are rejected, but old rows require future retention jobs. Keep encrypted backups and database access restricted; Better Auth session tokens are sensitive data stored by the maintained adapter. Do not treat the foundation as the full security acceptance of the product specification.
+
+Connector controls include verified-email administrator writes, transaction-held membership locks, tenant predicates on site reads, 256-bit short-lived single-use pairing codes, hash-only server credential storage, immediate rotation/revocation, strictly increasing heartbeat sequences, server receipt timestamps, and sanitized transactional audit events. Every mutation, including connector requests, requires the exact trusted Origin. Origin is not connector authentication; its bearer credential is site-scoped.
+
+Site registration rejects non-public DNS answers and unsafe URL syntax; there are no customer URL fetches. Future monitoring requires connection-time address pinning and DNS/redirect revalidation; registration checks alone are insufficient. The WordPress client uses wp_safe_remote_post, validated HTTPS origins, TLS verification, zero redirects, response limits and timeouts. Local WordPress options contain the secret with autoload disabled; protect the WP database/backups. A stolen pairing code can pair its scoped site until expiration; it is not an independent domain-ownership proof.
+
+Plugin administration requires manage_options and a nonce. Heartbeats are cron-driven; deactivation stops them, while uninstall removes local credentials and cannot revoke an unreachable server. Disconnect first or revoke from the SaaS. Multisite is blocked. Only connector freshness is monitored; no uptime, inventory, remote commands, billing or alerts are implemented.
+
+Before public pilot: complete live WordPress acceptance, set a private disclosure contact, review data retention/deletion, verify backup restoration, configure a verified sender and test actual email delivery, verify TLS and headers, review dependency audit results, and repeat cross-tenant tests for every new tenant-owned resource. WordPress external monitoring must ship with SSRF-safe DNS, IP, redirect, timeout, and size controls in the same milestone.

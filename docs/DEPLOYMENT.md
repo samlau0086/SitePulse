@@ -1,0 +1,32 @@
+# Deployment, backups, and rollback
+
+This repository supplies deployment configuration; it does not deploy or alter any production environment. Production changes require explicit authorization.
+
+## Local containers
+
+Prepare `.env` as described in README.md, then run:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail 100 sitepulse-api sitepulse-migrate
+```
+
+Only the development override publishes PostgreSQL, bound to `127.0.0.1`. That file also enables non-Secure cookies for local HTTP. Use a base64url DB password; other passwords must be URL-encoded in connection strings. Changing `POSTGRES_PASSWORD` does not rotate an initialized database's password; perform rotation explicitly.
+
+## Production preparation
+
+Use the base `docker-compose.yml` only. Set `APP_ORIGIN=https://your-hostname` with no path/trailing slash, an independent random `BETTER_AUTH_SECRET`, and independent production DB credentials. Prefer injection from a secret manager. Compose rejects empty required secrets; API validation rejects malformed or placeholder configuration. Do not print resolved Compose configuration where it can expose credentials; use `docker compose config --quiet`.
+
+The base configuration publishes only `127.0.0.1:3000`. Run an HTTPS host reverse proxy with a valid certificate. Preserve browser Origin, reject unrecognized hostnames, and apply request timeouts and limits. The API and PostgreSQL are not public; the database network is internal. The public Next rewrite destination is compiled into the web image; rebuilding is required if the internal service origin changes.
+
+Back up the database and record the currently deployed image/source revision before any migration. Build and test the candidate in staging. Start only one migration runner. Compose waits for database readiness, applies migrations, then starts the API, heartbeat worker and web. A migration failure prevents application startup. Inspect migration and health results before routing traffic. Verify the worker process remains running and stale transitions are applied; the worker does not expose a network health endpoint.
+
+Set AUTH_MAIL_TRANSPORT=resend, AUTH_MAIL_FROM to a verified provider sender, and inject RESEND_API_KEY privately. Confirm actual signup verification and reset delivery in staging. Mail is synchronous without a durable retry queue; generic public responses do not confirm delivery. Protect `.local/mail` development outbox and ensure the bind mount is writable by the container's node user. The worker requires only database/freshness settings and cannot send email.
+
+No reverse proxy, managed TLS, automated backup scheduling, deployment-specific resource limits, or production monitoring is bundled. These need environment-specific configuration before launch. API runtime currently includes build tooling; prune it in a later deployment hardening task.
+
+## Backup and recovery
+
+Use `pg_dump --format=custom` against a private database connection using a protected credentials mechanism (such as `PGPASSFILE`), encrypt the dump, and store it outside the server. Never place dumps inside Git or a public web directory. Set retention and access policies before production. A backup is verified only after a successful restore drill into an isolated database.
+
+For an application-only regression with a compatible schema, restore the previous recorded image revision and check API health and login/organization flows. Schema migrations are forward-only: prefer a reviewed corrective migration. For destructive or incompatible changes, stop writes, restore the verified pre-migration backup into a separate database, validate data, then cut over during an authorized maintenance window. Restoring an older backup can lose later writes; plan reconciliation. Never run an automatic destructive down-migration or `docker compose down -v` on production.

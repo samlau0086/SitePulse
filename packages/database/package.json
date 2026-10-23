@@ -1,0 +1,19 @@
+{
+  "name": "@sitepulse/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./client/index.ts",
+    "./schema": "./schema/index.ts",
+    "./migrate": "./client/migrations.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sitepulse/config": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "pg": "^8.16.3"
+  }
+}

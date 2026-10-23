@@ -1,0 +1,98 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: light;
+}
+body {
+  margin: 0;
+  background: #f5f7fa;
+  color: #172b36;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.6;
+}
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #d6dfe4;
+  background: white;
+}
+a {
+  color: #125c58;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 1rem;
+}
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+p {
+  margin: 1rem 0;
+}
+form,
+.card {
+  border: 1px solid #d6dfe4;
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: white;
+  margin: 1.5rem 0;
+}
+label {
+  display: block;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+input {
+  width: 100%;
+  border: 1px solid #738a94;
+  border-radius: 6px;
+  padding: 0.65rem;
+  margin: 0.25rem 0 0.75rem;
+}
+button,
+.button {
+  display: inline-block;
+  background: #125c58;
+  color: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.65rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+:focus-visible {
+  outline: 3px solid #b66a00;
+  outline-offset: 3px;
+}
+[role='alert'] {
+  color: #9c2020;
+}
+ul {
+  padding-left: 1.5rem;
+  list-style: disc;
+}
+.auth {
+  max-width: 480px;
+}
+.muted {
+  color: #526976;
+}

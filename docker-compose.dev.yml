@@ -1,0 +1,14 @@
+# Explicit local override. Never use this file in production.
+services:
+  sitepulse-db:
+    ports:
+      - '127.0.0.1:5432:5432'
+  sitepulse-migrate:
+    environment:
+      NODE_ENV: development
+  sitepulse-api:
+    environment:
+      NODE_ENV: development
+      AUTH_MAIL_TRANSPORT: file
+    volumes:
+      - ./.local/mail:/app/.local/mail

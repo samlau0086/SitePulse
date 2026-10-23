@@ -1,0 +1,42 @@
+{
+  "name": "sitepulse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.18.0 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @sitepulse/api --filter @sitepulse/web --filter @sitepulse/worker dev",
+    "build": "pnpm --filter @sitepulse/api build && pnpm --filter @sitepulse/worker build && pnpm --filter @sitepulse/web build",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:plugin": "node scripts/test-plugin.mjs",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "db:migrate": "tsx --env-file=.env packages/database/client/migrate.ts",
+    "db:generate": "drizzle-kit generate --config packages/database/drizzle.config.ts",
+    "db:check": "drizzle-kit check --config packages/database/drizzle.config.ts",
+    "compose:check": "node scripts/validate-compose.mjs",
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "test:db:down": "docker compose -f docker-compose.test.yml down -v"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.19.0",
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^4.0.0"
+  }
+}

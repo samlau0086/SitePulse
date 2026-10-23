@@ -1,0 +1,16 @@
+{
+  "name": "@sitepulse/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sitepulse/config": "workspace:*",
+    "@sitepulse/database": "workspace:*",
+    "tsx": "^4.20.6"
+  }
+}

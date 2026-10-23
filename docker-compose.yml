@@ -1,0 +1,116 @@
+name: sitepulse
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://${POSTGRES_USER:-sitepulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@sitepulse-db:5432/${POSTGRES_DB:-sitepulse}
+  APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your public HTTPS origin}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
+  API_PORT: '4000'
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  AUTH_MAIL_TRANSPORT: ${AUTH_MAIL_TRANSPORT:-resend}
+  AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-no-reply@localhost.test}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+
+services:
+  sitepulse-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sitepulse}
+      POSTGRES_USER: ${POSTGRES_USER:-sitepulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  sitepulse-migrate:
+    build:
+      context: .
+      target: api
+    command: ['node', '--import', 'tsx', 'packages/database/client/migrate.ts']
+    environment: *api-environment
+    networks: [database]
+    depends_on:
+      sitepulse-db:
+        condition: service_healthy
+    restart: 'no'
+
+  sitepulse-api:
+    build:
+      context: .
+      target: api
+    environment: *api-environment
+    networks: [application, database]
+    depends_on:
+      sitepulse-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    init: true
+    restart: unless-stopped
+
+  sitepulse-worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sitepulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@sitepulse-db:5432/${POSTGRES_DB:-sitepulse}
+      HEARTBEAT_STALE_SECONDS: ${HEARTBEAT_STALE_SECONDS:-2700}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-60}
+    networks: [database]
+    depends_on:
+      sitepulse-migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+
+  sitepulse-web:
+    build:
+      context: .
+      target: web
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_ORIGIN: http://sitepulse-api:4000
+      HOSTNAME: 0.0.0.0
+      PORT: '3000'
+    ports:
+      - '127.0.0.1:3000:3000'
+    networks: [application]
+    depends_on:
+      sitepulse-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    init: true
+    restart: unless-stopped
+
+volumes:
+  database:
+
+networks:
+  application:
+  database:
+    internal: true

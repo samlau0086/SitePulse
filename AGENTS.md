@@ -1,0 +1,16 @@
+# SitePulse contributor rules
+
+Read docs/PRODUCT_SPECIFICATION.md before changing architecture. Work on one milestone at a time.
+
+- Use Next.js in apps/web, Fastify in apps/api, and Drizzle/PostgreSQL in packages/database.
+- All organization data access must check the authenticated user's membership on the server. Never trust a client-supplied user, role, owner, or plan.
+- Use Better Auth for authentication. Never implement custom session or password protocols. Keep cookies HttpOnly, SameSite, and Secure in production; require a trusted Origin on mutations.
+- Validate environment variables through packages/config and requests through packages/api-contracts.
+- Never commit secrets, .env files, customer data, database volumes, or session tokens. Never log credentials, cookies, or request bodies.
+- Keep database migrations immutable once applied. Back up production databases before migrations; production changes require explicit authorization.
+- Keep PostgreSQL private in production. Only the web container may publish an application port, bound to loopback by default.
+- Do not add WordPress monitoring, billing, notifications, or remote WordPress execution to the foundation milestone.
+- Future monitoring requires SSRF defenses before any URL-fetching feature is enabled.
+- Update README.md, CHANGELOG.md, and relevant docs with behavior changes.
+- Run `pnpm check`, `pnpm test:integration`, `pnpm build`, and Compose validation. Report failures and checks that could not run without claiming success.
+- Do not weaken isolation or authentication to make a test pass. Integration tests must use a dedicated disposable PostgreSQL database.

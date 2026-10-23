@@ -1,0 +1,27 @@
+{
+  "name": "@sitepulse/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/swagger": "^9.5.2",
+    "@node-rs/argon2": "^2.0.2",
+    "@sitepulse/api-contracts": "workspace:*",
+    "@sitepulse/config": "workspace:*",
+    "@sitepulse/database": "workspace:*",
+    "@sitepulse/shared": "workspace:*",
+    "better-auth": "1.7.12",
+    "fastify": "^5.6.2",
+    "ipaddr.js": "^2.5.0",
+    "tsx": "^4.20.6",
+    "zod": "^4.1.12"
+  }
+}

@@ -69,9 +69,10 @@ assert.equal(
 const release = '0123456789012345678901234567890123456789-123-1';
 const deployed = configuration(['docker-compose.yml'], {
   SITEPULSE_RELEASE: release,
-  WEB_BIND_PORT: '3001',
+  WEB_BIND_PORT: '18080',
 });
-assert.equal(deployed.services['sitepulse-web'].ports[0].published, '3001');
+assert.equal(deployed.services['sitepulse-web'].ports[0].published, '18080');
+assert.equal(deployed.services['sitepulse-web'].ports[0].target, 3000);
 assert.equal(deployed.services['sitepulse-web'].ports[0].host_ip, '127.0.0.1');
 for (const service of ['api', 'worker', 'web']) {
   assert.equal(

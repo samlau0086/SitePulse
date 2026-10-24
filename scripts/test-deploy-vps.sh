@@ -11,7 +11,7 @@ export PATH="$fixture/bin:$PATH"
 cat > "$fixture/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 set -eu
-printf '%s\n' "$*" >> "$CALLS"
+printf '%s\n' "port=$WEB_BIND_PORT $*" >> "$CALLS"
 if [[ "$*" == *' build '* && "${FAIL_AT:-}" == build ]]; then exit 1; fi
 if [[ "$*" == *' run '* && "$*" == *'parseEnvironment'* && "${FAIL_AT:-}" == config ]]; then exit 1; fi
 if [[ "$*" == *' exec '* ]]; then
@@ -32,6 +32,7 @@ cat
 STUB
 cat > "$fixture/bin/curl" <<'STUB'
 #!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$CALLS"
 [[ "${FAIL_AT:-}" != https ]]
 STUB
 chmod +x "$fixture/bin/"*
@@ -65,7 +66,20 @@ rm -f "$root/backups/$release.dump.age.partial"
 bash "$workspace/scripts/deploy-vps.sh" staging "$release"
 [[ $(readlink "$root/current") == "$root/releases/$release" ]]
 [[ $(<"$root/current-release.txt") == "$release" && -s "$root/backups/$release.dump.age" ]]
+[[ $(<"$root/current-web-bind-port.txt") == 3000 ]]
 echo 'Deployment success recording passed'
+bash "$workspace/scripts/deploy-vps.sh" staging "$release" 18080 > "$fixture/output" 2>&1
+[[ $(<"$root/current-web-bind-port.txt") == 18080 ]]
+grep -q 'port=18080 compose' "$CALLS"
+grep -q 'http://127.0.0.1:18080/api/v1/health' "$CALLS"
+echo 'Custom application port passed through Compose, health check and release record'
+for invalid_port in 0 65536 03000 '3000;echo injected'; do
+  : > "$CALLS"
+  if bash "$workspace/scripts/deploy-vps.sh" staging "$release" "$invalid_port" > "$fixture/output" 2>&1; then exit 1; fi
+  [[ ! -s "$CALLS" ]]
+  grep -q 'WEB_BIND_PORT must be' "$fixture/output"
+done
+echo 'Invalid application ports rejected before infrastructure changes'
 if bash "$workspace/scripts/deploy-vps.sh" invalid "$release" >/dev/null 2>&1; then exit 1; fi
 if bash "$workspace/scripts/deploy-vps.sh" staging '../escape' >/dev/null 2>&1; then exit 1; fi
 echo 'Deployment argument validation passed'

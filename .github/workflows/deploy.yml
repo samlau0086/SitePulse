@@ -21,6 +21,7 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
       VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      WEB_BIND_PORT: ${{ vars.WEB_BIND_PORT || (inputs.environment == 'production' && '3001' || '3000') }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
@@ -29,18 +30,23 @@ jobs:
       - name: Upload checked source and deploy over SSH
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           umask 077
-          [[ "$DEPLOY_ENVIRONMENT" =~ ^(staging|production)$ ]]
-          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
-          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
-          [[ "$VPS_PORT" =~ ^[0-9]{1,5}$ ]] && (( VPS_PORT >= 1 && VPS_PORT <= 65535 ))
-          [[ -n "$VPS_SSH_KEY" ]]
+          phase='configuration validation'
+          trap 'status=$?; echo "::error::Deployment failed during $phase (exit $status). See the preceding diagnostic; no credential values are printed." >&2' ERR
+          fail() { echo "::error::$1" >&2; exit 1; }
+          [[ "$DEPLOY_ENVIRONMENT" =~ ^(staging|production)$ ]] || fail 'Invalid deployment environment.'
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || fail 'Set VPS_HOST to a hostname or IPv4 address without protocol, port or path.'
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail 'Set VPS_USER to a valid Linux account name.'
+          if [[ ! "$VPS_PORT" =~ ^[1-9][0-9]{0,4}$ ]] || (( VPS_PORT > 65535 )); then fail 'VPS_PORT must be an SSH port from 1 to 65535.'; fi
+          if [[ ! "$WEB_BIND_PORT" =~ ^[1-9][0-9]{0,4}$ ]] || (( WEB_BIND_PORT > 65535 )); then fail 'WEB_BIND_PORT must be an application host port from 1 to 65535.'; fi
+          [[ -n "$VPS_SSH_KEY" ]] || fail 'Set the VPS_SSH_KEY environment secret.'
           key="$RUNNER_TEMP/sitepulse-deploy-key"
           hosts="$RUNNER_TEMP/sitepulse-known-hosts"
           archive="$RUNNER_TEMP/sitepulse-release.tar.gz"
           trap 'rm -f "$key" "$hosts" "$archive"' EXIT
           printf '%s\n' "$VPS_SSH_KEY" > "$key"
+          phase='SSH host key discovery'
           if [[ -n "$VPS_KNOWN_HOSTS" ]]; then
             printf '%s\n' "$VPS_KNOWN_HOSTS" > "$hosts"
           else
@@ -54,8 +60,14 @@ jobs:
           ssh_options=(-i "$key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$hosts" -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
           root="/opt/sitepulse-$DEPLOY_ENVIRONMENT"
           release="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          phase='source archive'
           git archive --format=tar.gz "$GITHUB_SHA" > "$archive"
-          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "test -d '$root/incoming' && test -f '$root/shared/.env'"
+          phase='VPS setup and SSH authentication'
+          echo 'Checking SSH access and required VPS directories/configuration.'
+          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -eu; for dir in '$root/incoming' '$root/releases' '$root/shared' '$root/backups' '$root/logs'; do if [ ! -d \"\$dir\" ] || [ ! -w \"\$dir\" ]; then echo \"VPS setup incomplete: directory missing or not writable: \$dir. Follow docs/GITHUB_ACTIONS_VPS.md section 1.\" >&2; exit 1; fi; done; for file in '$root/shared/.env' '$root/shared/backup-recipient.txt' '$root/shared/public-origin.txt'; do if [ ! -r \"\$file\" ] || [ ! -s \"\$file\" ]; then echo \"VPS setup incomplete: configuration missing, empty or not readable: \$file. Follow docs/GITHUB_ACTIONS_VPS.md section 2.\" >&2; exit 1; fi; done"
+          phase='source upload'
           scp "${ssh_options[@]}" -P "$VPS_PORT" "$archive" "$VPS_USER@$VPS_HOST:$root/incoming/$release.tar.gz"
           # Only the exact checked commit is uploaded; no runner environment or secrets.
-          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -eu; umask 077; mkdir '$root/releases/$release'; tar -xzf '$root/incoming/$release.tar.gz' -C '$root/releases/$release'; bash '$root/releases/$release/scripts/deploy-vps.sh' '$DEPLOY_ENVIRONMENT' '$release'; rm '$root/incoming/$release.tar.gz'"
+          phase='remote build, backup, migration and health verification'
+          echo "Deploying web on 127.0.0.1:$WEB_BIND_PORT (container port 3000)."
+          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -eu; umask 077; mkdir '$root/releases/$release'; tar -xzf '$root/incoming/$release.tar.gz' -C '$root/releases/$release'; bash '$root/releases/$release/scripts/deploy-vps.sh' '$DEPLOY_ENVIRONMENT' '$release' '$WEB_BIND_PORT'; rm '$root/incoming/$release.tar.gz'"

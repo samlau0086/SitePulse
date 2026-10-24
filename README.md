@@ -139,6 +139,8 @@ sudo -u deploy mkdir -p /opt/sitepulse-staging/{incoming,releases,shared,backups
 
 将域名解析到 VPS，通过宿主机上的 Nginx、Caddy 或 1Panel HTTPS 反向代理转发到 `127.0.0.1:3000`。可参考 [Caddy 配置模板](deploy/Caddyfile.example)。代理应保留浏览器的 `Origin`，拒绝未知主机名，并限制请求大小和超时。
 
+端口可在 GitHub **Settings → Environments → staging → Environment variables** 中配置：新增变量 `WEB_BIND_PORT`，例如 `18080`，代理上游改为 `127.0.0.1:18080`。Production 在自己的 Environment 中单独设置。有效范围为 `1–65535`，请选择 VPS 上未被占用的端口。未设置时 staging 默认 `3000`，production 默认 `3001`。这是宿主机端口，容器内部仍为 `3000`；`VPS_PORT` 只控制 SSH 端口。此变量填在 **Variables**，不是 Secrets；部署时优先于 VPS `.env` 中同名项，绑定地址仍为 `127.0.0.1`。
+
 只对外开放 SSH 和 HTTPS 所需端口；不要公开 PostgreSQL 或 API 端口，不要使用 `docker-compose.dev.yml` 部署 staging 或 production。如果代理运行在容器中，需要另外配置其到宿主机回环服务的访问方式，详见完整指南。
 
 ### 3. 在 GitHub 后台保存 VPS 信息和密钥
@@ -183,6 +185,8 @@ Production 使用独立 GitHub Environment `production`、独立应用密钥和�
 Production 不会随推送自动部署。需要手动运行 **SitePulse checks**，选择 `production` 并勾选 `confirm_production`，授权本次部署及数据库迁移。
 
 每次部署前的加密备份保存在 VPS 的 `backups` 目录。当前流程尚未自动上传异地备份或执行恢复演练，正式使用前需要配置。备份、迁移或启动验证失败时，应用会保持停止，等待检查和人工恢复；不会自动回退数据库。请按[完整部署指南](docs/GITHUB_ACTIONS_VPS.md)查看日志、状态和回滚步骤，不要对部署项目运行 `docker compose down -v`。
+
+如果 Actions 只显示 `VPS_KNOWN_HOSTS is unset` 后退出，该行是警告，不能单独确定失败原因。更新后的工作流会显示失败阶段；SSH 连接后的预检查会指出缺失、不可读或不可写的目录/配置文件。首次部署前必须完成以上 VPS 初始化步骤，上传工作流并不会自动生成应用密钥和备份配置。构建后的详细诊断保存在 VPS 的 `logs/<release>.log`，请在服务器上私下查看，不要公开原始日志或 `.env`。
 
 ## Repository map
 

@@ -5,8 +5,15 @@ umask 077
 
 environment=${1:-}
 release=${2:-}
+web_bind_port=${3:-${WEB_BIND_PORT:-}}
 [[ "$environment" =~ ^(staging|production)$ ]] || { echo 'Invalid environment' >&2; exit 1; }
 [[ "$release" =~ ^[a-f0-9]{40}-[0-9]+-[0-9]+$ ]] || { echo 'Invalid release' >&2; exit 1; }
+if [[ -z "$web_bind_port" ]]; then
+  if [[ "$environment" == production ]]; then web_bind_port=3001; else web_bind_port=3000; fi
+fi
+if [[ ! "$web_bind_port" =~ ^[1-9][0-9]{0,4}$ ]] || (( web_bind_port > 65535 )); then
+  echo 'WEB_BIND_PORT must be an application host port from 1 to 65535' >&2; exit 1
+fi
 root="${SITEPULSE_DEPLOY_BASE:-/opt}/sitepulse-$environment"
 candidate="$root/releases/$release"
 [[ -d "$candidate" && -f "$root/shared/.env" ]] || { echo 'VPS setup is incomplete' >&2; exit 1; }
@@ -24,7 +31,7 @@ backup="$root/backups/$release.dump.age"
 compose=(docker compose --project-name "sitepulse-$environment" --env-file "$root/shared/.env" -f "$candidate/docker-compose.yml")
 # Stable project name preserves the database volume; release-specific tags preserve old images.
 export COMPOSE_PROJECT_NAME="sitepulse-$environment" SITEPULSE_RELEASE="$release"
-if [[ "$environment" == production ]]; then export WEB_BIND_PORT=3001; else export WEB_BIND_PORT=3000; fi
+export WEB_BIND_PORT="$web_bind_port"
 phase=preflight
 on_error() {
   echo "Deployment failed during $phase. Protected VPS log: $log" >&2
@@ -71,5 +78,6 @@ if [[ -L "$root/current" ]]; then readlink "$root/current" > "$root/previous-rel
 ln -s "$candidate" "$root/current.next-$release"
 mv -Tf "$root/current.next-$release" "$root/current"
 printf '%s\n' "$release" > "$root/current-release.txt"
+printf '%s\n' "$WEB_BIND_PORT" > "$root/current-web-bind-port.txt"
 phase=complete
 echo "Deployment verified: $release. Encrypted backup retained on VPS; verify off-host copy and restore separately."

@@ -41,6 +41,28 @@ const cases = [
     scan: 'empty',
     ok: false,
   },
+  ...[
+    ['archive', 'source archive'],
+    ['authentication', 'VPS setup and SSH authentication'],
+    ['missing-directory', 'VPS setup and SSH authentication'],
+    ['missing-config', 'VPS setup and SSH authentication'],
+    ['upload', 'source upload'],
+    ['deploy', 'remote build, backup, migration and health verification'],
+  ].map(([failure, phase]) => ({
+    name: `${failure} failure names the stage`,
+    configured: hostKey,
+    scan: 'fail',
+    failure,
+    phase,
+    ok: false,
+  })),
+  ...['0', '65536', '03000', '3000;echo injected'].map((port) => ({
+    name: 'invalid application port blocks transport',
+    configured: hostKey,
+    scan: 'fail',
+    port,
+    ok: false,
+  })),
 ];
 for (const scenario of cases) {
   const directory = mkdtempSync(join(tmpdir(), 'sitepulse-ssh-test-'));
@@ -48,6 +70,15 @@ for (const scenario of cases) {
     const bin = join(directory, 'bin');
     const calls = join(directory, 'calls');
     mkdirSync(bin);
+    const remote = join(directory, 'remote');
+    for (const name of ['incoming', 'releases', 'shared', 'backups', 'logs']) {
+      if (scenario.failure !== 'missing-directory' || name !== 'incoming')
+        mkdirSync(join(remote, name), { recursive: true });
+    }
+    for (const name of ['.env', 'backup-recipient.txt', 'public-origin.txt']) {
+      if (scenario.failure !== 'missing-config' || name !== '.env')
+        writeFileSync(join(remote, 'shared', name), 'fixture');
+    }
     writeFileSync(calls, '');
     const stub = `#!/usr/bin/env bash
 set -eu
@@ -66,8 +97,19 @@ case "$command_name" in
     [[ " $* " == *' StrictHostKeyChecking=yes '* ]]
     [[ "$(<"$RUNNER_TEMP/sitepulse-known-hosts")" == "$TEST_HOST_KEY" ]]
     [[ "$(<"$RUNNER_TEMP/sitepulse-deploy-key")" == fixture-private-key ]]
+    if [[ "$command_name" == scp ]]; then
+      [[ "$TEST_FAILURE" != upload ]]
+    elif [[ " $* " == *'set -eu; for dir'* ]]; then
+      [[ "$TEST_FAILURE" != authentication ]] || exit 255
+      remote_command="\${!#}"
+      remote_command="\${remote_command//"$TEST_ROOT"/"$TEST_REMOTE"}"
+      bash -c "$remote_command"
+    else
+      [[ " $* " == *"'staging' '0000000000000000000000000000000000000000-1-1' '18080'"* ]]
+      [[ "$TEST_FAILURE" != deploy ]]
+    fi
     ;;
-  git) printf 'fixture-archive' ;;
+  git) [[ "$TEST_FAILURE" != archive ]] || exit 1; printf 'fixture-archive' ;;
 esac
 `;
     for (const command of ['ssh-keyscan', 'ssh', 'scp', 'git']) {
@@ -82,6 +124,10 @@ esac
         TEST_CALLS: calls,
         TEST_SCAN: scenario.scan,
         TEST_HOST_KEY: hostKey,
+        TEST_FAILURE: scenario.failure ?? '',
+        TEST_REMOTE: remote,
+        TEST_ROOT: '/opt/sitepulse-staging',
+        WEB_BIND_PORT: scenario.port ?? '18080',
         VPS_HOST: 'test-vps.invalid',
         VPS_PORT: '2222',
         VPS_USER: 'deploy',
@@ -97,9 +143,22 @@ esac
     assert.equal(result.status === 0, scenario.ok, scenario.name);
     const commands = readFileSync(calls, 'utf8').trim().split('\n');
     assert.equal(commands.includes('ssh-keyscan'), !scenario.configured);
-    assert.equal(commands.includes('ssh'), scenario.ok);
-    assert.equal(commands.includes('scp'), scenario.ok);
+    assert.equal(
+      commands.includes('ssh'),
+      scenario.ok ||
+        Boolean(scenario.failure && scenario.failure !== 'archive'),
+    );
+    assert.equal(
+      commands.includes('scp'),
+      scenario.ok || ['upload', 'deploy'].includes(scenario.failure),
+    );
     assert.equal(result.stdout.includes('::warning::'), !scenario.configured);
+    if (scenario.phase)
+      assert.ok(result.stderr.includes(`failed during ${scenario.phase}`));
+    if (scenario.failure?.startsWith('missing-'))
+      assert.ok(result.stderr.includes('VPS setup incomplete:'));
+    if (scenario.port)
+      assert.ok(result.stderr.includes('WEB_BIND_PORT must be'));
     assert.equal(result.stdout.includes('fixture-private-key'), false);
     assert.equal(result.stderr.includes('fixture-private-key'), false);
     for (const file of [

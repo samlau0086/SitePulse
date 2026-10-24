@@ -110,12 +110,16 @@ See [deployment and rollback](docs/DEPLOYMENT.md) and [security limits](docs/SEC
 
 将部署 SSH 公钥加入该账户的 `~/.ssh/authorized_keys`。匹配的私钥用于下面的 GitHub Secret；当前工作流需要可非交互使用的专用密钥。不要把私钥、密码或 `.env` 提交到仓库。
 
-以管理员身份建立 staging 目录；以下 `deploy` 用户和组名需要替换为实际部署账户：
+工作流会通过 SSH 自动创建 `/opt/sitepulse-staging` 及 `incoming`、`releases`、`shared`、`backups`、`logs` 子目录。使用 root 部署时无需手工创建；新目录权限为 `700`，已有目录的权限、所有者和文件保持不变。重复运行不会清空目录。Production 自动创建对应的 `/opt/sitepulse-production` 目录。
+
+如果使用普通部署账户且无权在 `/opt` 下创建目录，先由管理员执行以下一次性准备；将 `deploy` 用户和组名替换为实际部署账户：
 
 ```sh
 sudo install -d -m 700 -o deploy -g deploy /opt/sitepulse-staging
 sudo -u deploy mkdir -p /opt/sitepulse-staging/{incoming,releases,shared,backups,logs}
 ```
+
+自动创建目录后，工作流会检查下面的三个必需配置文件。它不会生成或覆盖应用密钥、备份公钥或域名配置；首次运行缺少配置时会明确指出文件路径，可填写后重新运行。
 
 通过安全方式将 [deploy/vps.env.example](deploy/vps.env.example) 复制为 `/opt/sitepulse-staging/shared/.env`，设置权限为 `600`，填写：
 
@@ -186,7 +190,7 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 
 每次部署前的加密备份保存在 VPS 的 `backups` 目录。当前流程尚未自动上传异地备份或执行恢复演练，正式使用前需要配置。备份、迁移或启动验证失败时，应用会保持停止，等待检查和人工恢复；不会自动回退数据库。请按[完整部署指南](docs/GITHUB_ACTIONS_VPS.md)查看日志、状态和回滚步骤，不要对部署项目运行 `docker compose down -v`。
 
-如果 Actions 只显示 `VPS_KNOWN_HOSTS is unset` 后退出，该行是警告，不能单独确定失败原因。更新后的工作流会显示失败阶段；SSH 连接后的预检查会指出缺失、不可读或不可写的目录/配置文件。首次部署前必须完成以上 VPS 初始化步骤，上传工作流并不会自动生成应用密钥和备份配置。构建后的详细诊断保存在 VPS 的 `logs/<release>.log`，请在服务器上私下查看，不要公开原始日志或 `.env`。
+如果 Actions 只显示 `VPS_KNOWN_HOSTS is unset` 后退出，该行是警告，不能单独确定失败原因。工作流会显示失败阶段；SSH 连接后自动创建部署目录，并指出创建失败、目录不可写或配置缺失/不可读的具体路径。首次部署前仍需准备应用密钥和备份配置。构建后的详细诊断保存在 VPS 的 `logs/<release>.log`，请在服务器上私下查看，不要公开原始日志或 `.env`。
 
 ## Repository map
 

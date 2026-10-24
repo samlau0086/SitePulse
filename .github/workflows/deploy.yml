@@ -63,8 +63,8 @@ jobs:
           phase='source archive'
           git archive --format=tar.gz "$GITHUB_SHA" > "$archive"
           phase='VPS setup and SSH authentication'
-          echo 'Checking SSH access and required VPS directories/configuration.'
-          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -eu; for dir in '$root/incoming' '$root/releases' '$root/shared' '$root/backups' '$root/logs'; do if [ ! -d \"\$dir\" ] || [ ! -w \"\$dir\" ]; then echo \"VPS setup incomplete: directory missing or not writable: \$dir. Follow docs/GITHUB_ACTIONS_VPS.md section 1.\" >&2; exit 1; fi; done; for file in '$root/shared/.env' '$root/shared/backup-recipient.txt' '$root/shared/public-origin.txt'; do if [ ! -r \"\$file\" ] || [ ! -s \"\$file\" ]; then echo \"VPS setup incomplete: configuration missing, empty or not readable: \$file. Follow docs/GITHUB_ACTIONS_VPS.md section 2.\" >&2; exit 1; fi; done"
+          echo 'Checking SSH access, creating deployment directories and validating configuration.'
+          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -eu; umask 077; for dir in '$root' '$root/incoming' '$root/releases' '$root/shared' '$root/backups' '$root/logs'; do if ! mkdir -p -- \"\$dir\"; then echo \"VPS setup incomplete: cannot create deployment directory: \$dir. The SSH account needs permission to create it. Follow docs/GITHUB_ACTIONS_VPS.md section 1.\" >&2; exit 1; fi; if [ ! -d \"\$dir\" ] || [ ! -w \"\$dir\" ]; then echo \"VPS setup incomplete: directory is not writable: \$dir. Follow docs/GITHUB_ACTIONS_VPS.md section 1.\" >&2; exit 1; fi; done; for file in '$root/shared/.env' '$root/shared/backup-recipient.txt' '$root/shared/public-origin.txt'; do if [ ! -r \"\$file\" ] || [ ! -s \"\$file\" ]; then echo \"VPS setup incomplete: configuration missing, empty or not readable: \$file. Follow docs/GITHUB_ACTIONS_VPS.md section 2.\" >&2; exit 1; fi; done"
           phase='source upload'
           scp "${ssh_options[@]}" -P "$VPS_PORT" "$archive" "$VPS_USER@$VPS_HOST:$root/incoming/$release.tar.gz"
           # Only the exact checked commit is uploaded; no runner environment or secrets.

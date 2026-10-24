@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -30,6 +31,13 @@ const cases = [
     ok: true,
   },
   {
+    name: 'missing directory is created idempotently and deployment continues',
+    configured: hostKey,
+    scan: 'fail',
+    missingDirectory: true,
+    ok: true,
+  },
+  {
     name: 'failed discovery blocks transport',
     configured: '',
     scan: 'fail',
@@ -44,7 +52,8 @@ const cases = [
   ...[
     ['archive', 'source archive'],
     ['authentication', 'VPS setup and SSH authentication'],
-    ['missing-directory', 'VPS setup and SSH authentication'],
+    ['blocked-directory', 'VPS setup and SSH authentication'],
+    ['fresh-root', 'VPS setup and SSH authentication'],
     ['missing-config', 'VPS setup and SSH authentication'],
     ['upload', 'source upload'],
     ['deploy', 'remote build, backup, migration and health verification'],
@@ -72,11 +81,20 @@ for (const scenario of cases) {
     mkdirSync(bin);
     const remote = join(directory, 'remote');
     for (const name of ['incoming', 'releases', 'shared', 'backups', 'logs']) {
-      if (scenario.failure !== 'missing-directory' || name !== 'incoming')
-        mkdirSync(join(remote, name), { recursive: true });
+      if (scenario.failure === 'fresh-root') continue;
+      if (
+        name !== 'incoming' ||
+        (!scenario.missingDirectory && scenario.failure !== 'blocked-directory')
+      )
+        mkdirSync(join(remote, name), { recursive: true, mode: 0o750 });
     }
+    if (scenario.failure === 'blocked-directory')
+      writeFileSync(join(remote, 'incoming'), 'existing-file');
     for (const name of ['.env', 'backup-recipient.txt', 'public-origin.txt']) {
-      if (scenario.failure !== 'missing-config' || name !== '.env')
+      if (
+        scenario.failure !== 'fresh-root' &&
+        (scenario.failure !== 'missing-config' || name !== '.env')
+      )
         writeFileSync(join(remote, 'shared', name), 'fixture');
     }
     writeFileSync(calls, '');
@@ -99,11 +117,12 @@ case "$command_name" in
     [[ "$(<"$RUNNER_TEMP/sitepulse-deploy-key")" == fixture-private-key ]]
     if [[ "$command_name" == scp ]]; then
       [[ "$TEST_FAILURE" != upload ]]
-    elif [[ " $* " == *'set -eu; for dir'* ]]; then
+    elif [[ " $* " == *'set -eu; umask 077; for dir'* ]]; then
       [[ "$TEST_FAILURE" != authentication ]] || exit 255
       remote_command="\${!#}"
       remote_command="\${remote_command//"$TEST_ROOT"/"$TEST_REMOTE"}"
       bash -c "$remote_command"
+      if [[ "$TEST_REPEAT_SETUP" == true ]]; then bash -c "$remote_command"; fi
     else
       [[ " $* " == *"'staging' '0000000000000000000000000000000000000000-1-1' '18080'"* ]]
       [[ "$TEST_FAILURE" != deploy ]]
@@ -125,6 +144,7 @@ esac
         TEST_SCAN: scenario.scan,
         TEST_HOST_KEY: hostKey,
         TEST_FAILURE: scenario.failure ?? '',
+        TEST_REPEAT_SETUP: String(Boolean(scenario.missingDirectory)),
         TEST_REMOTE: remote,
         TEST_ROOT: '/opt/sitepulse-staging',
         WEB_BIND_PORT: scenario.port ?? '18080',
@@ -155,8 +175,37 @@ esac
     assert.equal(result.stdout.includes('::warning::'), !scenario.configured);
     if (scenario.phase)
       assert.ok(result.stderr.includes(`failed during ${scenario.phase}`));
-    if (scenario.failure?.startsWith('missing-'))
+    if (
+      ['missing-config', 'blocked-directory', 'fresh-root'].includes(
+        scenario.failure,
+      )
+    )
       assert.ok(result.stderr.includes('VPS setup incomplete:'));
+    if (scenario.missingDirectory) {
+      assert.equal(statSync(join(remote, 'incoming')).mode & 0o777, 0o700);
+      assert.equal(statSync(join(remote, 'shared')).mode & 0o777, 0o750);
+      assert.equal(
+        readFileSync(join(remote, 'shared', '.env'), 'utf8'),
+        'fixture',
+      );
+    }
+    if (scenario.failure === 'fresh-root') {
+      for (const name of [
+        '',
+        'incoming',
+        'releases',
+        'shared',
+        'backups',
+        'logs',
+      ])
+        assert.equal(statSync(join(remote, name)).mode & 0o777, 0o700);
+      assert.throws(() => statSync(join(remote, 'shared', '.env')), {
+        code: 'ENOENT',
+      });
+      assert.ok(
+        result.stderr.includes('configuration missing, empty or not readable:'),
+      );
+    }
     if (scenario.port)
       assert.ok(result.stderr.includes('WEB_BIND_PORT must be'));
     assert.equal(result.stdout.includes('fixture-private-key'), false);

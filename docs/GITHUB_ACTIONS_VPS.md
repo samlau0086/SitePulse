@@ -18,7 +18,9 @@ This is a single-host deployment with downtime during backup/migration/startup. 
 
 Use a supported Linux host with Docker Engine and Docker Compose v2, Bash, `curl`, `flock` (util-linux), `age`, and a host reverse proxy such as Caddy or your existing 1Panel/Nginx installation. Allow enough RAM/disk to build Next.js while the existing app runs. Port 22 (or your SSH port), 80 and 443 are public; PostgreSQL/API are private. Deployment account access to Docker is privileged access to this host; use a dedicated account/key.
 
-Have the VPS administrator create the staging directory, replacing `deploy` with the SSH account name:
+The workflow automatically creates `/opt/sitepulse-staging` (or `/opt/sitepulse-production`) and its `incoming`, `releases`, `shared`, `backups`, and `logs` subdirectories over SSH before validating configuration. With root SSH access, no manual directory creation is needed. New directories use mode 700 via umask 077. Existing directory permissions/owners and all files remain unchanged; repeated setup is safe. It does not invoke sudo, change ownership or clear directories.
+
+For a non-root account without permission to create directories under `/opt`, have the VPS administrator prepare the directories once, replacing `deploy` with the SSH account name:
 
 ```sh
 sudo install -d -m 700 -o deploy -g deploy /opt/sitepulse-staging
@@ -32,6 +34,8 @@ Install a dedicated public SSH deployment key in this account's `~/.ssh/authoriz
 ## 2. Configure server-only secrets and backups
 
 Copy the template [deploy/vps.env.example](../deploy/vps.env.example) to `/opt/sitepulse-staging/shared/.env` through a secure channel. Set permissions to 600 and fill it using a private editor. Generate independent DB and auth secrets with `openssl rand -hex 48` twice; do not paste them into chat or CI logs. Hex passwords do not need URL encoding.
+
+Automatic directory creation never creates or replaces `.env`, `backup-recipient.txt`, or `public-origin.txt`. A first run without these files creates the directory tree, then stops with the missing file path before source upload/build/migration. Prepare the files below and rerun the workflow.
 
 Required values:
 
@@ -100,7 +104,7 @@ Keep these variables when running any administrative Compose command. Production
 
 For a failure, inspect the protected release log through SSH. If a backup failed, investigate before manually restarting the previous app. If a migration ran or partially ran, review its actual database state first. The previous source path is recorded in `previous-release.txt` after successful promotion, while `current-release.txt` identifies the last successful deployment. Failed candidates never overwrite those markers.
 
-The `VPS_KNOWN_HOSTS is unset` line is a warning, not a failure diagnosis. Workflow errors name the failing stage: configuration validation, host-key discovery, source archive, VPS setup/SSH authentication, source upload, or remote deployment. VPS preflight names missing/unwritable directories and missing/empty/unreadable configuration files without printing file contents. A failure at setup means checking section 1 and section 2 using the configured SSH account; authentication/connection failures also retain SSH diagnostics. A remote build/migration failure prints the phase and protected server log path. Logs are not automatically copied to GitHub because they can contain application/provider diagnostics; review privately and redact before sharing. The workflow intentionally avoids tracing shell commands or echoing credential values.
+The `VPS_KNOWN_HOSTS is unset` line is a warning, not a failure diagnosis. Workflow errors name the failing stage: configuration validation, host-key discovery, source archive, VPS setup/SSH authentication, source upload, or remote deployment. VPS preflight creates deployment directories and names creation failures, unwritable directories, and missing/empty/unreadable configuration files without printing file contents. A failure at setup means checking section 1 and section 2 using the configured SSH account; authentication/connection failures also retain SSH diagnostics. A remote build/migration failure prints the phase and protected server log path. Logs are not automatically copied to GitHub because they can contain application/provider diagnostics; review privately and redact before sharing. The workflow intentionally avoids tracing shell commands or echoing credential values.
 
 An application-only rollback is manual and requires a confirmed compatible schema: select a retained previous release directory/tag, export its `SITEPULSE_RELEASE` and the environment's `WEB_BIND_PORT`, then run `docker compose -p sitepulse-staging --env-file /opt/sitepulse-staging/shared/.env -f <previous-release>/docker-compose.yml up --no-build --no-deps -d --wait sitepulse-api sitepulse-worker sitepulse-web`. Verify HTTPS and authentication before marking recovery complete. Do not rerun migrations from an old release or restore a database automatically. For incompatible migrations, use a reviewed forward fix or the authorized isolated-database restoration/cutover described in [DEPLOYMENT.md](DEPLOYMENT.md). Restoring a dump can lose subsequent writes.
 

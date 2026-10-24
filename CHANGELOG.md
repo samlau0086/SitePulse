@@ -2,6 +2,7 @@
 
 ## Unreleased — 2026-10-24
 
+- Automatically create VPS deployment directories over SSH with private permissions for new directories, preserving existing data/permissions and retaining required configuration checks; added creation, repeat-run and blocked-path regression coverage.
 - Added configurable GitHub Environment WEB_BIND_PORT for VPS deployments, validated port forwarding to Compose and health checks, and a successful-release port record for administration.
 - Added explicit deployment-stage errors and actionable remote setup diagnostics for missing directories/configuration, with transport-failure and custom/invalid-port regression checks.
 - Made VPS_KNOWN_HOSTS optional: discover SSH host keys per deployment when omitted, abort on discovery failure, retain configured key pinning and document the identity-verification limitation.

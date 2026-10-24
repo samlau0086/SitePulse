@@ -2,6 +2,8 @@
 
 Date: 2026-10-24. Scope: authentication recovery and email verification, followed by connector pairing, tenant-isolated sites, and heartbeat freshness. This records local implementation checks, not production deployment or full MVP acceptance.
 
+This is the original implementation checkpoint. Later Docker runtime checks and the current live acceptance blockers are recorded in [STAGING_ACCEPTANCE_REPORT.md](STAGING_ACCEPTANCE_REPORT.md).
+
 ## Delivered behavior
 
 - Better Auth manages expiring password resets, single-use reset consumption, session revocation, and email verification. Recovery requests use generic responses and rate limits. Development uses a private ignored outbox; production requires the configured Resend transport.
@@ -21,7 +23,7 @@ Date: 2026-10-24. Scope: authentication recovery and email verification, followe
 | `Dockerfile`, `docker-compose*.yml`, `.env.example`, `.github/workflows/ci.yml`, `scripts`, root workspace configuration and lockfile | Worker container, private networks, mail configuration, plugin checks and dependencies                                                                   |
 | `README.md`, `CHANGELOG.md`, `docs`                                                                                                   | Development commands, security boundaries, architecture, API, deployment and live acceptance procedure                                                   |
 
-The repository has no committed baseline; foundation files and these additions are currently untracked. No commit or production migration was performed. Local mail, database state, downloaded test runtimes and `.env` files are ignored by Git.
+At the original implementation checkpoint, foundation files and these additions were untracked and no commit or production migration had been performed. The later acceptance attempt starts from commit `41d7d14`. Local mail, database state, downloaded test runtimes and `.env` files are ignored by Git.
 
 ## Validation
 

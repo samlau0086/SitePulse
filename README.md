@@ -113,3 +113,5 @@ See [deployment and rollback](docs/DEPLOYMENT.md) and [security limits](docs/SEC
 | `docs`                        | Full specification, architecture, API, security, deployment and milestone tracking               |
 
 Next task: run the live WordPress acceptance procedure against HTTPS staging, then add minimized inventory with validation and size limits. External uptime/SSL monitoring needs connection-time DNS/IP pinning, redirect validation, bounded jobs, and outage/recovery tests before it is enabled.
+
+Current acceptance status: local Docker image builds, migration-first startup and web/API health checks pass. Live HTTPS WordPress and real email acceptance require staging details; see [the acceptance attempt record](docs/STAGING_ACCEPTANCE_REPORT.md). Inventory remains pending that acceptance.

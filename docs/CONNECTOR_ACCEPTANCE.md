@@ -2,6 +2,8 @@
 
 Automated API/SQL and isolated PHP contract tests are not live WordPress acceptance. Use a disposable single-site WordPress 6.5+ installation with PHP 8.1+ and an HTTPS SitePulse staging origin, private PostgreSQL, valid TLS, and a configured authentication sender. Do not run production migrations or expose database/API ports for this procedure.
 
+The latest attempt and missing environment prerequisites are recorded in [STAGING_ACCEPTANCE_REPORT.md](STAGING_ACCEPTANCE_REPORT.md). Local Docker startup and health checks now pass; live HTTPS WordPress and real mail acceptance remain pending.
+
 1. Run frozen dependency installation, `pnpm check`, `pnpm test:integration`, `pnpm test:plugin`, `pnpm build`, `pnpm db:check`, `pnpm compose:check` and dependency audit. Apply migrations only to authorized staging data after backup. Start web/API and the heartbeat worker.
 2. Register two users, receive a real verification email, confirm it and verify password recovery revokes an old session. Create separate organizations. Confirm a guessed foreign site URL/API ID yields 404, and unverified accounts cannot manage sites.
 3. As the verified owner, register the WordPress home URL including its subdirectory. Generate a code. Copy/zip plugins/sitepulse-connector to the WP plugins directory, activate, and pair through Settings → SitePulse with your HTTPS origin. Confirm the initial heartbeat makes the dashboard active and its last receipt time advances.

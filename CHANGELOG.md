@@ -2,6 +2,7 @@
 
 ## Unreleased — 2026-10-24
 
+- Verified disposable local Docker image builds, migration-first startup and web/API proxy health on PostgreSQL 17.11; recorded missing live HTTPS WordPress and email prerequisites before inventory work.
 - Added Better Auth password recovery, expiring single-use reset links, concurrent replay protection, and revocation of all sessions on reset.
 - Added registration verification mail, resend and confirmation, verification timestamps, account recovery pages, and sanitized security audit events.
 - Added development file outbox and production Resend transport with validated configuration and generic public responses.

@@ -157,6 +157,61 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'
 
 部署固定启用 production 运行模式及 Resend 邮件，不接受本地 file 邮件模式。更换认证密钥会影响已有会话；不要每次发布生成新密钥。已有服务器配置需将相同凭据迁入 GitHub，而不是重新生成数据库密码。
 
+#### 如何生成或获取这些配置（Windows）
+
+以下操作都在自己的电脑或服务商后台完成，无需登录 VPS。先打开 GitHub **Settings → Environments → staging**；本次部署选 `production` 时，填写对应的 `production` 环境。Secrets 使用 **Add environment secret**，Variables 使用 **Add environment variable**。名称必须与上表完全一致，不能把所有字段都放入 Secrets；当前工作流分别从 `secrets` 和 `vars` 读取。
+
+**`POSTGRES_PASSWORD` 和 `BETTER_AUTH_SECRET`：分别生成。** 在 Windows PowerShell 执行：
+
+```powershell
+# 生成数据库密码并复制到剪贴板，立即粘贴到 POSTGRES_PASSWORD Secret。
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))" | Set-Clipboard
+```
+
+保存第一个 Secret 后，再执行一次以生成不同的认证密钥：
+
+```powershell
+# 生成独立认证密钥，立即粘贴到 BETTER_AUTH_SECRET Secret。
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))" | Set-Clipboard
+```
+
+命令要求本机已安装 Node.js；它们不会将密钥输出到终端或写入仓库。两个值不要相同，后续发布不要重新生成。若服务器已有数据库，必须沿用已有数据库密码。粘贴后可用 `Set-Clipboard -Value ''` 清空当前剪贴板；启用剪贴板历史或同步时也应自行清理。
+
+**`RESEND_API_KEY` 和 `AUTH_MAIL_FROM`：从 Resend 配置获得。** 登录 Resend 后，在 **Domains** 添加自己拥有的发件域名，按页面要求在域名 DNS 服务商添加验证记录，等待验证通过。在 **API Keys → Create API Key** 创建专用 key，选择 **Sending access** 并限制到该发件域名，将完整 key 保存为 `RESEND_API_KEY` Secret。key 是服务商签发的，不能用随机字符串代替。
+
+`AUTH_MAIL_FROM` 填该已验证域名下的邮箱地址，例如发件域名为 `mail.your-domain.com` 时可填 `no-reply@mail.your-domain.com`。这里只填邮箱，不要填写 `SitePulse <no-reply@...>` 这样的显示名称格式。将它保存为 Variable；网站域名与发件域名可以不同，但发件域名必须完成 Resend 验证。官方说明见 [Resend API key 管理](https://resend.com/docs/dashboard/api-keys/introduction)与[发件域名验证](https://resend.com/docs/dashboard/domains/introduction)。
+
+**`BACKUP_AGE_RECIPIENT`：生成备份密钥后提取公钥。** 在 Windows PowerShell 安装官方 age 工具：
+
+```powershell
+winget install --id FiloSottile.age --exact
+```
+
+安装后重新打开 PowerShell，在仓库之外保存备份私钥，再复制公钥：
+
+```powershell
+$sitepulseBackupDirectory = Join-Path $env:LOCALAPPDATA 'SitePulse\backup-keys'
+New-Item -ItemType Directory -Path $sitepulseBackupDirectory -Force | Out-Null
+$sitepulseBackupKey = Join-Path $sitepulseBackupDirectory 'staging-backup.key'
+age-keygen -o "$sitepulseBackupKey"
+age-keygen -y "$sitepulseBackupKey" | Set-Clipboard
+```
+
+将剪贴板中的完整 `age1…` 公钥粘贴为 `BACKUP_AGE_RECIPIENT` Variable。只复制公钥，不能复制 `AGE-SECRET-KEY-…` 私钥或整个 `.key` 文件。这里使用默认传统 age 密钥，不要加 `-pq`，当前部署仅接受 `age1…` 格式。已有私钥时只运行 `age-keygen -y` 提取公钥即可；不要重新生成或覆盖。Production 使用另一文件名如 `production-backup.key`。将私钥另行安全备份，恢复数据库时需要它；不要上传至 GitHub、VPS 或提交到仓库。安装与命令参考 [age 官方说明](https://github.com/FiloSottile/age#installation)。
+
+**其余 Variables：选择实际配置，不需要随机生成。**
+
+| 名称                           | 如何确定                                                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ORIGIN`                   | 填准备访问 SitePulse 的真实 HTTPS 网站地址，例如 `https://pulse.your-domain.com`；域名解析到 VPS，HTTPS 代理指向所选应用端口。不填 VPS 内网地址，也不加 `/`、路径或端口。示例域名需要替换为自己的域名。 |
+| `WEB_BIND_PORT`                | 根据 VPS 面板已有容器的端口映射选择未占用宿主机端口，例如 `18080`，HTTPS 代理上游同步填 `127.0.0.1:18080`；不能仅凭示例假定端口空闲。                                                                   |
+| `POSTGRES_USER`、`POSTGRES_DB` | 首次部署通常都不创建，工作流默认使用 `sitepulse`；自定义时填固定名称，不能用邮箱或连接字符串。                                                                                                          |
+| `AUTO_DEPLOY_STAGING`          | 希望推送 `main` 后自动部署时，按下节在 **Repository variables** 添加并填 `true`；它不放在 Environment secrets 中。                                                                                      |
+
+`VPS_HOST`、`VPS_PORT`、`VPS_USER` 从 VPS 服务商或面板已有 SSH 登录信息获得；当前 root 用户填 `root`。`VPS_SSH_KEY` 使用已经能登录这台 VPS 的完整私钥，不能只在本机新生成一个未获服务器授权的密钥就填入。`VPS_KNOWN_HOSTS` 可省略。
+
+若仍出现 `Invalid deployment variables`，先检查报错字段是否为空、Secrets/Variables 分类是否正确、是否填在本次选择的环境中。报错可能重复列出同一字段，因为它同时违反了多条校验，并不代表需要创建多个同名配置。
+
 `VPS_KNOWN_HOSTS` 可以不创建：工作流会在每次部署时自动运行 `ssh-keyscan`，扫描失败或结果为空时停止部署，并在日志中提示此模式的限制。SSH 仍使用 `StrictHostKeyChecking=yes`，但自动扫描只保证当前任务内使用同一组密钥，无法独立验证服务器身份，也不会发现不同部署任务之间的主机密钥变化，不能防止扫描阶段的中间人冒充。
 
 如果希望预先核验身份，可设置 `VPS_KNOWN_HOSTS`，工作流会直接使用该记录，不再自动扫描。可以用 `ssh-keyscan -p PORT HOST` 收集记录，通过 VPS 控制台或可信管理员核验主机指纹后保存。`VPS_SSH_KEY` 是部署账户的私钥，与服务器主机公钥不能混用。

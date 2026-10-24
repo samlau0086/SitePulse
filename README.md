@@ -2,6 +2,12 @@
 
 SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks and incidents are implemented. Billing and alert delivery remain separate milestones.
 
+## Workspace navigation
+
+The signed-in workspace uses a persistent sidebar: **Overview**, **Sites**, **Incidents**, and **Workspaces**. `/app/sites` lists sites across your authorized organizations, with name/hostname search, workspace filtering, connector status, recent unresolved incidents, and direct Monitoring / Inventory / Connection links. `/app/sites/new` lets verified owners/admins select a workspace and opens pairing after creation. `/app/incidents` provides status/workspace filters and acknowledgement for verified owners/admins.
+
+Site sections are directly addressable at `/app/sites/<id>?view=monitoring`, `?view=inventory`, and `?view=connection`. Navigation adapts to small screens, and Refresh data reloads current server data. All reads and mutations retain API membership checks; UI filters do not grant access. Overview connector statistics describe heartbeat activity, not HTTP uptime. Lists include up to 1,000 sites and the latest 100 incidents per organization; unresolved counts apply to that recent history. The interface does not auto-poll.
+
 ## HTTP / SSL monitoring
 
 Paired sites are monitored by the worker independently of connector heartbeats. Site details show HTTP availability, latency, certificate expiry, recent checks and incidents; organization pages list recent incidents. Verified owners/admins can acknowledge an incident. Two consecutive failures open an incident; two successes recover it. Disconnecting, rotating or re-pairing closes existing incidents with `connection_reset`, which does not assert recovery.

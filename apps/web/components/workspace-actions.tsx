@@ -54,7 +54,7 @@ export function CreateOrganizationForm() {
     }
   }
   return (
-    <form onSubmit={submit}>
+    <form className="creation-form" onSubmit={submit}>
       <h2>Create an organization</h2>
       <Label.Root htmlFor="org-name">Organization name</Label.Root>
       <input id="org-name" name="name" required maxLength={100} />

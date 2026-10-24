@@ -16,10 +16,17 @@ import { MonitoringPanel } from '../../../../components/monitoring-panel';
 
 export default async function SitePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ siteId: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { siteId } = await params;
+  const requestedView = (await searchParams).view;
+  const view =
+    requestedView === 'inventory' || requestedView === 'connection'
+      ? requestedView
+      : 'monitoring';
   if (!/^[0-9a-f-]{36}$/i.test(siteId)) notFound();
   const { user } = await serverApi<{ user: { emailVerified: boolean } }>(
     '/auth/session',
@@ -45,78 +52,105 @@ export default async function SitePage({
   ]);
   return (
     <main>
-      <Link href={`/app/organizations/${site.organizationId}`}>
-        Back to workspace
-      </Link>
-      <section className="card">
-        <h1>{site.name}</h1>
-        <p>{site.canonicalUrl}</p>
-        <p>
-          Connector status:{' '}
-          {site.status === 'degraded' ? 'Stale heartbeat' : site.status}
-        </p>
-        <p>
-          Last heartbeat:{' '}
-          {site.lastSeenAt
-            ? new Date(site.lastSeenAt).toISOString()
-            : 'Not received'}
-        </p>
-        <p>Connector version: {site.connectorVersion ?? 'Not received'}</p>
-      </section>
-      <MonitoringPanel
-        monitoring={monitoring}
-        checks={checks}
-        incidents={incidents}
-        https={site.canonicalUrl.startsWith('https://')}
-        canManage={organization.role !== 'member' && user.emailVerified}
-      />
-      <section className="card">
-        <h2>Site inventory</h2>
-        {!inventory ? (
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">{organization.name} / SITE OPERATIONS</p>
+          <h1>{site.name}</h1>
+          <p className="muted">{site.canonicalUrl}</p>
+        </div>
+        <Link className="button secondary" href="/app/sites">
+          All sites
+        </Link>
+      </div>
+      <nav className="site-tabs" aria-label="Site sections">
+        {(['monitoring', 'inventory', 'connection'] as const).map((tab) => (
+          <Link
+            key={tab}
+            href={`/app/sites/${siteId}?view=${tab}`}
+            aria-current={view === tab ? 'page' : undefined}
+          >
+            {tab === 'monitoring'
+              ? 'Monitoring'
+              : tab === 'inventory'
+                ? 'Inventory'
+                : 'Connection'}
+          </Link>
+        ))}
+      </nav>
+      {view === 'connection' && (
+        <section className="card">
           <p>
-            Inventory has not been reported yet. The connector will send it
-            after the next successful sync.
+            Connector status:{' '}
+            {site.status === 'degraded' ? 'Stale heartbeat' : site.status}
           </p>
-        ) : (
-          <>
+          <p>
+            Last heartbeat:{' '}
+            {site.lastSeenAt
+              ? new Date(site.lastSeenAt).toISOString()
+              : 'Not received'}
+          </p>
+          <p>Connector version: {site.connectorVersion ?? 'Not received'}</p>
+        </section>
+      )}
+      {view === 'monitoring' && (
+        <MonitoringPanel
+          monitoring={monitoring}
+          checks={checks}
+          incidents={incidents}
+          https={site.canonicalUrl.startsWith('https://')}
+          canManage={organization.role !== 'member' && user.emailVerified}
+        />
+      )}
+      {view === 'inventory' && (
+        <section className="card">
+          <h2>Site inventory</h2>
+          {!inventory ? (
             <p>
-              WordPress {inventory.wordpressVersion} · PHP{' '}
-              {inventory.phpVersion}
+              Inventory has not been reported yet. The connector will send it
+              after the next successful sync.
             </p>
-            <p>
-              Updates available: {inventory.updateCounts.core} core,{' '}
-              {inventory.updateCounts.plugins} plugins,{' '}
-              {inventory.updateCounts.themes} themes.
-            </p>
-            <p>Received: {new Date(inventory.receivedAt).toISOString()}</p>
-            <h3>Active plugins</h3>
-            {inventory.activePlugins.length ? (
-              <ul>
-                {inventory.activePlugins.map((item) => (
-                  <li key={item.identifier}>
-                    {item.name} ({item.version})
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>None reported.</p>
-            )}
-            <h3>Active themes</h3>
-            {inventory.activeThemes.length ? (
-              <ul>
-                {inventory.activeThemes.map((item) => (
-                  <li key={item.identifier}>
-                    {item.name} ({item.version})
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>None reported.</p>
-            )}
-          </>
-        )}
-      </section>
-      {organization.role !== 'member' &&
+          ) : (
+            <>
+              <p>
+                WordPress {inventory.wordpressVersion} · PHP{' '}
+                {inventory.phpVersion}
+              </p>
+              <p>
+                Updates available: {inventory.updateCounts.core} core,{' '}
+                {inventory.updateCounts.plugins} plugins,{' '}
+                {inventory.updateCounts.themes} themes.
+              </p>
+              <p>Received: {new Date(inventory.receivedAt).toISOString()}</p>
+              <h3>Active plugins</h3>
+              {inventory.activePlugins.length ? (
+                <ul>
+                  {inventory.activePlugins.map((item) => (
+                    <li key={item.identifier}>
+                      {item.name} ({item.version})
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>None reported.</p>
+              )}
+              <h3>Active themes</h3>
+              {inventory.activeThemes.length ? (
+                <ul>
+                  {inventory.activeThemes.map((item) => (
+                    <li key={item.identifier}>
+                      {item.name} ({item.version})
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>None reported.</p>
+              )}
+            </>
+          )}
+        </section>
+      )}
+      {view === 'connection' &&
+        organization.role !== 'member' &&
         (user.emailVerified ? (
           <SiteControls siteId={siteId} />
         ) : (

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { PublicHeader } from '../components/app-navigation';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,10 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <nav aria-label="Main navigation">
-          <Link href="/">SitePulse</Link>
-          <Link href="/app">Workspace</Link>
-        </nav>
+        <PublicHeader />
         {children}
       </body>
     </html>

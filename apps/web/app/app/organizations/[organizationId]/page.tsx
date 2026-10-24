@@ -4,7 +4,10 @@ import { cookies } from 'next/headers';
 import { parseWebEnvironment } from '@sitepulse/config';
 import { serverApi } from '../../../../lib/server-api';
 import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
-import { SitesPanel } from '../../../../components/sites-panel';
+import {
+  SiteDirectory,
+  IncidentDirectory,
+} from '../../../../components/workspace-directory';
 
 export default async function OrganizationPage({
   params,
@@ -35,39 +38,41 @@ export default async function OrganizationPage({
   );
   return (
     <main>
-      <Link href="/app">All organizations</Link>
-      <section className="card">
-        <h1>{organization.name}</h1>
-        <p>Workspace: {organization.slug}</p>
-        <p>Your role: {organization.role}</p>
-        {!user.emailVerified && (
-          <Link href="/verify-email">Verify your email to manage sites</Link>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">WORKSPACE</p>
+          <h1>{organization.name}</h1>
+          <p className="muted">
+            {organization.slug} · Your role: {organization.role}
+          </p>
+          {!user.emailVerified && (
+            <Link href="/verify-email">Verify your email to manage sites</Link>
+          )}
+        </div>
+        <Link className="button secondary" href="/app/organizations">
+          All workspaces
+        </Link>
+      </div>
+      <div className="section-heading">
+        <h2>Workspace sites</h2>
+        {organization.role !== 'member' && user.emailVerified && (
+          <Link href="/app/sites/new">+ Add site</Link>
         )}
-      </section>
-      <SitesPanel
-        organizationId={organizationId}
+      </div>
+      <SiteDirectory
+        organizations={[organization]}
         sites={sites}
+        incidents={incidents}
+      />
+      <div className="section-heading">
+        <h2>Recent incidents</h2>
+      </div>
+      <IncidentDirectory
+        sites={sites}
+        organizations={[organization]}
+        incidents={incidents}
         canManage={organization.role !== 'member' && user.emailVerified}
       />
-      <section className="card">
-        <h2>Recent incidents</h2>
-        {!incidents.length ? (
-          <p>No incidents recorded.</p>
-        ) : (
-          <ul>
-            {incidents.map((incident) => (
-              <li key={incident.id}>
-                <Link href={`/app/sites/${incident.siteId}`}>
-                  {sites.find((site) => site.id === incident.siteId)?.name ??
-                    'Site'}
-                </Link>{' '}
-                · {incident.monitorType} · {incident.severity} ·{' '}
-                {incident.status} · {new Date(incident.startedAt).toISOString()}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </main>
   );
 }

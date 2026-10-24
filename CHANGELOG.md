@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-24
 
+- Replaced organization-first navigation with a responsive workspace sidebar, operational overview, searchable cross-workspace site directory, incident center, and direct monitoring/inventory/connection tabs. Added a standalone add-site flow, loading/error states, clearer connector labels and destructive credential confirmations; preserved server membership and verified administrator checks.
+
 - Added external HTTP availability and SSL expiry monitoring with connection-time public-IP pinning, redirect/DNS revalidation, TLS hostname verification and bounded probes that discard response bodies.
 - Added migration 0003 for leased PostgreSQL jobs, retained check history and deduplicated incidents; two failures confirm an outage and two successes confirm recovery. Disconnect/rotation/re-pair fences stale results and closes incidents without claiming recovery.
 - Added tenant-scoped check/incident APIs, verified administrator acknowledgement, site monitoring panels, organization incidents and validated deployment settings. Added SSRF, real HTTP/TLS and transactional outage/isolation regression tests. Live HTTPS/WordPress acceptance remains pending; no alerts or production deployment are included.

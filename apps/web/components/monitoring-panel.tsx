@@ -45,7 +45,7 @@ export function MonitoringPanel({
             (check) => check.monitorType === monitor.monitorType,
           );
           return (
-            <div key={monitor.monitorType}>
+            <div className="monitor-summary" key={monitor.monitorType}>
               <h3>
                 {monitor.monitorType === 'uptime'
                   ? 'HTTP availability'

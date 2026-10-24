@@ -78,6 +78,15 @@ export function SiteControls({ siteId }: { siteId: string }) {
   const [message, setMessage] = useState('');
   const [pending, setPending] = useState(false);
   async function action(operation: string) {
+    if (
+      operation !== 'pairing-challenges' &&
+      !window.confirm(
+        operation === 'disconnect'
+          ? 'Disconnect this site? The existing connector credential will be revoked and monitoring will stop.'
+          : 'Revoke this connector credential? You will need to pair WordPress again.',
+      )
+    )
+      return;
     setPending(true);
     setCode('');
     setMessage('');

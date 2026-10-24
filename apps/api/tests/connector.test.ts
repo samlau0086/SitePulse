@@ -323,6 +323,81 @@ it('rejects forged, absent and cross-site connector credentials', async () => {
   ).toBe(401);
   expect((await heartbeat(1, credential, randomUUID())).statusCode).toBe(401);
 });
+it('migrates inventory idempotently and returns an empty snapshot before reporting', async () => {
+  await migrateDatabase(database.db);
+  const response = await call('GET', `/sites/${siteId}`);
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json()).toMatchObject({
+    site: { id: siteId },
+    inventory: null,
+  });
+});
+it('stores and replaces inventory with server receipt time and enforces tenant and credential isolation', async () => {
+  const payload = {
+    siteId,
+    wordpressVersion: '6.7.1',
+    phpVersion: '8.3.4',
+    activePlugins: [
+      { identifier: 'example', name: 'Example', version: '1.0.0' },
+    ],
+    activeThemes: [{ identifier: 'theme', name: 'Theme', version: '1.0.0' }],
+    updateCounts: { plugins: 1, themes: 0, core: 0 },
+  };
+  const send = (body: object, token = credential) =>
+    call('POST', '/connector/inventory', body, '', token);
+  expect((await send(payload, '')).statusCode).toBe(401);
+  expect(
+    (await send(payload, randomBytes(32).toString('base64url'))).statusCode,
+  ).toBe(401);
+  expect((await send({ ...payload, siteId: randomUUID() })).statusCode).toBe(
+    401,
+  );
+  const other = await call('POST', `/organizations/${organizationId}/sites`, {
+    name: 'Inventory isolation',
+    canonicalUrl: 'https://inventory.customer-domain.com',
+  });
+  expect(other.statusCode, other.body).toBe(201);
+  expect(
+    (await send({ ...payload, siteId: other.json().site.id })).statusCode,
+  ).toBe(401);
+  expect(
+    (await send({ ...payload, receivedAt: '2099-01-01' })).statusCode,
+  ).toBe(400);
+  expect(
+    (
+      await send({
+        ...payload,
+        activePlugins: Array(201).fill(payload.activePlugins[0]),
+      })
+    ).statusCode,
+  ).toBe(400);
+  expect(
+    (await send({ ...payload, wordpressVersion: 'invalid' })).statusCode,
+  ).toBe(400);
+  const before = Date.now();
+  const written = await send(payload);
+  expect(written.statusCode, written.body).toBe(200);
+  expect(new Date(written.json().receivedAt).getTime()).toBeGreaterThanOrEqual(
+    before - 1000,
+  );
+  const response = await call('GET', `/sites/${siteId}`);
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json().inventory).toMatchObject(payload);
+  expect(response.json().inventory.receivedAt).toBe(written.json().receivedAt);
+  expect(
+    (await call('GET', `/sites/${siteId}`, undefined, outsider.cookie))
+      .statusCode,
+  ).toBe(404);
+  expect(
+    (await send({ ...payload, wordpressVersion: '6.8.0' })).statusCode,
+  ).toBe(200);
+  const rows = await database.db
+    .select()
+    .from(schema.siteInventorySnapshots)
+    .where(eq(schema.siteInventorySnapshots.siteId, siteId));
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.wordpressVersion).toBe('6.8.0');
+});
 it('accepts heartbeat with server time and rejects replay without refreshing freshness', async () => {
   const before = Date.now();
   expect((await heartbeat(1)).statusCode).toBe(200);
@@ -379,6 +454,24 @@ it('rotation immediately revokes the old secret and requires re-pairing', async 
   expect(response.statusCode).toBe(200);
   challenge = response.json().challenge;
   expect((await heartbeat(4)).statusCode).toBe(401);
+  expect(
+    (
+      await call(
+        'POST',
+        '/connector/inventory',
+        {
+          siteId,
+          wordpressVersion: '6.7.1',
+          phpVersion: '8.3.4',
+          activePlugins: [],
+          activeThemes: [],
+          updateCounts: { plugins: 0, themes: 0, core: 0 },
+        },
+        '',
+        credential,
+      )
+    ).statusCode,
+  ).toBe(401);
   const paired = await pair();
   expect(paired.statusCode).toBe(200);
   expect(paired.json().credential).not.toBe(credential);

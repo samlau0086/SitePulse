@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-24
 
+- Fixed missing Drizzle registration and schema snapshot for inventory migration 0002, which caused site detail reads to fail with HTTP 500. Added migration metadata, idempotency, inventory write/read and tenant/credential isolation regression coverage.
+
 - Documented Windows commands and provider setup for all GitHub deployment settings, including independent secret generation, age backup public-key extraction outside the repository, Resend credentials, environment placement and validation troubleshooting.
 - Documented Cloudflare 525 troubleshooting: TLS terminates at the HTTPS reverse proxy while the selected SitePulse host port remains plain HTTP, and rerunning deployment after proxy correction.
 - Automate first-deployment VPS configuration from GitHub Environment secrets/variables: validate before SSH, transfer secrets separately through SSH stdin, install mode-600 config under the deployment lock, and reject implicit database credential changes. Automatically install missing age/curl/flock helpers for Debian/Ubuntu root deployments; added configuration and first-run regression checks.

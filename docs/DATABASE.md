@@ -23,4 +23,6 @@ The schema lives in `packages/database/schema/index.ts`. Generate SQL with `pnpm
 
 Migrations use the Drizzle PostgreSQL migrator and its `drizzle.__drizzle_migrations` ledger. Re-running applied migrations is a no-op. Never edit an already applied migration: create a follow-up. The integration suite applies the migration twice against a disposable database and then exercises real queries and transactions.
 
+`0002_minimal_inventory.sql` adds the latest inventory snapshot per site. Its journal entry and `meta/0002_snapshot.json` must accompany the SQL; an unregistered SQL file is ignored by the migrator. Unit tests reject missing journal entries or snapshots, and integration tests cover empty inventory reads, snapshot replacement, server receipt times and authorization.
+
 Do not run migrations against production without authorization, a verified backup, and compatibility review. Prefer forward fixes. Destructive schema rollback requires a controlled restore to a separate database, verification, and a planned cutover; see DEPLOYMENT.md. Row-level security is not enabled: isolation is enforced by API query predicates and role checks, with regression tests. Any future direct database consumer must enforce equivalent isolation or add RLS.

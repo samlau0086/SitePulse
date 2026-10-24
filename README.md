@@ -264,3 +264,5 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 Next task: complete live WordPress acceptance for inventory reporting. External uptime/SSL monitoring needs connection-time DNS/IP pinning, redirect validation, bounded jobs, and outage/recovery tests before it is enabled.
 
 Current acceptance status: local Docker image builds, migration-first startup and web/API health checks pass. HTTPS staging login, site creation and connector pairing are working; inventory is now available for live acceptance. See [the acceptance procedure](docs/CONNECTOR_ACCEPTANCE.md).
+
+Inventory requires migration `0002_minimal_inventory`. Commit SQL migrations together with `packages/database/migrations/meta/_journal.json` and their snapshots: Drizzle runs only journal entries. CI checks migration registration and exercises inventory reads/writes on a disposable database. Deployment applies registered migrations automatically before starting the application.

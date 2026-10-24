@@ -6,7 +6,11 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['packages/**/*.test.ts', 'apps/api/src/**/*.test.ts'],
+          include: [
+            'packages/**/*.test.ts',
+            'apps/api/src/**/*.test.ts',
+            'apps/web/lib/**/*.test.ts',
+          ],
           testTimeout: 15000,
         },
       },

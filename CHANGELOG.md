@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-24
 
+- Made the homepage session-aware and redirected authenticated visitors from login/registration to their workspace, using uncached server session validation.
+
 - Fixed missing Drizzle registration and schema snapshot for inventory migration 0002, which caused site detail reads to fail with HTTP 500. Added migration metadata, idempotency, inventory write/read and tenant/credential isolation regression coverage.
 
 - Documented Windows commands and provider setup for all GitHub deployment settings, including independent secret generation, age backup public-key extraction outside the repository, Resend credentials, environment placement and validation troubleshooting.

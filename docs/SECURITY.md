@@ -2,6 +2,8 @@
 
 Implemented controls:
 
+- Homepage and login/registration navigation validate sessions through the API on the server with no response caching. Cookie presence alone does not grant authenticated navigation; workspace APIs continue to enforce authorization independently.
+
 - Maintained Better Auth session/password flow; Argon2id passwords, minimum 12 characters, bounded 128-character input, no password logging.
 - Database-backed, revocable, expiring sessions; HttpOnly/SameSite cookies, Secure in production. Production startup requires an HTTPS public origin and a non-placeholder auth secret of at least 32 characters.
 - Exact trusted-Origin checks on all mutations protect against CSRF, including login CSRF. No permissive CORS. Client session tokens are excluded from response JSON.

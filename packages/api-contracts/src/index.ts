@@ -56,6 +56,42 @@ export const connectorHeartbeat = z
       .max(32),
   })
   .strict();
+const inventoryItem = z
+  .object({
+    identifier: z.string().trim().min(1).max(100),
+    name: z.string().trim().min(1).max(150),
+    version: z
+      .string()
+      .trim()
+      .regex(/^[0-9A-Za-z.+_-]{1,40}$/),
+  })
+  .strict();
+export const connectorInventory = z
+  .object({
+    siteId: z.uuid(),
+    wordpressVersion: z
+      .string()
+      .regex(/^\d+\.\d+(?:\.\d+)?$/)
+      .max(32),
+    phpVersion: z
+      .string()
+      .regex(/^\d+\.\d+(?:\.\d+)?$/)
+      .max(32),
+    activePlugins: z.array(inventoryItem).max(200),
+    activeThemes: z.array(inventoryItem).max(20),
+    updateCounts: z
+      .object({
+        plugins: z.number().int().min(0).max(10000),
+        themes: z.number().int().min(0).max(10000),
+        core: z.number().int().min(0).max(100),
+      })
+      .strict(),
+  })
+  .strict();
+export type InventoryItem = z.infer<typeof inventoryItem>;
+export type SiteInventory = z.infer<typeof connectorInventory> & {
+  receivedAt: string;
+};
 export type Site = {
   id: string;
   organizationId: string;

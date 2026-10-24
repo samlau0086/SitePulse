@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { parseWebEnvironment } from '@sitepulse/config';
-import type { Organization, Site } from '@sitepulse/api-contracts';
+import type {
+  Organization,
+  Site,
+  SiteInventory,
+} from '@sitepulse/api-contracts';
 import { serverApi } from '../../../../lib/server-api';
 import { SiteControls } from '../../../../components/sites-panel';
 
@@ -23,7 +27,10 @@ export default async function SitePage({
   );
   if (response.status === 404 || response.status === 400) notFound();
   if (!response.ok) throw new Error('Unable to load site.');
-  const { site } = (await response.json()) as { site: Site };
+  const { site, inventory } = (await response.json()) as {
+    site: Site;
+    inventory: SiteInventory | null;
+  };
   const { organization } = await serverApi<{ organization: Organization }>(
     `/organizations/${site.organizationId}`,
   );
@@ -45,6 +52,52 @@ export default async function SitePage({
             : 'Not received'}
         </p>
         <p>Connector version: {site.connectorVersion ?? 'Not received'}</p>
+      </section>
+      <section className="card">
+        <h2>Site inventory</h2>
+        {!inventory ? (
+          <p>
+            Inventory has not been reported yet. The connector will send it
+            after the next successful sync.
+          </p>
+        ) : (
+          <>
+            <p>
+              WordPress {inventory.wordpressVersion} · PHP{' '}
+              {inventory.phpVersion}
+            </p>
+            <p>
+              Updates available: {inventory.updateCounts.core} core,{' '}
+              {inventory.updateCounts.plugins} plugins,{' '}
+              {inventory.updateCounts.themes} themes.
+            </p>
+            <p>Received: {new Date(inventory.receivedAt).toISOString()}</p>
+            <h3>Active plugins</h3>
+            {inventory.activePlugins.length ? (
+              <ul>
+                {inventory.activePlugins.map((item) => (
+                  <li key={item.identifier}>
+                    {item.name} ({item.version})
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>None reported.</p>
+            )}
+            <h3>Active themes</h3>
+            {inventory.activeThemes.length ? (
+              <ul>
+                {inventory.activeThemes.map((item) => (
+                  <li key={item.identifier}>
+                    {item.name} ({item.version})
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>None reported.</p>
+            )}
+          </>
+        )}
       </section>
       {organization.role !== 'member' &&
         (user.emailVerified ? (

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { and, eq, schema, sql, type Database } from '@sitepulse/database';
 import {
   connectorHeartbeat,
+  connectorInventory,
   connectorPair,
   createSite,
   emptyRequest,
@@ -203,7 +204,13 @@ export async function registerSiteRoutes(
     },
   );
   app.get('/api/v1/sites/:siteId', options(siteParams), (request) =>
-    withSite(request, false, async (_tx, site) => ({ site })),
+    withSite(request, false, async (tx, site) => {
+      const [inventory] = await tx
+        .select()
+        .from(schema.siteInventorySnapshots)
+        .where(eq(schema.siteInventorySnapshots.siteId, site.id));
+      return { site, inventory: inventory ?? null };
+    }),
   );
   app.patch(
     '/api/v1/sites/:siteId',
@@ -408,4 +415,72 @@ export async function registerSiteRoutes(
       },
     );
   }
+  app.post(
+    '/api/v1/connector/inventory',
+    {
+      schema: {
+        tags: ['Connector'],
+        security: [{ siteBearer: [] }],
+        body: jsonSchema(connectorInventory),
+      },
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
+    async (request) => {
+      const input = connectorInventory.parse(request.body);
+      const bearer = request.headers.authorization?.match(
+        /^Bearer ([A-Za-z0-9_-]{43})$/,
+      )?.[1];
+      if (!bearer) throw invalidCredential();
+      return db.transaction(async (tx) => {
+        const [site] = await tx
+          .select()
+          .from(schema.sites)
+          .where(eq(schema.sites.id, input.siteId))
+          .for('update');
+        const [credential] = await tx
+          .select()
+          .from(schema.siteCredentials)
+          .where(
+            and(
+              eq(schema.siteCredentials.siteId, input.siteId),
+              eq(schema.siteCredentials.credentialHash, hashCredential(bearer)),
+            ),
+          )
+          .for('update');
+        if (!site || site.deletedAt || !credential || credential.revokedAt)
+          throw invalidCredential();
+        const [inventory] = await tx
+          .insert(schema.siteInventorySnapshots)
+          .values({
+            siteId: site.id,
+            wordpressVersion: input.wordpressVersion,
+            phpVersion: input.phpVersion,
+            activePlugins: input.activePlugins,
+            activeThemes: input.activeThemes,
+            updateCounts: input.updateCounts,
+          })
+          .onConflictDoUpdate({
+            target: schema.siteInventorySnapshots.siteId,
+            set: {
+              wordpressVersion: input.wordpressVersion,
+              phpVersion: input.phpVersion,
+              activePlugins: input.activePlugins,
+              activeThemes: input.activeThemes,
+              updateCounts: input.updateCounts,
+              receivedAt: sql`now()`,
+              updatedAt: sql`now()`,
+            },
+          })
+          .returning();
+        await tx
+          .update(schema.siteCredentials)
+          .set({ lastUsedAt: sql`now()` })
+          .where(eq(schema.siteCredentials.id, credential.id));
+        return {
+          success: true,
+          receivedAt: inventory?.receivedAt.toISOString(),
+        };
+      });
+    },
+  );
 }

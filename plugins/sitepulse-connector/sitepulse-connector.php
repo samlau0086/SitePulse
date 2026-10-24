@@ -42,7 +42,7 @@ final class SitePulse_Connector {
         if (!$parts || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || !empty($parts['path']) || isset($parts['port'])) {
             return new WP_Error('sitepulse_url', 'Use an HTTPS SitePulse origin without a path or port.');
         }
-        if (!in_array($path, array('pair', 'heartbeat', 'disconnect'), true)) { return new WP_Error('sitepulse_path', 'Invalid endpoint.'); }
+        if (!in_array($path, array('pair', 'heartbeat', 'inventory', 'disconnect'), true)) { return new WP_Error('sitepulse_path', 'Invalid endpoint.'); }
         $headers = array('Content-Type' => 'application/json', 'Origin' => $origin);
         if ($credential) { $headers['Authorization'] = 'Bearer ' . $credential; }
         $response = wp_safe_remote_post($origin . '/api/v1/connector/' . $path, array('headers' => $headers, 'body' => wp_json_encode($body), 'timeout' => 15, 'redirection' => 0, 'sslverify' => true, 'limit_response_size' => 8192));
@@ -102,6 +102,7 @@ final class SitePulse_Connector {
             $state['sequence']++;
             update_option(self::OPTION, $state, false); // Reserve before sending, including on timeouts.
             $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => '0.1.0'), $state['credential']);
+            if (!is_wp_error($result) && function_exists('get_bloginfo')) { self::inventory($state); }
             // Do not resurrect a connection removed while the request was in flight.
             $current = get_option(self::OPTION, array());
             if (!$current || $current['credential'] !== $state['credential']) { return; }
@@ -112,6 +113,21 @@ final class SitePulse_Connector {
             wp_clear_scheduled_hook(self::HOOK);
             wp_schedule_single_event(time() + $delay, self::HOOK);
         } finally { delete_option(self::LOCK); }
+    }
+    public static function inventory($state) {
+        if (function_exists('plugin_basename') && defined('ABSPATH')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; }
+        $plugins = array();
+        foreach ((array) get_option('active_plugins', array()) as $file) {
+            $data = get_plugin_data(WP_PLUGIN_DIR . '/' . $file, false, false);
+            if (count($plugins) >= 200 || empty($data['Name']) || empty($data['Version'])) { continue; }
+            $plugins[] = array('identifier' => sanitize_key(dirname($file) === '.' ? basename($file, '.php') : dirname($file)), 'name' => sanitize_text_field($data['Name']), 'version' => sanitize_text_field($data['Version']));
+        }
+        $theme = wp_get_theme();
+        $themes = array(array('identifier' => sanitize_key($theme->get_stylesheet()), 'name' => sanitize_text_field($theme->get('Name')), 'version' => sanitize_text_field($theme->get('Version') ?: '0.0.0')));
+        $updates = get_site_transient('update_plugins');
+        $themeUpdates = get_site_transient('update_themes');
+        $coreUpdates = get_core_updates(array('dismissed' => false));
+        self::request($state['origin'], 'inventory', array('siteId' => $state['site_id'], 'wordpressVersion' => get_bloginfo('version'), 'phpVersion' => PHP_VERSION, 'activePlugins' => $plugins, 'activeThemes' => $themes, 'updateCounts' => array('plugins' => is_object($updates) && !empty($updates->response) ? count($updates->response) : 0, 'themes' => is_object($themeUpdates) && !empty($themeUpdates->response) ? count($themeUpdates->response) : 0, 'core' => is_array($coreUpdates) ? count($coreUpdates) : 0)), $state['credential']);
     }
     private static function acquire_lock() {
         $lock = get_option(self::LOCK);

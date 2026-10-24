@@ -32,3 +32,4 @@
 - Added organization creation, tenant-scoped listing/details, owner/admin updates, and privileged audit-log access.
 - Added local and production Compose configurations, private production database networking, and migration-first startup.
 - Documented development, test, migration, deployment, backup, rollback, and foundation limitations.
+- Added minimized site inventory snapshots with credential-scoped connector writes, membership-scoped reads, and WordPress/PHP/plugin/theme/update-count reporting.

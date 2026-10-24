@@ -253,3 +253,24 @@ export const pairingChallenges = pgTable(
   },
   (table) => [index('pairing_site_idx').on(table.siteId)],
 );
+
+export const siteInventorySnapshots = pgTable('site_inventory_snapshots', {
+  siteId: uuid('site_id')
+    .primaryKey()
+    .references(() => sites.id, { onDelete: 'cascade' }),
+  wordpressVersion: text('wordpress_version').notNull(),
+  phpVersion: text('php_version').notNull(),
+  activePlugins: jsonb('active_plugins')
+    .$type<Array<{ identifier: string; name: string; version: string }>>()
+    .notNull(),
+  activeThemes: jsonb('active_themes')
+    .$type<Array<{ identifier: string; name: string; version: string }>>()
+    .notNull(),
+  updateCounts: jsonb('update_counts')
+    .$type<{ plugins: number; themes: number; core: number }>()
+    .notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: updatedAt(),
+});

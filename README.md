@@ -1,6 +1,6 @@
 # SitePulse
 
-SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, and heartbeat freshness are implemented. External uptime/SSL probes, inventory, incidents, billing, and alert notifications remain separate milestones.
+SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, and minimized inventory are implemented. External uptime/SSL probes, incidents, billing, and alert notifications remain separate milestones.
 
 ## Authentication email
 
@@ -261,6 +261,6 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 | `plugins/sitepulse-connector` | Installable single-site WordPress pairing/heartbeat plugin and PHP contract checks               |
 | `docs`                        | Full specification, architecture, API, security, deployment and milestone tracking               |
 
-Next task: run the live WordPress acceptance procedure against HTTPS staging, then add minimized inventory with validation and size limits. External uptime/SSL monitoring needs connection-time DNS/IP pinning, redirect validation, bounded jobs, and outage/recovery tests before it is enabled.
+Next task: complete live WordPress acceptance for inventory reporting. External uptime/SSL monitoring needs connection-time DNS/IP pinning, redirect validation, bounded jobs, and outage/recovery tests before it is enabled.
 
-Current acceptance status: local Docker image builds, migration-first startup and web/API health checks pass. Live HTTPS WordPress and real email acceptance require staging details; see [the acceptance attempt record](docs/STAGING_ACCEPTANCE_REPORT.md). Inventory remains pending that acceptance.
+Current acceptance status: local Docker image builds, migration-first startup and web/API health checks pass. HTTPS staging login, site creation and connector pairing are working; inventory is now available for live acceptance. See [the acceptance procedure](docs/CONNECTOR_ACCEPTANCE.md).

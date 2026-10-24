@@ -1,0 +1,13 @@
+# Host-installed Caddy; replace the hostname and reload after caddy validate.
+# Staging uses 3000; production uses 3001. Keep the upstream on loopback.
+staging.sitepulse.example.com {
+    request_body {
+        max_size 1MB
+    }
+    reverse_proxy 127.0.0.1:3000 {
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 30s
+        }
+    }
+}

@@ -2,6 +2,11 @@
 
 ## Unreleased — 2026-10-24
 
+- Made VPS_KNOWN_HOSTS optional: discover SSH host keys per deployment when omitted, abort on discovery failure, retain configured key pinning and document the identity-verification limitation.
+- Expanded README with Chinese GitHub Actions VPS setup, environment secrets, server prerequisites, HTTPS, deployment triggers, and recovery guidance.
+- Added opt-in GitHub Actions staging deployment and manually confirmed production deployment to a Linux VPS after CI checks, with optional pinned SSH host keys and server-only application secrets.
+- Added release-tagged images, encrypted pre-migration database dumps, serialized deployments, fail-closed recovery, internal/public HTTPS health checks, and deployment fault-injection checks; documented VPS, TLS, email, backup and rollback setup.
+
 - Verified disposable local Docker image builds, migration-first startup and web/API proxy health on PostgreSQL 17.11; recorded missing live HTTPS WordPress and email prerequisites before inventory work.
 - Added Better Auth password recovery, expiring single-use reset links, concurrent replay protection, and revocation of all sessions on reset.
 - Added registration verification mail, resend and confirmation, verification timestamps, account recovery pages, and sanitized security audit events.

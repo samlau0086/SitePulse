@@ -1,6 +1,6 @@
 # Deployment, backups, and rollback
 
-This repository supplies deployment configuration; it does not deploy or alter any production environment. Production changes require explicit authorization.
+This repository supplies deployment configuration and an opt-in GitHub Actions VPS workflow. No VPS is contacted until its GitHub environment/SSH settings are configured and a deployment is triggered. Production changes require explicit authorization; the workflow requires a manual production confirmation. See [GitHub Actions VPS setup](GITHUB_ACTIONS_VPS.md).
 
 ## Local containers
 
@@ -23,7 +23,7 @@ Back up the database and record the currently deployed image/source revision bef
 
 Set AUTH_MAIL_TRANSPORT=resend, AUTH_MAIL_FROM to a verified provider sender, and inject RESEND_API_KEY privately. Confirm actual signup verification and reset delivery in staging. Mail is synchronous without a durable retry queue; generic public responses do not confirm delivery. Protect `.local/mail` development outbox and ensure the bind mount is writable by the container's node user. The worker requires only database/freshness settings and cannot send email.
 
-No reverse proxy, managed TLS, automated backup scheduling, deployment-specific resource limits, or production monitoring is bundled. These need environment-specific configuration before launch. API runtime currently includes build tooling; prune it in a later deployment hardening task.
+The Actions VPS workflow supplies encrypted pre-migration backups, release image tags and health verification. A host Caddy example is included; installation, DNS/TLS setup, off-host backup scheduling/retention, deployment-specific resource limits and production monitoring still need environment-specific configuration before launch. API runtime currently includes build tooling; prune it in a later deployment hardening task.
 
 ## Backup and recovery
 

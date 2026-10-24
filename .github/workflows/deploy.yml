@@ -1,0 +1,61 @@
+name: Deploy SitePulse to VPS
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: sitepulse-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.environment }}
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Upload checked source and deploy over SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$DEPLOY_ENVIRONMENT" =~ ^(staging|production)$ ]]
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$VPS_PORT" =~ ^[0-9]{1,5}$ ]] && (( VPS_PORT >= 1 && VPS_PORT <= 65535 ))
+          [[ -n "$VPS_SSH_KEY" ]]
+          key="$RUNNER_TEMP/sitepulse-deploy-key"
+          hosts="$RUNNER_TEMP/sitepulse-known-hosts"
+          archive="$RUNNER_TEMP/sitepulse-release.tar.gz"
+          trap 'rm -f "$key" "$hosts" "$archive"' EXIT
+          printf '%s\n' "$VPS_SSH_KEY" > "$key"
+          if [[ -n "$VPS_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$VPS_KNOWN_HOSTS" > "$hosts"
+          else
+            echo '::warning::VPS_KNOWN_HOSTS is unset. Automatically scanned keys are trusted for this run only; server identity is not independently verified and key changes across runs are not detected.'
+            if ! ssh-keyscan -T 10 -p "$VPS_PORT" "$VPS_HOST" > "$hosts" 2>/dev/null || [[ ! -s "$hosts" ]]; then
+              echo '::error::Unable to discover VPS SSH host keys. Check VPS_HOST, VPS_PORT and SSH connectivity.'
+              exit 1
+            fi
+          fi
+          unset VPS_SSH_KEY VPS_KNOWN_HOSTS
+          ssh_options=(-i "$key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$hosts" -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          root="/opt/sitepulse-$DEPLOY_ENVIRONMENT"
+          release="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          git archive --format=tar.gz "$GITHUB_SHA" > "$archive"
+          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "test -d '$root/incoming' && test -f '$root/shared/.env'"
+          scp "${ssh_options[@]}" -P "$VPS_PORT" "$archive" "$VPS_USER@$VPS_HOST:$root/incoming/$release.tar.gz"
+          # Only the exact checked commit is uploaded; no runner environment or secrets.
+          ssh "${ssh_options[@]}" -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -eu; umask 077; mkdir '$root/releases/$release'; tar -xzf '$root/incoming/$release.tar.gz' -C '$root/releases/$release'; bash '$root/releases/$release/scripts/deploy-vps.sh' '$DEPLOY_ENVIRONMENT' '$release'; rm '$root/incoming/$release.tar.gz'"

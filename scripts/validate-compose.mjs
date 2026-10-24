@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-function configuration(files) {
+function configuration(files, overrides = {}) {
   const result = spawnSync(
     'docker',
     [
@@ -19,6 +19,7 @@ function configuration(files) {
         APP_ORIGIN: 'https://sitepulse.example.invalid',
         POSTGRES_PASSWORD: randomBytes(32).toString('base64url'),
         BETTER_AUTH_SECRET: randomBytes(48).toString('base64url'),
+        ...overrides,
       },
     },
   );
@@ -64,6 +65,23 @@ assert.equal(
   production.services['sitepulse-api'].depends_on['sitepulse-migrate']
     .condition,
   'service_completed_successfully',
+);
+const release = '0123456789012345678901234567890123456789-123-1';
+const deployed = configuration(['docker-compose.yml'], {
+  SITEPULSE_RELEASE: release,
+  WEB_BIND_PORT: '3001',
+});
+assert.equal(deployed.services['sitepulse-web'].ports[0].published, '3001');
+assert.equal(deployed.services['sitepulse-web'].ports[0].host_ip, '127.0.0.1');
+for (const service of ['api', 'worker', 'web']) {
+  assert.equal(
+    deployed.services[`sitepulse-${service}`].image,
+    `sitepulse-${service}:${release}`,
+  );
+}
+assert.equal(
+  deployed.services['sitepulse-migrate'].image,
+  deployed.services['sitepulse-api'].image,
 );
 const development = configuration([
   'docker-compose.yml',

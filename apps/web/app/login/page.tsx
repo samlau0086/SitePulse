@@ -6,7 +6,11 @@ export default async function LoginPage() {
   if (await getSession()) redirect('/app');
   return (
     <main className="auth">
+      <p className="eyebrow">SITEPULSE / LOG IN</p>
       <h1>Welcome back</h1>
+      <p className="muted">
+        Your sites. Your workspace. Right where you left them.
+      </p>
       <AuthForm mode="login" />
       <p>
         <Link href="/forgot-password">Forgot your password?</Link> ·{' '}

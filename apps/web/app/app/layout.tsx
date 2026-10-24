@@ -16,7 +16,10 @@ export default async function AppLayout({
       </a>
       <aside className="app-sidebar">
         <Link className="brand" href="/app">
-          <span className="brand-mark">S</span>SitePulse
+          <span className="brand-mark" aria-hidden="true">
+            [s/p]
+          </span>
+          SitePulse
         </Link>
         <p className="eyebrow sidebar-caption">OPERATIONS WORKSPACE</p>
         <AppNavigation />

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — 2026-10-25
+
+- Applied DESIGN.md across the homepage, authentication and operational workspace: shared cream/ink tokens, monospace type, flat bordered sections, ASCII navigation/status markers, monochrome controls and responsive layouts. Added a clearly labeled illustrative homepage preview and retained session-aware actions.
+- Made DESIGN.md and UI implementation guidelines mandatory for future UI work through AGENTS.md; documented font fallback and accessible interaction requirements.
+
 ## Unreleased — 2026-10-24
 
 - Replaced organization-first navigation with a responsive workspace sidebar, operational overview, searchable cross-workspace site directory, incident center, and direct monitoring/inventory/connection tabs. Added a standalone add-site flow, loading/error states, clearer connector labels and destructive credential confirmations; preserved server membership and verified administrator checks.

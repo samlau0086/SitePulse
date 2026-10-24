@@ -1,5 +1,9 @@
 # SitePulse
 
+## UI design
+
+All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Shared design tokens live in `apps/web/app/globals.css`; follow [UI implementation guidelines](docs/UI_GUIDELINES.md) for future UI changes. The interface uses warm cream surfaces, monochrome controls, monospace typography, ASCII markers and flat hairline borders. Berkeley Mono is used when installed, with local monospace fallbacks; no commercial font is bundled or downloaded.
+
 SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks and incidents are implemented. Billing and alert delivery remain separate milestones.
 
 ## Workspace navigation

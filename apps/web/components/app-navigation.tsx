@@ -3,17 +3,22 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 export const navigation = [
-  { href: '/app', label: 'Overview', icon: '◫' },
-  { href: '/app/sites', label: 'Sites', icon: '▤' },
-  { href: '/app/incidents', label: 'Incidents', icon: '◉' },
-  { href: '/app/organizations', label: 'Workspaces', icon: '▦' },
+  { href: '/app', label: 'Overview', icon: '[=]' },
+  { href: '/app/sites', label: 'Sites', icon: '[+]' },
+  { href: '/app/incidents', label: 'Incidents', icon: '[!]' },
+  { href: '/app/organizations', label: 'Workspaces', icon: '[#]' },
 ];
 export function PublicHeader() {
   const pathname = usePathname();
   if (pathname === '/app' || pathname.startsWith('/app/')) return null;
   return (
-    <nav aria-label="Main navigation">
-      <Link href="/">SitePulse</Link>
+    <nav className="public-header" aria-label="Main navigation">
+      <Link className="brand" href="/">
+        <span className="brand-mark" aria-hidden="true">
+          [s/p]
+        </span>
+        SitePulse
+      </Link>
       <Link href="/app">Workspace</Link>
     </nav>
   );

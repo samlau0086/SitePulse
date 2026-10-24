@@ -2,6 +2,8 @@
 
 Read docs/PRODUCT_SPECIFICATION.md before changing architecture. Work on one milestone at a time.
 
+- Read `DESIGN.md` and `docs/UI_GUIDELINES.md` before creating or changing any UI. All future pages and components must follow this design and reuse the shared tokens in `apps/web/app/globals.css`.
+
 - Use Next.js in apps/web, Fastify in apps/api, and Drizzle/PostgreSQL in packages/database.
 - All organization data access must check the authenticated user's membership on the server. Never trust a client-supplied user, role, owner, or plan.
 - Use Better Auth for authentication. Never implement custom session or password protocols. Keep cookies HttpOnly, SameSite, and Secure in production; require a trusted Origin on mutations.

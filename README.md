@@ -245,6 +245,8 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 
 如果 Actions 显示 `VPS_KNOWN_HOSTS is unset`，该行只是警告。缺少 GitHub 应用配置会在连接 VPS 前显示对应字段名；不再要求手动创建服务器 `.env`。构建后的详细诊断保存在 VPS 的 `logs/<release>.log`，请私下查看，不要公开原始日志或 `.env`。现有 HTTPS 代理与 DNS 仍需指向所选上游端口；工作流不会改写 VPS 上其他站点的代理配置。
 
+如果部署日志出现 `curl: (**) ... 525`，说明应用已构建并完成迁移，但公网 HTTPS 反向代理的 TLS 握手失败。确认 `APP_ORIGIN` 对应的域名解析到 VPS，Cloudflare 使用 `Full (strict)`，源站证书已安装在 443 反向代理，且代理使用 **HTTP** 转发到 `127.0.0.1:WEB_BIND_PORT`（例如 `http://127.0.0.1:18080`），不要把容器上游写成 HTTPS，也不要继续使用旧的 3000 端口。修复代理后重新运行同一个 staging workflow；失败验证会让应用保持停止，这是为了避免未经公网验证的版本继续运行。
+
 ## Repository map
 
 | Location                      | Responsibility                                                                                   |

@@ -274,3 +274,126 @@ export const siteInventorySnapshots = pgTable('site_inventory_snapshots', {
     .defaultNow(),
   updatedAt: updatedAt(),
 });
+
+export const monitorJobs = pgTable(
+  'monitor_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    monitorType: text('monitor_type', { enum: ['uptime', 'ssl'] }).notNull(),
+    nextRunAt: timestamp('next_run_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    failures: integer('failures').notNull().default(0),
+    successes: integer('successes').notNull().default(0),
+    state: text('state', {
+      enum: [
+        'pending',
+        'healthy',
+        'suspected',
+        'down',
+        'recovering',
+        'warning',
+      ],
+    })
+      .notNull()
+      .default('pending'),
+    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('monitor_jobs_site_type_unique').on(
+      table.siteId,
+      table.monitorType,
+    ),
+    index('monitor_jobs_due_idx').on(table.nextRunAt),
+    check(
+      'monitor_jobs_type_valid',
+      sql`${table.monitorType} in ('uptime', 'ssl')`,
+    ),
+    check(
+      'monitor_jobs_state_valid',
+      sql`${table.state} in ('pending', 'healthy', 'suspected', 'down', 'recovering', 'warning')`,
+    ),
+    check(
+      'monitor_jobs_counters_valid',
+      sql`${table.failures} >= 0 and ${table.successes} >= 0`,
+    ),
+  ],
+);
+
+export const monitorChecks = pgTable(
+  'monitor_checks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    monitorType: text('monitor_type', { enum: ['uptime', 'ssl'] }).notNull(),
+    checkedAt: timestamp('checked_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    result: text('result', {
+      enum: ['up', 'down', 'warning', 'error'],
+    }).notNull(),
+    httpStatus: integer('http_status'),
+    latencyMs: integer('latency_ms'),
+    sslExpiresAt: timestamp('ssl_expires_at', { withTimezone: true }),
+    errorCode: text('error_code'),
+  },
+  (table) => [
+    index('monitor_checks_site_time_idx').on(table.siteId, table.checkedAt),
+    check(
+      'monitor_checks_type_valid',
+      sql`${table.monitorType} in ('uptime', 'ssl')`,
+    ),
+    check(
+      'monitor_checks_result_valid',
+      sql`${table.result} in ('up', 'down', 'warning', 'error')`,
+    ),
+  ],
+);
+
+export const incidents = pgTable(
+  'incidents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    monitorType: text('monitor_type', { enum: ['uptime', 'ssl'] }).notNull(),
+    status: text('status', { enum: ['open', 'acknowledged', 'resolved'] })
+      .notNull()
+      .default('open'),
+    severity: text('severity', { enum: ['warning', 'critical'] }).notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolutionReason: text('resolution_reason', {
+      enum: ['recovered', 'connection_reset'],
+    }),
+  },
+  (table) => [
+    uniqueIndex('incidents_active_fingerprint_unique')
+      .on(table.fingerprint)
+      .where(sql`${table.status} <> 'resolved'`),
+    index('incidents_site_time_idx').on(table.siteId, table.startedAt),
+    check(
+      'incidents_type_valid',
+      sql`${table.monitorType} in ('uptime', 'ssl')`,
+    ),
+    check(
+      'incidents_status_valid',
+      sql`${table.status} in ('open', 'acknowledged', 'resolved')`,
+    ),
+    check(
+      'incidents_severity_valid',
+      sql`${table.severity} in ('warning', 'critical')`,
+    ),
+  ],
+);

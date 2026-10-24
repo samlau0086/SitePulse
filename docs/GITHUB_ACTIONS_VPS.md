@@ -90,8 +90,13 @@ Add these **Environment variables** in the same environment:
 | `BACKUP_AGE_RECIPIENT`         | Public backup recipient printed by age-keygen; never the private key                                                        |
 | `WEB_BIND_PORT`                | Optional free host port; staging defaults 3000, production 3001                                                             |
 | `POSTGRES_USER`, `POSTGRES_DB` | Optional, default `sitepulse`; lowercase letters/digits/underscore, starts with a letter or underscore, up to 63 characters |
+| `MONITORING_ENABLED`           | Optional `true`/`false`, default `true`; pause external probes while retaining history                                      |
+| `MONITOR_INTERVAL_SECONDS`     | Optional HTTP interval, default `900`, allowed `300`–`86400`                                                                |
+| `SSL_INTERVAL_SECONDS`         | Optional SSL interval, default `86400`, allowed `3600`–`604800`                                                             |
 
 The deployment forces production mode and Resend transport. Invalid/missing application settings fail before any SSH connection. Keep runtime credentials stable; no local development or test credentials are injected.
+
+Monitoring variables are validated and installed in the generated private dotenv alongside existing settings. The worker needs outbound DNS and public HTTP/HTTPS access through its monitoring network; it exposes no port and PostgreSQL remains internal. A process health check does not establish monitoring correctness. After migration 0003, complete [monitoring acceptance](MONITORING_ACCEPTANCE.md) with a controlled target. Set MONITORING_ENABLED=false and redeploy to pause probes; stored state/history stays visible and connector freshness continues.
 
 You can omit `VPS_KNOWN_HOSTS`. The workflow then runs `ssh-keyscan` with a timeout, aborts if discovery fails or produces no keys, and emits a warning. SSH still uses `StrictHostKeyChecking=yes` against that run's discovered keys. Discovery does not independently authenticate the server, does not detect key changes between runs, and cannot prevent an attacker impersonating the server during the scan. There is no persistent host-key cache.
 

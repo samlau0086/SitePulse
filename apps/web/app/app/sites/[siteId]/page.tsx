@@ -6,9 +6,13 @@ import type {
   Organization,
   Site,
   SiteInventory,
+  MonitorState,
+  MonitorCheck,
+  Incident,
 } from '@sitepulse/api-contracts';
 import { serverApi } from '../../../../lib/server-api';
 import { SiteControls } from '../../../../components/sites-panel';
+import { MonitoringPanel } from '../../../../components/monitoring-panel';
 
 export default async function SitePage({
   params,
@@ -27,13 +31,18 @@ export default async function SitePage({
   );
   if (response.status === 404 || response.status === 400) notFound();
   if (!response.ok) throw new Error('Unable to load site.');
-  const { site, inventory } = (await response.json()) as {
+  const { site, inventory, monitoring } = (await response.json()) as {
     site: Site;
     inventory: SiteInventory | null;
+    monitoring: MonitorState[];
   };
   const { organization } = await serverApi<{ organization: Organization }>(
     `/organizations/${site.organizationId}`,
   );
+  const [{ checks }, { incidents }] = await Promise.all([
+    serverApi<{ checks: MonitorCheck[] }>(`/sites/${siteId}/checks`),
+    serverApi<{ incidents: Incident[] }>(`/sites/${siteId}/incidents`),
+  ]);
   return (
     <main>
       <Link href={`/app/organizations/${site.organizationId}`}>
@@ -43,7 +52,8 @@ export default async function SitePage({
         <h1>{site.name}</h1>
         <p>{site.canonicalUrl}</p>
         <p>
-          Status: {site.status === 'degraded' ? 'Stale heartbeat' : site.status}
+          Connector status:{' '}
+          {site.status === 'degraded' ? 'Stale heartbeat' : site.status}
         </p>
         <p>
           Last heartbeat:{' '}
@@ -53,6 +63,13 @@ export default async function SitePage({
         </p>
         <p>Connector version: {site.connectorVersion ?? 'Not received'}</p>
       </section>
+      <MonitoringPanel
+        monitoring={monitoring}
+        checks={checks}
+        incidents={incidents}
+        https={site.canonicalUrl.startsWith('https://')}
+        canManage={organization.role !== 'member' && user.emailVerified}
+      />
       <section className="card">
         <h2>Site inventory</h2>
         {!inventory ? (

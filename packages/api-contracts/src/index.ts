@@ -40,6 +40,9 @@ export const updateSite = z
   .object({ name: z.string().trim().min(1).max(100) })
   .strict();
 export const siteParams = z.object({ siteId: z.uuid() }).strict();
+export const incidentParams = z
+  .object({ siteId: z.uuid(), incidentId: z.uuid() })
+  .strict();
 export const connectorPair = z
   .object({
     challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
@@ -110,4 +113,32 @@ export type Organization = {
 };
 export type ApiError = {
   error: { code: string; message: string; requestId: string };
+};
+export type MonitorCheck = {
+  id: string;
+  siteId: string;
+  monitorType: 'uptime' | 'ssl';
+  checkedAt: string;
+  result: 'up' | 'down' | 'warning' | 'error';
+  httpStatus: number | null;
+  latencyMs: number | null;
+  sslExpiresAt: string | null;
+  errorCode: string | null;
+};
+export type MonitorState = {
+  monitorType: 'uptime' | 'ssl';
+  state:
+    'pending' | 'healthy' | 'suspected' | 'down' | 'recovering' | 'warning';
+  lastCheckedAt: string | null;
+  nextRunAt: string;
+};
+export type Incident = {
+  id: string;
+  siteId: string;
+  monitorType: 'uptime' | 'ssl';
+  status: 'open' | 'acknowledged' | 'resolved';
+  severity: 'warning' | 'critical';
+  startedAt: string;
+  resolvedAt: string | null;
+  resolutionReason: 'recovered' | 'connection_reset' | null;
 };

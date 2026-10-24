@@ -1,6 +1,16 @@
 # SitePulse
 
-SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, and minimized inventory are implemented. External uptime/SSL probes, incidents, billing, and alert notifications remain separate milestones.
+SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks and incidents are implemented. Billing and alert delivery remain separate milestones.
+
+## HTTP / SSL monitoring
+
+Paired sites are monitored by the worker independently of connector heartbeats. Site details show HTTP availability, latency, certificate expiry, recent checks and incidents; organization pages list recent incidents. Verified owners/admins can acknowledge an incident. Two consecutive failures open an incident; two successes recover it. Disconnecting, rotating or re-pairing closes existing incidents with `connection_reset`, which does not assert recovery.
+
+Only public HTTP(S) destinations on standard ports are allowed. Every connection and redirect resolves and validates all addresses, pins an approved address and verifies TLS. Each probe has a 10-second total budget, at most three redirects, and a 16 KiB header limit; response bodies are discarded. HTTPS downgrade is rejected. HTTP 200–399 is healthy after redirect processing; 4xx/5xx (including WAF blocks) count as failures. SSL checks validate the original HTTPS hostname and flag expiry at 14/7/3 days. HTTP-only sites have no SSL job.
+
+Optional validated settings in `.env` or GitHub Environment Variables: `MONITORING_ENABLED=true`, `MONITOR_INTERVAL_SECONDS=900` (300–86400), `SSL_INTERVAL_SECONDS=86400` (3600–604800). Set `MONITORING_ENABLED=false` and restart/redeploy to pause external probes; stored status/history remains visible. The worker needs outbound DNS and public HTTP/HTTPS access. PostgreSQL remains private and no worker port is published.
+
+Migration `0003_external_monitoring` adds jobs, checks and incidents. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four jobs per poll (default 60 seconds); next-run timestamps are due times, not delivery guarantees. Validate capacity before scaling beyond a small pilot. Run the [monitoring acceptance procedure](docs/MONITORING_ACCEPTANCE.md) before enabling notifications or claiming live monitoring acceptance.
 
 ## Authentication email
 
@@ -17,6 +27,7 @@ The complete supplied specification is preserved in [docs/PRODUCT_SPECIFICATION.
 - Node.js 22.18+ (Node 22 recommended), Corepack, pnpm 10.32.1.
 - Docker Engine with Compose v2, or a separately managed PostgreSQL database for host development.
 - PHP 8.1+ for plugin syntax/contract tests; WordPress 6.5+ single-site for live plugin acceptance.
+- OpenSSL for ephemeral TLS test certificates; Git for Windows includes a compatible executable. Set `OPENSSL_BIN` if needed.
 - An unused local port 3000 (web), 4000 (API), 5432 (development DB), and 5433 (disposable test DB).
 
 Enable pnpm with `corepack enable` and `corepack prepare pnpm@10.32.1 --activate`. If Corepack is unavailable, use `npx --yes pnpm@10.32.1` in place of `pnpm`.
@@ -255,7 +266,7 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
 | `apps/web`                    | Next.js, React, Tailwind, accessible Radix form labels; login, registration, protected workspace |
 | `apps/api`                    | Fastify REST API, Better Auth bridge, authorization, integration tests                           |
-| `apps/worker`                 | Independent bounded heartbeat expiration sweeps with PostgreSQL row locks                        |
+| `apps/worker`                 | Heartbeat expiration, SSRF-safe HTTP/SSL probes, leased PostgreSQL jobs and incident transitions |
 | `packages/database`           | Drizzle schema, SQL migrations, PostgreSQL connection/migration helpers                          |
 | `packages/api-contracts`      | Shared strict Zod request contracts and public types                                             |
 | `packages/config`             | Validated server environment variables                                                           |
@@ -263,7 +274,7 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 | `plugins/sitepulse-connector` | Installable single-site WordPress pairing/heartbeat plugin and PHP contract checks               |
 | `docs`                        | Full specification, architecture, API, security, deployment and milestone tracking               |
 
-Next task: complete live WordPress acceptance for inventory reporting. External uptime/SSL monitoring needs connection-time DNS/IP pinning, redirect validation, bounded jobs, and outage/recovery tests before it is enabled.
+Next task: complete live inventory and HTTP/SSL staging acceptance, including controlled outage/recovery and backup restoration. Implement notification delivery only after this acceptance.
 
 Current acceptance status: local Docker image builds, migration-first startup and web/API health checks pass. HTTPS staging login, site creation and connector pairing are working; inventory is now available for live acceptance. See [the acceptance procedure](docs/CONNECTOR_ACCEPTANCE.md).
 

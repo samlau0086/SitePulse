@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-24
 
+- Added external HTTP availability and SSL expiry monitoring with connection-time public-IP pinning, redirect/DNS revalidation, TLS hostname verification and bounded probes that discard response bodies.
+- Added migration 0003 for leased PostgreSQL jobs, retained check history and deduplicated incidents; two failures confirm an outage and two successes confirm recovery. Disconnect/rotation/re-pair fences stale results and closes incidents without claiming recovery.
+- Added tenant-scoped check/incident APIs, verified administrator acknowledgement, site monitoring panels, organization incidents and validated deployment settings. Added SSRF, real HTTP/TLS and transactional outage/isolation regression tests. Live HTTPS/WordPress acceptance remains pending; no alerts or production deployment are included.
+
 - Made the homepage session-aware and redirected authenticated visitors from login/registration to their workspace, using uncached server session validation.
 
 - Fixed missing Drizzle registration and schema snapshot for inventory migration 0002, which caused site detail reads to fail with HTTP 500. Added migration metadata, idempotency, inventory write/read and tenant/credential isolation regression coverage.

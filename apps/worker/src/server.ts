@@ -1,6 +1,7 @@
 import { parseWorkerEnvironment } from '@sitepulse/config';
 import { createDatabase } from '@sitepulse/database';
 import { expireHeartbeats } from './heartbeat';
+import { runMonitoring } from './monitoring';
 
 const env = parseWorkerEnvironment(process.env);
 const { db, pool } = createDatabase(env.DATABASE_URL);
@@ -17,6 +18,13 @@ while (!stopped) {
     await expireHeartbeats(db, env.HEARTBEAT_STALE_SECONDS);
   } catch {
     console.error('Heartbeat expiration sweep failed');
+  }
+  if (env.MONITORING_ENABLED && !stopped) {
+    try {
+      await runMonitoring(db, env);
+    } catch {
+      console.error('Monitoring sweep failed');
+    }
   }
   if (stopped) break;
   await new Promise<void>((resolve) => {

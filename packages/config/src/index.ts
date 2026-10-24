@@ -17,6 +17,22 @@ export const workerEnvironment = databaseEnvironment.extend({
     .max(86400)
     .default(2700),
   WORKER_POLL_SECONDS: z.coerce.number().int().min(10).max(300).default(60),
+  MONITORING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  MONITOR_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .max(86400)
+    .default(900),
+  SSL_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(3600)
+    .max(604800)
+    .default(86400),
 });
 export function parseWorkerEnvironment(
   input: Record<string, string | undefined>,

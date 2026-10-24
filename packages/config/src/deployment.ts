@@ -69,6 +69,9 @@ export function prepareDeploymentConfiguration(
     LOG_LEVEL: api.LOG_LEVEL,
     HEARTBEAT_STALE_SECONDS: String(worker.HEARTBEAT_STALE_SECONDS),
     WORKER_POLL_SECONDS: String(worker.WORKER_POLL_SECONDS),
+    MONITORING_ENABLED: String(worker.MONITORING_ENABLED),
+    MONITOR_INTERVAL_SECONDS: String(worker.MONITOR_INTERVAL_SECONDS),
+    SSL_INTERVAL_SECONDS: String(worker.SSL_INTERVAL_SECONDS),
   };
   return {
     '.env': Object.entries(values)

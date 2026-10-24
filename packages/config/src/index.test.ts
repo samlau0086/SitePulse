@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseEnvironment, parseWebEnvironment } from './index';
+import {
+  parseEnvironment,
+  parseWebEnvironment,
+  parseWorkerEnvironment,
+} from './index';
 
 const valid = {
   DATABASE_URL: 'postgres://test:test@localhost/sitepulse_test',
@@ -7,6 +11,21 @@ const valid = {
   BETTER_AUTH_SECRET: 'a'.repeat(48),
 };
 describe('environment validation', () => {
+  it('validates monitoring switches and interval bounds without Boolean coercion', () => {
+    expect(parseWorkerEnvironment(valid).MONITORING_ENABLED).toBe(true);
+    expect(
+      parseWorkerEnvironment({ ...valid, MONITORING_ENABLED: 'false' })
+        .MONITORING_ENABLED,
+    ).toBe(false);
+    for (const input of [
+      { MONITORING_ENABLED: 'yes' },
+      { MONITOR_INTERVAL_SECONDS: '1' },
+      { SSL_INTERVAL_SECONDS: '0' },
+    ])
+      expect(() => parseWorkerEnvironment({ ...valid, ...input })).toThrow(
+        'Invalid worker',
+      );
+  });
   it('requires a real mail transport in production and credentials for Resend', () => {
     expect(() =>
       parseEnvironment({

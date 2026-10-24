@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { and, eq, schema, sql, type Database } from '@sitepulse/database';
+import { and, desc, eq, schema, sql, type Database } from '@sitepulse/database';
 import {
   connectorHeartbeat,
   connectorInventory,
@@ -10,6 +10,7 @@ import {
   emptyRequest,
   organizationParams,
   siteParams,
+  incidentParams,
   updateSite,
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
@@ -100,7 +101,9 @@ export async function registerSiteRoutes(
     ) => Promise<T>,
   ) {
     const user = await requireUser(request);
-    const { siteId } = siteParams.parse(request.params);
+    const { siteId } = siteParams.parse({
+      siteId: (request.params as { siteId: unknown }).siteId,
+    });
     return db.transaction(async (tx) => {
       const [identity] = await tx
         .select({ organizationId: schema.sites.organizationId })
@@ -136,7 +139,26 @@ export async function registerSiteRoutes(
       requestId: request.id,
       metadata: { siteId: site.id },
     });
+  const resetMonitoring = async (tx: Transaction, siteId: string) => {
+    await tx
+      .delete(schema.monitorJobs)
+      .where(eq(schema.monitorJobs.siteId, siteId));
+    await tx
+      .update(schema.incidents)
+      .set({
+        status: 'resolved',
+        resolvedAt: sql`now()`,
+        resolutionReason: 'connection_reset',
+      })
+      .where(
+        and(
+          eq(schema.incidents.siteId, siteId),
+          sql`${schema.incidents.status} <> 'resolved'`,
+        ),
+      );
+  };
   const revoke = async (tx: Transaction, siteId: string) => {
+    await resetMonitoring(tx, siteId);
     await tx
       .update(schema.siteCredentials)
       .set({ revokedAt: new Date() })
@@ -209,8 +231,112 @@ export async function registerSiteRoutes(
         .select()
         .from(schema.siteInventorySnapshots)
         .where(eq(schema.siteInventorySnapshots.siteId, site.id));
-      return { site, inventory: inventory ?? null };
+      const monitoring = await tx
+        .select({
+          monitorType: schema.monitorJobs.monitorType,
+          state: schema.monitorJobs.state,
+          lastCheckedAt: schema.monitorJobs.lastCheckedAt,
+          nextRunAt: schema.monitorJobs.nextRunAt,
+        })
+        .from(schema.monitorJobs)
+        .where(eq(schema.monitorJobs.siteId, site.id));
+      return { site, inventory: inventory ?? null, monitoring };
     }),
+  );
+  for (const resource of ['checks', 'incidents'] as const) {
+    app.get(
+      `/api/v1/sites/:siteId/${resource}`,
+      options(siteParams),
+      (request) =>
+        withSite(request, false, async (tx, site) =>
+          resource === 'checks'
+            ? {
+                checks: await tx
+                  .select()
+                  .from(schema.monitorChecks)
+                  .where(eq(schema.monitorChecks.siteId, site.id))
+                  .orderBy(
+                    desc(schema.monitorChecks.checkedAt),
+                    desc(schema.monitorChecks.id),
+                  )
+                  .limit(100),
+              }
+            : {
+                incidents: await tx
+                  .select()
+                  .from(schema.incidents)
+                  .where(eq(schema.incidents.siteId, site.id))
+                  .orderBy(
+                    desc(schema.incidents.startedAt),
+                    desc(schema.incidents.id),
+                  )
+                  .limit(100),
+              },
+        ),
+    );
+  }
+  app.get(
+    '/api/v1/organizations/:organizationId/incidents',
+    options(organizationParams),
+    async (request) => {
+      const user = await requireUser(request);
+      const { organizationId } = organizationParams.parse(request.params);
+      return db.transaction(async (tx) => {
+        await membership(tx, user, organizationId, false);
+        const rows = await tx
+          .select({ incident: schema.incidents })
+          .from(schema.incidents)
+          .innerJoin(schema.sites, eq(schema.sites.id, schema.incidents.siteId))
+          .where(
+            and(
+              eq(schema.sites.organizationId, organizationId),
+              sql`${schema.sites.deletedAt} is null`,
+            ),
+          )
+          .orderBy(desc(schema.incidents.startedAt), desc(schema.incidents.id))
+          .limit(100);
+        return { incidents: rows.map((row) => row.incident) };
+      });
+    },
+  );
+  app.post(
+    '/api/v1/sites/:siteId/incidents/:incidentId/acknowledge',
+    options(incidentParams, emptyRequest),
+    (request) =>
+      withSite(request, true, async (tx, site, user) => {
+        const { incidentId } = incidentParams.parse(request.params);
+        emptyRequest.parse(request.body);
+        const [incident] = await tx
+          .select()
+          .from(schema.incidents)
+          .where(
+            and(
+              eq(schema.incidents.id, incidentId),
+              eq(schema.incidents.siteId, site.id),
+            ),
+          )
+          .for('update');
+        if (!incident)
+          throw new HttpError(
+            404,
+            'INCIDENT_NOT_FOUND',
+            'The requested incident was not found.',
+          );
+        if (incident.status === 'open') {
+          await tx
+            .update(schema.incidents)
+            .set({ status: 'acknowledged' })
+            .where(eq(schema.incidents.id, incidentId));
+          await audit(
+            tx,
+            site,
+            request,
+            'monitor.incident_acknowledged',
+            user.id,
+          );
+        }
+        return { success: true };
+      }),
   );
   app.patch(
     '/api/v1/sites/:siteId',
@@ -308,6 +434,7 @@ export async function registerSiteRoutes(
           code.expiresAt.getTime() <= Date.now()
         )
           throw invalid();
+        await resetMonitoring(tx, site.id);
         await tx
           .update(schema.pairingChallenges)
           .set({ consumedAt: new Date() })

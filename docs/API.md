@@ -65,4 +65,16 @@ Connector POST requests send `Origin: <APP_ORIGIN>` and (except pairing) `Author
 
 Non-members and deleted sites return `SITE_NOT_FOUND` (404); insufficient roles or unverified managing users return 403. Invalid/expired/consumed codes return `INVALID_CHALLENGE` (400), invalid/revoked bearer credentials `INVALID_CREDENTIAL` (401), duplicate/reordered heartbeat `HEARTBEAT_REPLAY` (409). Heartbeats use database receipt time and do not accept client timestamps. Version is a numeric three-part version, sequence is 1–2147483647. Re-pair after sequence exhaustion. Pairing allows 20 requests/minute/IP and each authenticated connector endpoint 120/minute/IP. These process-local limits require tuning and shared storage before public scale.
 
-Member administration, dashboard aggregate metrics, usage, external probes/checks/incidents, alert notifications, and billing endpoints are not mounted. Unimplemented endpoints return the standard 404. Inventory contains only WordPress/PHP versions, active plugin/theme identifiers and versions, update counts, and a server receipt timestamp.
+Member administration, dashboard aggregate metrics, usage, alert delivery and billing endpoints are not mounted. Unimplemented endpoints return the standard 404. Inventory contains only WordPress/PHP versions, active plugin/theme identifiers and versions, update counts, and a server receipt timestamp.
+
+## External monitoring and incidents
+
+| Method / path                                           | Body           | Access/result                                                                          |
+| ------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `GET /sites/:siteId`                                    | —              | Member; also returns sanitized `monitoring` states/last/next timestamps; no job leases |
+| `GET /sites/:siteId/checks`                             | —              | Member; `{ checks }`, latest 100 results                                               |
+| `GET /sites/:siteId/incidents`                          | —              | Member; `{ incidents }`, latest 100 by start time                                      |
+| `GET /organizations/:organizationId/incidents`          | —              | Member; latest 100 incidents, excluding deleted sites                                  |
+| `POST /sites/:siteId/incidents/:incidentId/acknowledge` | `{}` or absent | Verified owner/admin and trusted Origin; idempotent acknowledgement                    |
+
+Non-members/deleted sites return 404. A foreign or nonexistent incident on an authorized site returns `INCIDENT_NOT_FOUND` (404); members and unverified administrators cannot acknowledge. Acknowledgement never closes an incident or suppresses checks. Check fields include type, server timestamp, result, HTTP status, latency, certificate expiry and safe error code. Incident fields include type, severity, lifecycle timestamps and `resolutionReason` (`recovered` or `connection_reset` when resolved). No public endpoint accepts probe results, schedules arbitrary fetches, changes target identity or exposes lease tokens. Reads are bounded history snapshots; pagination and aggregate availability percentages are deferred.

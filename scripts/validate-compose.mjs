@@ -41,7 +41,9 @@ for (const [name, service] of Object.entries(production.services)) {
 }
 assert.deepEqual(production.services['sitepulse-worker'].networks, {
   database: null,
+  monitoring: null,
 });
+assert.equal(production.networks.monitoring.internal ?? false, false);
 assert.equal(
   production.services['sitepulse-db'].ports,
   undefined,

@@ -11,6 +11,7 @@
   "dependencies": {
     "@sitepulse/config": "workspace:*",
     "@sitepulse/database": "workspace:*",
+    "@sitepulse/shared": "workspace:*",
     "tsx": "^4.20.6"
   }
 }

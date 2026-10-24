@@ -9,6 +9,7 @@ export default defineConfig({
           include: [
             'packages/**/*.test.ts',
             'apps/api/src/**/*.test.ts',
+            'apps/worker/src/**/*.test.ts',
             'apps/web/lib/**/*.test.ts',
           ],
           testTimeout: 15000,

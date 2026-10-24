@@ -74,7 +74,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-sitepulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@sitepulse-db:5432/${POSTGRES_DB:-sitepulse}
       HEARTBEAT_STALE_SECONDS: ${HEARTBEAT_STALE_SECONDS:-2700}
       WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-60}
-    networks: [database]
+      MONITORING_ENABLED: ${MONITORING_ENABLED:-true}
+      MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-900}
+      SSL_INTERVAL_SECONDS: ${SSL_INTERVAL_SECONDS:-86400}
+    networks: [database, monitoring]
     depends_on:
       sitepulse-migrate:
         condition: service_completed_successfully
@@ -116,5 +119,6 @@ volumes:
 
 networks:
   application:
+  monitoring:
   database:
     internal: true

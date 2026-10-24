@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { parseWebEnvironment } from '@sitepulse/config';
 import { serverApi } from '../../../../lib/server-api';
-import type { Organization, Site } from '@sitepulse/api-contracts';
+import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
 import { SitesPanel } from '../../../../components/sites-panel';
 
 export default async function OrganizationPage({
@@ -30,6 +30,9 @@ export default async function OrganizationPage({
   const { sites } = await serverApi<{ sites: Site[] }>(
     `/organizations/${organizationId}/sites`,
   );
+  const { incidents } = await serverApi<{ incidents: Incident[] }>(
+    `/organizations/${organizationId}/incidents`,
+  );
   return (
     <main>
       <Link href="/app">All organizations</Link>
@@ -46,6 +49,25 @@ export default async function OrganizationPage({
         sites={sites}
         canManage={organization.role !== 'member' && user.emailVerified}
       />
+      <section className="card">
+        <h2>Recent incidents</h2>
+        {!incidents.length ? (
+          <p>No incidents recorded.</p>
+        ) : (
+          <ul>
+            {incidents.map((incident) => (
+              <li key={incident.id}>
+                <Link href={`/app/sites/${incident.siteId}`}>
+                  {sites.find((site) => site.id === incident.siteId)?.name ??
+                    'Site'}
+                </Link>{' '}
+                · {incident.monitorType} · {incident.severity} ·{' '}
+                {incident.status} · {new Date(incident.startedAt).toISOString()}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }

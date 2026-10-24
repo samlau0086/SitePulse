@@ -4,6 +4,8 @@ Date: 2026-10-24. Scope: authentication recovery and email verification, followe
 
 This is the original implementation checkpoint. Later Docker runtime checks and the current live acceptance blockers are recorded in [STAGING_ACCEPTANCE_REPORT.md](STAGING_ACCEPTANCE_REPORT.md).
 
+The historical results below remain unchanged. Subsequent inventory and HTTP/SSL monitoring implementation is documented in README.md, CHANGELOG.md and [MONITORING_ACCEPTANCE.md](MONITORING_ACCEPTANCE.md); statements below about missing inventory/probes describe this original checkpoint only.
+
 ## Delivered behavior
 
 - Better Auth manages expiring password resets, single-use reset consumption, session revocation, and email verification. Recovery requests use generic responses and rate limits. Development uses a private ignored outbox; production requires the configured Resend transport.

@@ -10,6 +10,23 @@ const valid = {
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 describe('GitHub deployment configuration', () => {
+  it('preserves validated monitor settings in the private deployment config', () => {
+    const config = prepareDeploymentConfiguration({
+      ...valid,
+      MONITORING_ENABLED: 'false',
+      MONITOR_INTERVAL_SECONDS: '600',
+      SSL_INTERVAL_SECONDS: '7200',
+    })['.env'];
+    expect(config).toContain("MONITORING_ENABLED='false'\n");
+    expect(config).toContain("MONITOR_INTERVAL_SECONDS='600'\n");
+    expect(config).toContain("SSL_INTERVAL_SECONDS='7200'\n");
+    expect(() =>
+      prepareDeploymentConfiguration({
+        ...valid,
+        MONITOR_INTERVAL_SECONDS: '1',
+      }),
+    ).toThrow('Invalid worker');
+  });
   it('produces production dotenv and matching backup/origin files', () => {
     const files = prepareDeploymentConfiguration(valid);
     expect(files['.env']).toContain("NODE_ENV='production'\n");

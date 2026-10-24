@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import ipaddr from 'ipaddr.js';
+import { isPublicAddress } from '@sitepulse/shared/network';
 import { HttpError } from './http-error';
 
 export type ResolveHost = (hostname: string) => Promise<string[]>;
@@ -30,11 +30,7 @@ export function normalizeSiteUrl(input: string) {
   url.pathname = url.pathname.replace(/\/+$/, '') || '/';
   return { canonicalUrl: url.toString().replace(/\/$/, ''), hostname };
 }
-export function isPublicAddress(address: string) {
-  if (!isIP(address)) return false;
-  const parsed = ipaddr.process(address);
-  return parsed.range() === 'unicast';
-}
+export { isPublicAddress } from '@sitepulse/shared/network';
 export async function validateSiteUrl(
   input: string,
   resolve: ResolveHost = resolveHost,

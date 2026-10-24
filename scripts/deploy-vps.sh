@@ -16,10 +16,14 @@ if [[ ! "$web_bind_port" =~ ^[1-9][0-9]{0,4}$ ]] || (( web_bind_port > 65535 ));
 fi
 root="${SITEPULSE_DEPLOY_BASE:-/opt}/sitepulse-$environment"
 candidate="$root/releases/$release"
-[[ -d "$candidate" && -f "$root/shared/.env" ]] || { echo 'VPS setup is incomplete' >&2; exit 1; }
+[[ -d "$candidate" ]] || { echo 'VPS release directory missing' >&2; exit 1; }
 for tool in docker age flock curl; do command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }; done
 exec 9>"$root/deploy.lock"
 flock -n 9 || { echo 'Another deployment is running' >&2; exit 1; }
+if [[ ${4:-} == --configure-from-stdin ]]; then
+  bash "$(dirname "$0")/install-vps-config.sh" "$root/shared"
+fi
+[[ -s "$root/shared/.env" ]] || { echo 'VPS application configuration missing' >&2; exit 1; }
 [[ -s "$root/shared/backup-recipient.txt" && -s "$root/shared/public-origin.txt" ]] || { echo 'Backup recipient/public origin missing' >&2; exit 1; }
 origin=$(<"$root/shared/public-origin.txt")
 [[ "$origin" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo 'Expected an HTTPS origin without path or trailing slash' >&2; exit 1; }

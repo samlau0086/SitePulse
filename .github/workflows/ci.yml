@@ -48,9 +48,11 @@ jobs:
       - run: pnpm build
       - run: pnpm audit --prod --audit-level high
       - run: pnpm compose:check
+      - run: node scripts/test-prepare-vps-config.mjs
       - run: bash -n scripts/deploy-vps.sh
-      - run: shellcheck scripts/deploy-vps.sh scripts/test-deploy-vps.sh
+      - run: shellcheck scripts/deploy-vps.sh scripts/test-deploy-vps.sh scripts/bootstrap-vps.sh scripts/install-vps-config.sh scripts/test-vps-config.sh
       - run: bash scripts/test-deploy-vps.sh
+      - run: bash scripts/test-vps-config.sh
       - run: node scripts/test-deploy-ssh.mjs
       - name: Validate Actions workflows
         run: docker run --rm --mount "type=bind,source=$GITHUB_WORKSPACE,target=/repo,readonly" -w /repo rhysd/actionlint:1.7.7

@@ -94,7 +94,7 @@ Credential rotation immediately revokes the old credential and issues a fresh pa
 
 ## Production configuration
 
-For GitHub Actions deployment to a Linux VPS, follow [the setup guide](docs/GITHUB_ACTIONS_VPS.md). CI can automatically deploy `main` to staging after checks; production requires a manual confirmation and supports GitHub environment approval rules. The workflow supports optional pinned SSH host keys, server-only application secrets, encrypted pre-migration backups, release-tagged images and HTTPS health verification. If no host-key record is configured, it discovers and trusts the server key on each run without independently verifying server identity. Configure VPS, DNS/TLS, real authentication mail and GitHub environment secrets before enabling it.
+For GitHub Actions deployment to a Linux VPS, follow [the setup guide](docs/GITHUB_ACTIONS_VPS.md). Configure application secrets and variables in GitHub Environments; Actions automatically creates directories and installs private configuration over SSH, including the first deployment. CI can deploy `main` to staging after checks; production requires manual confirmation. Encrypted pre-migration backups, release-tagged images and HTTPS health verification are included. Optional SSH host-key discovery does not independently verify server identity. Docker/Compose, working SSH access, DNS/TLS routing and real authentication mail are infrastructure prerequisites.
 
 Use only `docker-compose.yml`. Set `APP_ORIGIN` to the external **HTTPS** origin and supply independent production secrets through a secrets manager or protected deployment environment. The API rejects non-HTTPS origins in production. PostgreSQL has no published port and uses a private Docker network. API is internal; web publishes `127.0.0.1:3000` for a host HTTPS reverse proxy. Configure the proxy to preserve browser `Origin`, reject unknown hosts, terminate TLS, and forward requests to that loopback port.
 
@@ -104,40 +104,23 @@ See [deployment and rollback](docs/DEPLOYMENT.md) and [security limits](docs/SEC
 
 部署流程为：CI 检查通过 → SSH 上传对应提交 → VPS 构建 Docker 镜像 → 暂停应用写入并加密备份数据库 → 执行迁移 → 启动容器 → 检查内部及公网 HTTPS 健康状态。Docker 镜像在 VPS 构建，无需配置镜像仓库账号。迁移和重启期间会短暂停机。
 
-### 1. 首次准备 VPS
+### 1. 自动初始化 VPS
 
-准备 Linux VPS，安装 Docker Engine、Docker Compose v2、Bash、`curl`、`flock` 和 `age`，并配置有 Docker 操作权限的专用 SSH 部署账户。该账户需要足够的磁盘和内存完成构建。
+使用已有 Docker Engine、Docker Compose v2、Bash 和可用 SSH 登录的 Linux VPS。你当前使用 root，可直接在 GitHub 配置，不需要先登录 VPS 创建目录、编辑 `.env` 或安装 `age`。Debian/Ubuntu 的 root 部署会自动安装缺少的 `age`、`curl`、`flock` 辅助工具；已有 Docker 和其他容器不会被重装或清理。其他系统需预装这些工具。
 
-将部署 SSH 公钥加入该账户的 `~/.ssh/authorized_keys`。匹配的私钥用于下面的 GitHub Secret；当前工作流需要可非交互使用的专用密钥。不要把私钥、密码或 `.env` 提交到仓库。
+使用已经能够登录该账户的 SSH 私钥，存入下文的 GitHub Secret；私钥需要支持非交互认证。账户需要足够磁盘和内存完成构建。不要把私钥、密码或 `.env` 提交到仓库。
 
 工作流会通过 SSH 自动创建 `/opt/sitepulse-staging` 及 `incoming`、`releases`、`shared`、`backups`、`logs` 子目录。使用 root 部署时无需手工创建；新目录权限为 `700`，已有目录的权限、所有者和文件保持不变。重复运行不会清空目录。Production 自动创建对应的 `/opt/sitepulse-production` 目录。
 
-如果使用普通部署账户且无权在 `/opt` 下创建目录，先由管理员执行以下一次性准备；将 `deploy` 用户和组名替换为实际部署账户：
+工作流从 GitHub 配置自动生成并通过 SSH 标准输入传输 `shared/.env`、`shared/backup-recipient.txt` 和 `shared/public-origin.txt`，文件权限为 `600`。密钥不会进入源码压缩包、Docker 构建目录或 Actions artifact，日志不打印密钥。每次部署以 GitHub 配置为准；数据库用户、库名或密码与已有配置不一致时会停止，防止误以为修改 `.env` 就能轮换数据库凭据。普通账户仍须具有目标目录和 Docker 的操作权限。
+
+在自己的可信电脑分别运行两次下列命令，生成独立的数据库密码和认证密钥，粘贴到 GitHub Secrets，后续部署保持不变：
 
 ```sh
-sudo install -d -m 700 -o deploy -g deploy /opt/sitepulse-staging
-sudo -u deploy mkdir -p /opt/sitepulse-staging/{incoming,releases,shared,backups,logs}
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-自动创建目录后，工作流会检查下面的三个必需配置文件。它不会生成或覆盖应用密钥、备份公钥或域名配置；首次运行缺少配置时会明确指出文件路径，可填写后重新运行。
-
-通过安全方式将 [deploy/vps.env.example](deploy/vps.env.example) 复制为 `/opt/sitepulse-staging/shared/.env`，设置权限为 `600`，填写：
-
-- `APP_ORIGIN`：真实公网 HTTPS origin，不带路径或末尾斜杠。
-- `POSTGRES_USER`、`POSTGRES_DB`、`POSTGRES_PASSWORD`：独立的数据库配置。
-- `BETTER_AUTH_SECRET`：独立随机密钥，后续发布保持不变。
-- `AUTH_MAIL_TRANSPORT=resend`、`AUTH_MAIL_FROM`、`RESEND_API_KEY`：真实邮件服务配置，发件域名需要完成验证。
-
-可分别运行两次 `openssl rand -hex 48`，生成数据库密码和认证密钥，在服务器上私下保存。不要复用 Windows 本地凭据。数据库密码、认证密钥和邮件服务密钥保留在 VPS，当前工作流不会从 GitHub 注入这些应用配置。
-
-在可信管理员电脑生成 age 备份密钥，将私钥保存在 VPS 之外。服务器还必须准备以下两个文件，均设置权限为 `600`：
-
-| 文件                                                 | 内容                                                |
-| ---------------------------------------------------- | --------------------------------------------------- |
-| `/opt/sitepulse-staging/shared/backup-recipient.txt` | 一行 age 备份加密公钥，格式为 `age1…`               |
-| `/opt/sitepulse-staging/shared/public-origin.txt`    | 一行公网 HTTPS origin，必须与 `APP_ORIGIN` 完全一致 |
-
-备份密钥生成、异地备份与恢复演练步骤见[完整部署指南](docs/GITHUB_ACTIONS_VPS.md)。
+在自己的电脑使用 `age-keygen -o sitepulse-backup.key` 生成备份密钥，只把输出的 `age1…` 公钥填入 GitHub Variable `BACKUP_AGE_RECIPIENT`。私钥保存在 VPS 和 GitHub 之外，用于恢复备份。无需在 VPS 上运行此命令。异地备份与恢复演练见[完整部署指南](docs/GITHUB_ACTIONS_VPS.md)。
 
 ### 2. 配置域名与 HTTPS
 
@@ -151,13 +134,28 @@ sudo -u deploy mkdir -p /opt/sitepulse-staging/{incoming,releases,shared,backups
 
 进入仓库 **Settings → Environments → New environment**，创建名称完全一致的 `staging` 环境，在 **Environment secrets** 中添加：
 
-| Secret 名称       | 填写内容                                                                                 |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| `VPS_HOST`        | VPS 主机名或 IPv4 公网地址，不加协议、路径或端口；当前工作流不支持 IPv6 字面地址         |
-| `VPS_PORT`        | SSH 端口，例如 `22`；未设置时默认 `22`                                                   |
-| `VPS_USER`        | 已配置部署公钥且有 Docker 操作权限的 SSH 用户                                            |
-| `VPS_SSH_KEY`     | 完整 OpenSSH 私钥，包含首尾标记和原始换行                                                |
-| `VPS_KNOWN_HOSTS` | 可选：已核验的 VPS SSH 主机公钥记录；不配置时自动扫描；非默认端口使用 `[host]:port` 形式 |
+| Secret 名称          | 填写内容                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `VPS_HOST`           | VPS 主机名或 IPv4 公网地址，不加协议、路径或端口；当前工作流不支持 IPv6 字面地址         |
+| `VPS_PORT`           | SSH 端口，例如 `22`；未设置时默认 `22`                                                   |
+| `VPS_USER`           | 已配置部署公钥且有 Docker 操作权限的 SSH 用户                                            |
+| `VPS_SSH_KEY`        | 完整 OpenSSH 私钥，包含首尾标记和原始换行                                                |
+| `VPS_KNOWN_HOSTS`    | 可选：已核验的 VPS SSH 主机公钥记录；不配置时自动扫描；非默认端口使用 `[host]:port` 形式 |
+| `POSTGRES_PASSWORD`  | 至少 32 位随机 base64url 或十六进制数据库密码，保持稳定                                  |
+| `BETTER_AUTH_SECRET` | 独立随机认证密钥，至少 32 位，保持稳定                                                   |
+| `RESEND_API_KEY`     | 真实 Resend API key                                                                      |
+
+在同一个环境的 **Environment variables** 添加：
+
+| Variable 名称                  | 填写内容                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| `APP_ORIGIN`                   | 真实 HTTPS origin，例如 `https://pulse.your-domain.com`，不带路径、端口或末尾斜杠 |
+| `AUTH_MAIL_FROM`               | Resend 已验证域名下的发件邮箱                                                     |
+| `BACKUP_AGE_RECIPIENT`         | 备份加密公钥 `age1…`，不能填私钥                                                  |
+| `WEB_BIND_PORT`                | VPS 未占用端口，例如 `18080`；staging 默认 3000，production 默认 3001             |
+| `POSTGRES_USER`、`POSTGRES_DB` | 可选，均默认 `sitepulse`，只支持小写字母、数字、下划线，不能数字开头              |
+
+部署固定启用 production 运行模式及 Resend 邮件，不接受本地 file 邮件模式。更换认证密钥会影响已有会话；不要每次发布生成新密钥。已有服务器配置需将相同凭据迁入 GitHub，而不是重新生成数据库密码。
 
 `VPS_KNOWN_HOSTS` 可以不创建：工作流会在每次部署时自动运行 `ssh-keyscan`，扫描失败或结果为空时停止部署，并在日志中提示此模式的限制。SSH 仍使用 `StrictHostKeyChecking=yes`，但自动扫描只保证当前任务内使用同一组密钥，无法独立验证服务器身份，也不会发现不同部署任务之间的主机密钥变化，不能防止扫描阶段的中间人冒充。
 
@@ -184,13 +182,13 @@ sudo -u deploy mkdir -p /opt/sitepulse-staging/{incoming,releases,shared,backups
 
 ### 5. Production 与故障处理
 
-Production 使用独立 GitHub Environment `production`、独立应用密钥和服务器目录 `/opt/sitepulse-production`，宿主机上游端口为 `127.0.0.1:3001`。按 staging 相同步骤准备目录和配置文件，并设置对应域名、代理和 SSH Secrets，其中 `VPS_KNOWN_HOSTS` 可选。支持部署审批的 GitHub 套餐可额外配置 required reviewers，并将部署分支限制为 `main`。
+Production 使用独立 GitHub Environment `production`、独立应用密钥和服务器目录 `/opt/sitepulse-production`，默认上游为 `127.0.0.1:3001`。在该 Environment 填写对应的 Secrets、Variables 并设置域名代理即可；目录及配置文件由 Actions 自动创建。支持部署审批的 GitHub 套餐可额外配置 required reviewers，并将部署分支限制为 `main`。
 
 Production 不会随推送自动部署。需要手动运行 **SitePulse checks**，选择 `production` 并勾选 `confirm_production`，授权本次部署及数据库迁移。
 
 每次部署前的加密备份保存在 VPS 的 `backups` 目录。当前流程尚未自动上传异地备份或执行恢复演练，正式使用前需要配置。备份、迁移或启动验证失败时，应用会保持停止，等待检查和人工恢复；不会自动回退数据库。请按[完整部署指南](docs/GITHUB_ACTIONS_VPS.md)查看日志、状态和回滚步骤，不要对部署项目运行 `docker compose down -v`。
 
-如果 Actions 只显示 `VPS_KNOWN_HOSTS is unset` 后退出，该行是警告，不能单独确定失败原因。工作流会显示失败阶段；SSH 连接后自动创建部署目录，并指出创建失败、目录不可写或配置缺失/不可读的具体路径。首次部署前仍需准备应用密钥和备份配置。构建后的详细诊断保存在 VPS 的 `logs/<release>.log`，请在服务器上私下查看，不要公开原始日志或 `.env`。
+如果 Actions 显示 `VPS_KNOWN_HOSTS is unset`，该行只是警告。缺少 GitHub 应用配置会在连接 VPS 前显示对应字段名；不再要求手动创建服务器 `.env`。构建后的详细诊断保存在 VPS 的 `logs/<release>.log`，请私下查看，不要公开原始日志或 `.env`。现有 HTTPS 代理与 DNS 仍需指向所选上游端口；工作流不会改写 VPS 上其他站点的代理配置。
 
 ## Repository map
 

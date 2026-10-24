@@ -37,6 +37,13 @@ const cases = [
     missingDirectory: true,
     ok: true,
   },
+  ...['fresh-root', 'missing-config'].map((failure) => ({
+    name: `${failure} accepts automatic configuration transfer`,
+    configured: hostKey,
+    scan: 'fail',
+    failure,
+    ok: true,
+  })),
   {
     name: 'failed discovery blocks transport',
     configured: '',
@@ -50,11 +57,10 @@ const cases = [
     ok: false,
   },
   ...[
+    ['configuration', 'configuration validation'],
     ['archive', 'source archive'],
     ['authentication', 'VPS setup and SSH authentication'],
     ['blocked-directory', 'VPS setup and SSH authentication'],
-    ['fresh-root', 'VPS setup and SSH authentication'],
-    ['missing-config', 'VPS setup and SSH authentication'],
     ['upload', 'source upload'],
     ['deploy', 'remote build, backup, migration and health verification'],
   ].map(([failure, phase]) => ({
@@ -103,6 +109,14 @@ set -eu
 command_name=$(basename "$0")
 printf '%s\\n' "$command_name" >> "$TEST_CALLS"
 case "$command_name" in
+  node)
+    [[ "$TEST_FAILURE" != configuration ]] || { echo 'Invalid deployment variables: POSTGRES_PASSWORD' >&2; exit 1; }
+    directory="\${!#}"
+    mkdir -m 700 "$directory"
+    printf 'fixture-app-secret' > "$directory/.env"
+    printf 'https://staging.example.invalid' > "$directory/public-origin.txt"
+    printf 'age1fixture' > "$directory/backup-recipient.txt"
+    ;;
   ssh-keyscan)
     [[ " $* " == *' -p 2222 '* ]]
     case "$TEST_SCAN" in
@@ -126,12 +140,15 @@ case "$command_name" in
     else
       [[ " $* " == *"'staging' '0000000000000000000000000000000000000000-1-1' '18080'"* ]]
       [[ "$TEST_FAILURE" != deploy ]]
+      [[ " $* " == *'--configure-from-stdin'* ]]
+      mkdir -p "$TEST_REMOTE/shared"
+      tar -xf - -C "$TEST_REMOTE/shared"
     fi
     ;;
   git) [[ "$TEST_FAILURE" != archive ]] || exit 1; printf 'fixture-archive' ;;
 esac
 `;
-    for (const command of ['ssh-keyscan', 'ssh', 'scp', 'git']) {
+    for (const command of ['ssh-keyscan', 'ssh', 'scp', 'git', 'node']) {
       writeFileSync(join(bin, command), stub, { mode: 0o700 });
     }
     const result = spawnSync('bash', ['-c', script], {
@@ -166,7 +183,10 @@ esac
     assert.equal(
       commands.includes('ssh'),
       scenario.ok ||
-        Boolean(scenario.failure && scenario.failure !== 'archive'),
+        Boolean(
+          scenario.failure &&
+          !['archive', 'configuration'].includes(scenario.failure),
+        ),
     );
     assert.equal(
       commands.includes('scp'),
@@ -175,18 +195,14 @@ esac
     assert.equal(result.stdout.includes('::warning::'), !scenario.configured);
     if (scenario.phase)
       assert.ok(result.stderr.includes(`failed during ${scenario.phase}`));
-    if (
-      ['missing-config', 'blocked-directory', 'fresh-root'].includes(
-        scenario.failure,
-      )
-    )
+    if (['blocked-directory'].includes(scenario.failure))
       assert.ok(result.stderr.includes('VPS setup incomplete:'));
     if (scenario.missingDirectory) {
       assert.equal(statSync(join(remote, 'incoming')).mode & 0o777, 0o700);
       assert.equal(statSync(join(remote, 'shared')).mode & 0o777, 0o750);
       assert.equal(
         readFileSync(join(remote, 'shared', '.env'), 'utf8'),
-        'fixture',
+        'fixture-app-secret',
       );
     }
     if (scenario.failure === 'fresh-root') {
@@ -199,21 +215,23 @@ esac
         'logs',
       ])
         assert.equal(statSync(join(remote, name)).mode & 0o777, 0o700);
-      assert.throws(() => statSync(join(remote, 'shared', '.env')), {
-        code: 'ENOENT',
-      });
-      assert.ok(
-        result.stderr.includes('configuration missing, empty or not readable:'),
+      assert.equal(
+        readFileSync(join(remote, 'shared', '.env'), 'utf8'),
+        'fixture-app-secret',
       );
     }
     if (scenario.port)
       assert.ok(result.stderr.includes('WEB_BIND_PORT must be'));
     assert.equal(result.stdout.includes('fixture-private-key'), false);
     assert.equal(result.stderr.includes('fixture-private-key'), false);
+    assert.equal(result.stdout.includes('fixture-app-secret'), false);
+    assert.equal(result.stderr.includes('fixture-app-secret'), false);
     for (const file of [
       'sitepulse-deploy-key',
       'sitepulse-known-hosts',
       'sitepulse-release.tar.gz',
+      'sitepulse-config.tar',
+      'sitepulse-config',
     ]) {
       assert.throws(() => readFileSync(join(directory, file)), {
         code: 'ENOENT',

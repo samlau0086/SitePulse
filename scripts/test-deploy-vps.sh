@@ -39,7 +39,7 @@ chmod +x "$fixture/bin/"*
 release=0123456789012345678901234567890123456789-1-1
 root="$fixture/sitepulse-staging"
 mkdir -p "$root/shared" "$root/releases/$release"
-touch "$root/shared/.env"
+printf 'POSTGRES_USER=sitepulse\nPOSTGRES_DB=sitepulse\nPOSTGRES_PASSWORD=test\n' > "$root/shared/.env"
 printf 'age1testrecipient\n' > "$root/shared/backup-recipient.txt"
 printf 'https://staging.example.invalid\n' > "$root/shared/public-origin.txt"
 
@@ -68,6 +68,14 @@ bash "$workspace/scripts/deploy-vps.sh" staging "$release"
 [[ $(<"$root/current-release.txt") == "$release" && -s "$root/backups/$release.dump.age" ]]
 [[ $(<"$root/current-web-bind-port.txt") == 3000 ]]
 echo 'Deployment success recording passed'
+# Exercise first-run config stdin through the real deployment entry point.
+mkdir "$fixture/config-input"
+cp "$root/shared/.env" "$root/shared/public-origin.txt" "$root/shared/backup-recipient.txt" "$fixture/config-input/"
+tar -cf "$fixture/config.tar" -C "$fixture/config-input" .env public-origin.txt backup-recipient.txt
+rm "$root/shared/.env"
+bash "$workspace/scripts/deploy-vps.sh" staging "$release" 18080 --configure-from-stdin < "$fixture/config.tar" > "$fixture/output" 2>&1
+[[ -s "$root/shared/.env" && $(stat -c '%a' "$root/shared/.env") == 600 ]]
+echo 'Deployment initializes missing configuration from SSH stdin under the lock'
 bash "$workspace/scripts/deploy-vps.sh" staging "$release" 18080 > "$fixture/output" 2>&1
 [[ $(<"$root/current-web-bind-port.txt") == 18080 ]]
 grep -q 'port=18080 compose' "$CALLS"

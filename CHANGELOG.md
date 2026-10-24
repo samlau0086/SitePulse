@@ -2,6 +2,7 @@
 
 ## Unreleased — 2026-10-24
 
+- Automate first-deployment VPS configuration from GitHub Environment secrets/variables: validate before SSH, transfer secrets separately through SSH stdin, install mode-600 config under the deployment lock, and reject implicit database credential changes. Automatically install missing age/curl/flock helpers for Debian/Ubuntu root deployments; added configuration and first-run regression checks.
 - Automatically create VPS deployment directories over SSH with private permissions for new directories, preserving existing data/permissions and retaining required configuration checks; added creation, repeat-run and blocked-path regression coverage.
 - Added configurable GitHub Environment WEB_BIND_PORT for VPS deployments, validated port forwarding to Compose and health checks, and a successful-release port record for administration.
 - Added explicit deployment-stage errors and actionable remote setup diagnostics for missing directories/configuration, with transport-failure and custom/invalid-port regression checks.

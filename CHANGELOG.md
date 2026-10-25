@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-25
 
+- Added server-enforced site allowances (Free 2, Pro 10, Agency 30, Agency Plus 100), per-organization overrides, tenant-scoped usage, concurrent quota locking and safe API restoration. Downgrades retain existing monitoring. Added an audited operator CLI, workspace/add-site usage UI, migration 0006 and quota/isolation/concurrency tests. Payments remain deferred.
+
 - Added a staging email acceptance runbook with environment configuration, controlled incident/recovery checks, privacy-preserving read-only SQL, isolated retry testing and an explicit pending evidence template. Live provider/mailbox acceptance remains unexecuted.
 
 - Added incident-open and recovery email alerts through a durable, tenant-scoped PostgreSQL outbox. Verified organization members receive deduplicated messages; worker leases, Resend idempotency keys, bounded retries, sanitized delivery state, local file transport, migration 0004 and staging acceptance documentation are included.

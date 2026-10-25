@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { parseWebEnvironment } from '@sitepulse/config';
 import { serverApi } from '../../../../lib/server-api';
+import { workspaceUsage } from '../../../../lib/workspace';
+import { PlanUsage } from '../../../../components/plan-usage';
 import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
 import {
   SiteDirectory,
@@ -36,6 +38,7 @@ export default async function OrganizationPage({
   const { incidents } = await serverApi<{ incidents: Incident[] }>(
     `/organizations/${organizationId}/incidents`,
   );
+  const { usage } = await workspaceUsage(organizationId);
   return (
     <main>
       <div className="page-heading">
@@ -53,6 +56,9 @@ export default async function OrganizationPage({
           All workspaces
         </Link>
       </div>
+      <section className="card" aria-label="Plan allowance">
+        <PlanUsage usage={usage} />
+      </section>
       <div className="section-heading">
         <h2>Workspace sites</h2>
         {organization.role !== 'member' && user.emailVerified && (

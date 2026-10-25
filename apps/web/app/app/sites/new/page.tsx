@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {
   workspaceOrganizations,
   workspaceSession,
+  workspaceUsage,
 } from '../../../../lib/workspace';
 import { AddSiteForm } from '../../../../components/workspace-directory';
 export default async function NewSitePage() {
@@ -11,6 +12,15 @@ export default async function NewSitePage() {
   ]);
   const manageable = organizations.filter(
     (organization) => organization.role !== 'member',
+  );
+  const usageEntries = await Promise.all(
+    (user.emailVerified ? manageable : []).map(
+      async (organization) =>
+        [
+          organization.id,
+          (await workspaceUsage(organization.id)).usage,
+        ] as const,
+    ),
   );
   return (
     <main>
@@ -28,7 +38,10 @@ export default async function NewSitePage() {
           <Link href="/verify-email">Verify your email to add a site →</Link>
         </p>
       ) : manageable.length ? (
-        <AddSiteForm organizations={manageable} />
+        <AddSiteForm
+          organizations={manageable}
+          usages={Object.fromEntries(usageEntries)}
+        />
       ) : (
         <div className="empty-state">
           <h2>A workspace is required</h2>

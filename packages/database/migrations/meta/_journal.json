@@ -43,6 +43,13 @@
       "when": 1792897139013,
       "tag": "0005_strange_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792941257403,
+      "tag": "0006_tearful_morlocks",
+      "breakpoints": true
     }
   ]
 }

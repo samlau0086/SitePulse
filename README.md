@@ -22,6 +22,18 @@ Optional validated settings in `.env` or GitHub Environment Variables: `MONITORI
 
 Migrations `0003_external_monitoring`, `0004_cold_zemo` and `0005_strange_nocturne` add monitoring jobs, checks, incidents and the durable notification outbox with stale-worker fencing. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs and five email deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts go to verified organization members and use the configured file/Resend mail transport. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
 
+## Plans and site allowances
+
+Free / Pro / Agency / Agency Plus allow 2 / 10 / 30 / 100 sites by default. All non-deleted sites count, including pending/disconnected sites. The API enforces quotas during concurrent creation and restoration. Downgrades keep existing sites and monitoring running. Workspaces and Add a site display plan usage and quota messages.
+
+Operators can assign a plan or override an allowance (root `.env` required for host use):
+
+```sh
+pnpm entitlements:set --organization <organization-uuid> --plan pro --site-limit default --operator ops --reason "Pilot allocation"
+```
+
+Use a number from 0–1000 instead of `default` for a custom allowance. All flags are required and changes are audited. No payment integration is included. See [operator commands, container usage and quota rules](docs/ENTITLEMENTS.md). Production changes need explicit authorization; this implementation does not change VPS data.
+
 ## Authentication email
 
 The homepage shows an Open workspace button for authenticated users. Visiting `/login` or `/register` with a valid session redirects to `/app`. Session checks run on the server without caching; expired or revoked sessions show the normal login and registration pages.

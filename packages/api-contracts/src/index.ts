@@ -1,5 +1,26 @@
 import { z } from 'zod';
 
+export const planCode = z.enum(['free', 'pro', 'agency', 'agency_plus']);
+// Operator-only input; never accepted by organization mutation routes.
+export const entitlementChange = z
+  .object({
+    organizationId: z.uuid(),
+    planCode,
+    siteLimitOverride: z.number().int().min(0).max(1000).nullable(),
+    operator: z.string().trim().min(1).max(100),
+    reason: z.string().trim().min(1).max(300),
+  })
+  .strict();
+export type OrganizationUsage = {
+  planCode: z.infer<typeof planCode>;
+  siteLimit: number;
+  siteLimitOverride: number | null;
+  sitesUsed: number;
+  sitesRemaining: number;
+  canAddSite: boolean;
+  overLimit: boolean;
+};
+
 const email = z.email().max(254).trim().toLowerCase();
 // Long passphrases are accepted; no silent truncation or character-class rules.
 const password = z.string().min(12).max(128);

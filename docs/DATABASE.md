@@ -1,5 +1,7 @@
 # Database and migrations
 
+Migration `0006_tearful_morlocks.sql` adds nullable `organizations.site_limit_override` (0–1000) and `agency_plus`. Existing sites, credentials and jobs are unchanged. Quota decisions and manual entitlement updates serialize on the organization row; see [ENTITLEMENTS.md](ENTITLEMENTS.md). Existing migrations remain immutable.
+
 All IDs are UUIDs. Timestamps are `timestamptz`; PostgreSQL stores instants, and API serialization uses ISO timestamps. Production clients should use UTC. Email is normalized to lowercase and trimmed by the API and constrained in SQL; uniqueness is enforced by the database.
 
 | Table                  | Purpose and constraints                                                                                             |

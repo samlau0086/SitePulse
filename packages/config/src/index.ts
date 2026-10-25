@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+export const planSiteLimits = {
+  free: 2,
+  pro: 10,
+  agency: 30,
+  agency_plus: 100,
+} as const;
+
 const postgresUrl = z
   .string()
   .url()

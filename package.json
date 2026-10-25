@@ -21,6 +21,7 @@
     "db:migrate": "tsx --env-file=.env packages/database/client/migrate.ts",
     "db:generate": "drizzle-kit generate --config packages/database/drizzle.config.ts",
     "db:check": "drizzle-kit check --config packages/database/drizzle.config.ts",
+    "entitlements:set": "pnpm --filter @sitepulse/api exec tsx --env-file=../../.env src/entitlements-cli.ts",
     "compose:check": "node scripts/validate-compose.mjs",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v"

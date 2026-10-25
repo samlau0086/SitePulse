@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
 import { IncidentAction } from './incident-action';
 import { api } from '../lib/api';
+import { PlanUsage } from './plan-usage';
 
 type DirectoryProps = {
   sites: Site[];
@@ -310,10 +311,16 @@ export function IncidentDirectory({
 }
 export function AddSiteForm({
   organizations,
+  usages,
 }: {
   organizations: Organization[];
+  usages: Record<string, import('@sitepulse/api-contracts').OrganizationUsage>;
 }) {
   const router = useRouter();
+  const [organizationId, setOrganizationId] = useState(
+    organizations[0]?.id ?? '',
+  );
+  const usage = usages[organizationId];
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -337,13 +344,23 @@ export function AddSiteForm({
   return (
     <form className="creation-form" onSubmit={submit}>
       <label htmlFor="workspace">Workspace</label>
-      <select id="workspace" name="organizationId" required>
+      <select
+        id="workspace"
+        name="organizationId"
+        required
+        value={organizationId}
+        onChange={(event) => {
+          setOrganizationId(event.target.value);
+          setError('');
+        }}
+      >
         {organizations.map((organization) => (
           <option key={organization.id} value={organization.id}>
             {organization.name}
           </option>
         ))}
       </select>
+      {usage && <PlanUsage usage={usage} />}
       <label htmlFor="name">Site name</label>
       <input
         id="name"
@@ -366,7 +383,7 @@ export function AddSiteForm({
       </p>
       {error && <p role="alert">{error}</p>}
       <div className="row-actions">
-        <button disabled={pending}>
+        <button disabled={pending || !usage?.canAddSite}>
           {pending ? 'Adding site…' : 'Add and connect site'}
         </button>
         <Link href="/app/sites">Cancel</Link>

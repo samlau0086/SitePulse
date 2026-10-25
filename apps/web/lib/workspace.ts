@@ -1,5 +1,10 @@
 import { cache } from 'react';
-import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
+import type {
+  Incident,
+  Organization,
+  Site,
+  OrganizationUsage,
+} from '@sitepulse/api-contracts';
 import { serverApi } from './server-api';
 
 export const workspaceSession = cache(() =>
@@ -9,6 +14,11 @@ export const workspaceSession = cache(() =>
 );
 export const workspaceOrganizations = cache(() =>
   serverApi<{ organizations: Organization[] }>('/organizations'),
+);
+export const workspaceUsage = cache((organizationId: string) =>
+  serverApi<{ usage: OrganizationUsage }>(
+    `/organizations/${organizationId}/usage`,
+  ),
 );
 export const workspaceData = cache(async () => {
   const { organizations } = await workspaceOrganizations();

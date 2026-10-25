@@ -15,6 +15,7 @@ import {
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
 import { HttpError } from './http-error';
+import { organizationUsage, requireSiteSlot } from './entitlements';
 import {
   normalizeSiteUrl,
   validateSiteUrl,
@@ -210,6 +211,7 @@ export async function registerSiteRoutes(
       const input = createSite.parse(request.body);
       const site = await db.transaction(async (tx) => {
         await membership(tx, user, organizationId, true);
+        await requireSiteSlot(tx, organizationId);
         const normalized = await validateSiteUrl(
           input.canonicalUrl,
           resolveHost,
@@ -223,6 +225,61 @@ export async function registerSiteRoutes(
         return created;
       });
       return reply.code(201).send({ site });
+    },
+  );
+  app.get(
+    '/api/v1/organizations/:organizationId/usage',
+    options(organizationParams),
+    async (request) => {
+      const user = await requireUser(request);
+      const { organizationId } = organizationParams.parse(request.params);
+      return db.transaction(async (tx) => {
+        await membership(tx, user, organizationId, false);
+        const [organization] = await tx
+          .select()
+          .from(schema.organizations)
+          .where(eq(schema.organizations.id, organizationId))
+          .for('share');
+        if (!organization) throw absent();
+        return { usage: await organizationUsage(tx, organization) };
+      });
+    },
+  );
+  app.post(
+    '/api/v1/sites/:siteId/restore',
+    options(siteParams, emptyRequest),
+    async (request) => {
+      const user = await requireUser(request);
+      const { siteId } = siteParams.parse(request.params);
+      emptyRequest.parse(request.body);
+      return db.transaction(async (tx) => {
+        const [identity] = await tx
+          .select({ organizationId: schema.sites.organizationId })
+          .from(schema.sites)
+          .where(eq(schema.sites.id, siteId));
+        if (!identity) throw absent();
+        await membership(tx, user, identity.organizationId, true);
+        await requireSiteSlot(tx, identity.organizationId);
+        const [site] = await tx
+          .select()
+          .from(schema.sites)
+          .where(eq(schema.sites.id, siteId))
+          .for('update');
+        if (!site || !site.deletedAt) throw absent();
+        // Restoring never revives a deleted site's credentials or monitoring jobs.
+        await revoke(tx, site.id);
+        const [restored] = await tx
+          .update(schema.sites)
+          .set({
+            deletedAt: null,
+            status: 'disconnected',
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.sites.id, siteId))
+          .returning();
+        await audit(tx, site, request, 'site.restored', user.id);
+        return { site: restored };
+      });
     },
   );
   app.get('/api/v1/sites/:siteId', options(siteParams), (request) =>

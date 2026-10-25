@@ -11,11 +11,12 @@ import {
 import NewSitePage from '../app/app/sites/new/page';
 import { workspaceData } from './workspace';
 
-const { pathname, api, session, organizations } = vi.hoisted(() => ({
+const { pathname, api, session, organizations, usage } = vi.hoisted(() => ({
   pathname: vi.fn(),
   api: vi.fn(),
   session: vi.fn(),
   organizations: vi.fn(),
+  usage: vi.fn(),
 }));
 vi.mock('next/link', () => ({ default: 'a' }));
 vi.mock('next/navigation', () => ({
@@ -30,6 +31,7 @@ vi.mock('./workspace', async (original) => ({
   ...(await original<typeof import('./workspace')>()),
   workspaceSession: session,
   workspaceOrganizations: organizations,
+  workspaceUsage: usage,
 }));
 
 const org: Organization = {
@@ -62,6 +64,17 @@ const render = (component: React.ReactNode) => renderToStaticMarkup(component);
 beforeEach(() => {
   vi.clearAllMocks();
   pathname.mockReturnValue('/app/sites/site-a');
+  usage.mockResolvedValue({
+    usage: {
+      planCode: 'free',
+      siteLimit: 2,
+      siteLimitOverride: null,
+      sitesUsed: 0,
+      sitesRemaining: 2,
+      canAddSite: true,
+      overLimit: false,
+    },
+  });
 });
 
 it('keeps all main destinations one click away and marks nested site pages active', () => {
@@ -144,6 +157,7 @@ it('requires verification before rendering the site creation form', async () => 
   const html = render(await NewSitePage());
   expect(html).toContain('href="/verify-email"');
   expect(html).not.toContain('<form');
+  expect(usage).not.toHaveBeenCalled();
 });
 it('offers only owner/admin workspaces for site creation', async () => {
   organizations.mockResolvedValue({
@@ -156,6 +170,28 @@ it('offers only owner/admin workspaces for site creation', async () => {
   const html = render(await NewSitePage());
   expect(html).toContain('Alpha team');
   expect(html).not.toContain('Member workspace');
+  expect(usage).toHaveBeenCalledExactlyOnceWith(org.id);
+  expect(html).toContain('0 / 2 sites');
+});
+it('shows capacity and disables creation when the selected workspace is full', async () => {
+  organizations.mockResolvedValue({ organizations: [org] });
+  session.mockResolvedValue({ user: { emailVerified: true } });
+  usage.mockResolvedValue({
+    usage: {
+      planCode: 'free',
+      siteLimit: 2,
+      siteLimitOverride: null,
+      sitesUsed: 3,
+      sitesRemaining: 0,
+      canAddSite: false,
+      overLimit: true,
+    },
+  });
+  const html = render(await NewSitePage());
+  expect(html).toContain('3 / 2 sites');
+  expect(html).toContain('Over site limit.');
+  expect(html).toContain('Existing sites continue monitoring.');
+  expect(html).toMatch(/<button disabled="">Add and connect site/);
 });
 it('loads aggregate data only through membership-scoped organization endpoints', async () => {
   api.mockImplementation(async (path: string) => {

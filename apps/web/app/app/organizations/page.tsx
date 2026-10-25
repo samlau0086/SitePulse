@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { workspaceOrganizations } from '../../../lib/workspace';
+import { workspaceOrganizations, workspaceUsage } from '../../../lib/workspace';
+import { PlanUsage } from '../../../components/plan-usage';
 import { CreateOrganizationForm } from '../../../components/workspace-actions';
 export default async function OrganizationsPage() {
   const { organizations } = await workspaceOrganizations();
@@ -15,7 +16,7 @@ export default async function OrganizationsPage() {
         </div>
       </div>
       <div className="workspace-grid">
-        {organizations.map((organization) => (
+        {organizations.map(async (organization) => (
           <Link
             className="workspace-card"
             key={organization.id}
@@ -26,6 +27,7 @@ export default async function OrganizationsPage() {
             <span className="muted">
               {organization.slug} · {organization.role}
             </span>
+            <PlanUsage usage={(await workspaceUsage(organization.id)).usage} />
             <p>Open workspace →</p>
           </Link>
         ))}

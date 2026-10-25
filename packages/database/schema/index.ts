@@ -117,13 +117,18 @@ export const organizations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
     planCode: text('plan_code').notNull().default('free'),
+    siteLimitOverride: integer('site_limit_override'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [
     check(
       'organizations_plan_valid',
-      sql`${table.planCode} in ('free', 'pro', 'agency')`,
+      sql`${table.planCode} in ('free', 'pro', 'agency', 'agency_plus')`,
+    ),
+    check(
+      'organizations_site_limit_valid',
+      sql`${table.siteLimitOverride} between 0 and 1000`,
     ),
     check(
       'organizations_slug_valid',

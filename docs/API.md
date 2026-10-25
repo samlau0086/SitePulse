@@ -1,5 +1,11 @@
 # SitePulse API
 
+## Plan usage and restoration
+
+`GET /organizations/:organizationId/usage` returns member-only `{ usage: { planCode, siteLimit, siteLimitOverride, sitesUsed, sitesRemaining, canAddSite, overLimit } }`. All non-deleted sites count, including pending/disconnected sites. Creation and restoration return 409 `SITE_LIMIT_REACHED` at capacity. Client-supplied plan/override fields are rejected.
+
+`POST /sites/:siteId/restore` with `{}` and the trusted Origin requires verified owner/admin membership. It restores a deleted site as disconnected under quota. Old credentials remain revoked; fresh pairing is required. Duplicate active URLs return 409; cross-tenant requests return 404. There is no tenant entitlement mutation API. See [ENTITLEMENTS.md](ENTITLEMENTS.md).
+
 Authentication lifecycle routes (all POST, strict JSON, trusted Origin, 5 requests/minute per route/IP):
 
 | Route                   | Body                     | Result                                                            |

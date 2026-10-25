@@ -94,6 +94,11 @@ beforeAll(async () => {
     slug: 'connector-agency',
   });
   organizationId = response.json().organization.id;
+  // Connector isolation fixtures need several sites; quota behavior has its own suite.
+  await database.db
+    .update(schema.organizations)
+    .set({ planCode: 'pro' })
+    .where(eq(schema.organizations.id, organizationId));
 });
 afterAll(async () => {
   await app?.close();

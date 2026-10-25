@@ -19,6 +19,8 @@ Reuse `.page-heading`, `.metric-grid`, `.directory`, `.directory-toolbar`, `.sta
 
 Homepage illustrations must be labeled as examples and must not invent live customer data or operational health. Authentication, server membership checks, API contracts, mutations and destructive confirmations must retain their existing behavior during visual changes.
 
+Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effective allowance, used slots and a textual full/over-limit message. Disable site creation when the fetched allowance is full while retaining server quota checks and errors for concurrent changes. Existing sites remain accessible after a downgrade.
+
 ## Verification
 
 Review public and authenticated routes at desktop and mobile widths, including empty states, filters, errors and focused controls. Run `pnpm check`, `pnpm test:integration` against the dedicated disposable database, `pnpm build` and `pnpm compose:check`. Report any unavailable checks explicitly. Update README.md, CHANGELOG.md and these guidelines when shared UI behavior changes.

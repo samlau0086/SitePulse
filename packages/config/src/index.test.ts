@@ -37,6 +37,17 @@ describe('environment validation', () => {
     expect(() =>
       parseEnvironment({ ...valid, AUTH_MAIL_TRANSPORT: 'resend' }),
     ).toThrow('RESEND_API_KEY');
+    expect(() =>
+      parseWorkerEnvironment({ ...valid, NODE_ENV: 'production' }),
+    ).toThrow('AUTH_MAIL_TRANSPORT');
+    expect(() =>
+      parseWorkerEnvironment({
+        ...valid,
+        NODE_ENV: 'production',
+        AUTH_MAIL_TRANSPORT: 'resend',
+        RESEND_API_KEY: 'test-provider-key-not-used',
+      }),
+    ).toThrow('HTTPS');
   });
   it('parses defaults', () =>
     expect(parseEnvironment(valid).API_PORT).toBe(4000));

@@ -397,3 +397,51 @@ export const incidents = pgTable(
     ),
   ],
 );
+
+export const notificationDeliveries = pgTable(
+  'notification_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    incidentId: uuid('incident_id').references(() => incidents.id, {
+      onDelete: 'set null',
+    }),
+    eventKey: text('event_key').notNull().unique(),
+    eventType: text('event_type', { enum: ['opened', 'recovered'] }).notNull(),
+    recipient: text('recipient').notNull(),
+    siteName: text('site_name').notNull(),
+    siteUrl: text('site_url').notNull(),
+    monitorType: text('monitor_type', { enum: ['uptime', 'ssl'] }).notNull(),
+    severity: text('severity', { enum: ['warning', 'critical'] }).notNull(),
+    status: text('status', { enum: ['queued', 'sending', 'sent', 'failed'] })
+      .notNull()
+      .default('queued'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    providerMessageId: text('provider_message_id'),
+    lastErrorCode: text('last_error_code'),
+    createdAt: createdAt(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('notification_deliveries_due_idx').on(
+      table.status,
+      table.nextAttemptAt,
+    ),
+    check(
+      'notification_deliveries_event_valid',
+      sql`${table.eventType} in ('opened', 'recovered')`,
+    ),
+    check(
+      'notification_deliveries_status_valid',
+      sql`${table.status} in ('queued', 'sending', 'sent', 'failed')`,
+    ),
+    check(
+      'notification_deliveries_attempts_valid',
+      sql`${table.attempts} >= 0`,
+    ),
+  ],
+);

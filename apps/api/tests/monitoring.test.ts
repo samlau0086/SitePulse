@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { and, createDatabase, eq, schema, sql } from '@sitepulse/database';
 import { migrateDatabase } from '@sitepulse/database/migrate';
 import { parseEnvironment } from '@sitepulse/config';
@@ -11,6 +11,7 @@ import {
   seedMonitorJobs,
 } from '../../worker/src/monitoring';
 import type { ProbeResult } from '../../worker/src/probe';
+import { deliverNotificationBatch } from '../../worker/src/notifications';
 
 const origin = 'http://localhost:3000';
 const options = { MONITOR_INTERVAL_SECONDS: 900, SSL_INTERVAL_SECONDS: 86400 };
@@ -126,7 +127,9 @@ beforeAll(async () => {
   await database.db
     .update(schema.users)
     .set({ emailVerified: true, emailVerifiedAt: new Date() })
-    .where(sql`${schema.users.id} in (${owner.id}, ${outsider.id})`);
+    .where(
+      sql`${schema.users.id} in (${owner.id}, ${outsider.id}, ${member.id})`,
+    );
   const response = await call('POST', '/organizations', owner.cookie, {
     name: 'Monitors',
     slug: 'monitors',
@@ -214,6 +217,17 @@ it('confirms an outage after two failures and deduplicates repeated failures', a
   const rows = await incidents();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ status: 'open', severity: 'critical' });
+  const deliveries = await database.db
+    .select()
+    .from(schema.notificationDeliveries)
+    .where(eq(schema.notificationDeliveries.incidentId, rows[0]!.id));
+  expect(deliveries.map((delivery) => delivery.recipient).sort()).toEqual([
+    'monitor-member@example.com',
+    'monitor-owner@example.com',
+  ]);
+  expect(deliveries.every((delivery) => delivery.eventType === 'opened')).toBe(
+    true,
+  );
   const events = await database.db
     .select()
     .from(schema.auditLogs)
@@ -324,6 +338,91 @@ it('requires two consecutive successes to resolve, including after a failed reco
       .from(schema.auditLogs)
       .where(eq(schema.auditLogs.action, 'monitor.incident_resolved')),
   ).toHaveLength(1);
+  const deliveries = await database.db
+    .select()
+    .from(schema.notificationDeliveries)
+    .where(
+      eq(schema.notificationDeliveries.incidentId, (await incidents())[0]!.id),
+    );
+  expect(
+    deliveries.filter((delivery) => delivery.eventType === 'recovered'),
+  ).toHaveLength(2);
+});
+
+it('retries transient delivery failures and records only provider handoff state', async () => {
+  const incident = (await incidents())[0]!;
+  await database.db
+    .update(schema.notificationDeliveries)
+    .set({ status: 'sent', sentAt: new Date() })
+    .where(eq(schema.notificationDeliveries.status, 'queued'));
+  const [delivery] = await database.db
+    .insert(schema.notificationDeliveries)
+    .values({
+      incidentId: incident.id,
+      eventKey: `${incident.id}:test-retry:${randomBytes(8).toString('hex')}`,
+      eventType: 'opened',
+      recipient: 'monitor-owner@example.com',
+      siteName: 'Monitor WP',
+      siteUrl: 'https://wp.customer-domain.com',
+      monitorType: 'uptime',
+      severity: 'critical',
+    })
+    .returning();
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'provider-message-fixture' }), {
+        status: 200,
+      }),
+    );
+  vi.stubGlobal('fetch', fetchMock);
+  try {
+    await deliverNotificationBatch(database.db, {
+      AUTH_MAIL_TRANSPORT: 'resend',
+      AUTH_MAIL_FROM: 'alerts@example.com',
+      RESEND_API_KEY: 'test-provider-key-not-used',
+      APP_ORIGIN: origin,
+    });
+    let [state] = await database.db
+      .select()
+      .from(schema.notificationDeliveries)
+      .where(eq(schema.notificationDeliveries.id, delivery!.id));
+    expect(state).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      lastErrorCode: 'PROVIDER_REJECTED',
+    });
+    await database.db
+      .update(schema.notificationDeliveries)
+      .set({ nextAttemptAt: new Date(0) })
+      .where(eq(schema.notificationDeliveries.id, delivery!.id));
+    await deliverNotificationBatch(database.db, {
+      AUTH_MAIL_TRANSPORT: 'resend',
+      AUTH_MAIL_FROM: 'alerts@example.com',
+      RESEND_API_KEY: 'test-provider-key-not-used',
+      APP_ORIGIN: origin,
+    });
+    [state] = await database.db
+      .select()
+      .from(schema.notificationDeliveries)
+      .where(eq(schema.notificationDeliveries.id, delivery!.id));
+    expect(state).toMatchObject({
+      status: 'sent',
+      attempts: 2,
+      providerMessageId: 'provider-message-fixture',
+      lastErrorCode: null,
+      sentAt: expect.any(Date),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({
+      headers: expect.objectContaining({
+        'Idempotency-Key': delivery!.eventKey,
+      }),
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 it('opens a new incident for a later outage and DB prevents duplicate active fingerprints', async () => {
   await tick(failure);

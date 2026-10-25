@@ -2,6 +2,7 @@ import { parseWorkerEnvironment } from '@sitepulse/config';
 import { createDatabase } from '@sitepulse/database';
 import { expireHeartbeats } from './heartbeat';
 import { runMonitoring } from './monitoring';
+import { deliverNotificationBatch } from './notifications';
 
 const env = parseWorkerEnvironment(process.env);
 const { db, pool } = createDatabase(env.DATABASE_URL);
@@ -24,6 +25,13 @@ while (!stopped) {
       await runMonitoring(db, env);
     } catch {
       console.error('Monitoring sweep failed');
+    }
+  }
+  if (!stopped) {
+    try {
+      await deliverNotificationBatch(db, env);
+    } catch {
+      console.error('Notification delivery sweep failed');
     }
   }
   if (stopped) break;

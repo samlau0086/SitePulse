@@ -3,10 +3,48 @@ import { and, eq, schema, sql, type Database } from '@sitepulse/database';
 import { probe, type ProbeResult } from './probe';
 
 type Job = typeof schema.monitorJobs.$inferSelect;
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type Options = {
   MONITOR_INTERVAL_SECONDS: number;
   SSL_INTERVAL_SECONDS: number;
 };
+
+async function enqueueIncidentNotifications(
+  tx: Transaction,
+  site: typeof schema.sites.$inferSelect,
+  incident: typeof schema.incidents.$inferSelect,
+  eventType: 'opened' | 'recovered',
+) {
+  const recipients = await tx
+    .select({ email: schema.users.email })
+    .from(schema.organizationMembers)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.organizationMembers.userId),
+    )
+    .where(
+      and(
+        eq(schema.organizationMembers.organizationId, site.organizationId),
+        eq(schema.users.emailVerified, true),
+      ),
+    );
+  if (!recipients.length) return;
+  await tx
+    .insert(schema.notificationDeliveries)
+    .values(
+      recipients.map(({ email }) => ({
+        incidentId: incident.id,
+        eventKey: `${incident.id}:${eventType}:${email}`,
+        eventType,
+        recipient: email,
+        siteName: site.name,
+        siteUrl: site.canonicalUrl,
+        monitorType: incident.monitorType,
+        severity: incident.severity,
+      })),
+    )
+    .onConflictDoNothing();
+}
 const eligible = sql`exists (select 1 from sites s join site_credentials c on c.site_id = s.id
   where s.id = ${schema.monitorJobs.siteId} and s.deleted_at is null and s.status <> 'disconnected' and c.revoked_at is null)`;
 
@@ -122,6 +160,7 @@ export async function finishMonitorJob(
             fingerprint: `${job.siteId}:${job.monitorType}`,
           })
           .returning();
+        await enqueueIncidentNotifications(tx, site, created!, 'opened');
         await audit('monitor.incident_opened', created!.id);
       } else if (active.severity !== severity) {
         await tx
@@ -133,6 +172,8 @@ export async function finishMonitorJob(
     } else if (!bad && active) {
       state = successes >= 2 ? 'healthy' : 'recovering';
       if (successes >= 2) {
+        const resolved = { ...active, status: 'resolved' as const };
+        await enqueueIncidentNotifications(tx, site, resolved, 'recovered');
         await tx
           .update(schema.incidents)
           .set({

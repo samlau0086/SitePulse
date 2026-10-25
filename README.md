@@ -4,7 +4,7 @@
 
 All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Shared design tokens live in `apps/web/app/globals.css`; follow [UI implementation guidelines](docs/UI_GUIDELINES.md) for future UI changes. The interface uses warm cream surfaces, monochrome controls, monospace typography, ASCII markers and flat hairline borders. Berkeley Mono is used when installed, with local monospace fallbacks; no commercial font is bundled or downloaded.
 
-SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks and incidents are implemented. Billing and alert delivery remain separate milestones.
+SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents and deduplicated email incident/recovery alerts are implemented. Billing and alert endpoint management remain separate milestones.
 
 ## Workspace navigation
 
@@ -20,7 +20,7 @@ Only public HTTP(S) destinations on standard ports are allowed. Every connection
 
 Optional validated settings in `.env` or GitHub Environment Variables: `MONITORING_ENABLED=true`, `MONITOR_INTERVAL_SECONDS=900` (300–86400), `SSL_INTERVAL_SECONDS=86400` (3600–604800). Set `MONITORING_ENABLED=false` and restart/redeploy to pause external probes; stored status/history remains visible. The worker needs outbound DNS and public HTTP/HTTPS access. PostgreSQL remains private and no worker port is published.
 
-Migration `0003_external_monitoring` adds jobs, checks and incidents. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four jobs per poll (default 60 seconds); next-run timestamps are due times, not delivery guarantees. Validate capacity before scaling beyond a small pilot. Run the [monitoring acceptance procedure](docs/MONITORING_ACCEPTANCE.md) before enabling notifications or claiming live monitoring acceptance.
+Migrations `0003_external_monitoring`, `0004_cold_zemo` and `0005_strange_nocturne` add monitoring jobs, checks, incidents and the durable notification outbox with stale-worker fencing. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs and five email deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts go to verified organization members and use the configured file/Resend mail transport. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
 
 ## Authentication email
 
@@ -284,8 +284,8 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 | `plugins/sitepulse-connector` | Installable single-site WordPress pairing/heartbeat plugin and PHP contract checks               |
 | `docs`                        | Full specification, architecture, API, security, deployment and milestone tracking               |
 
-Next task: complete live inventory and HTTP/SSL staging acceptance, including controlled outage/recovery and backup restoration. Implement notification delivery only after this acceptance.
+Next task: run the documented staging acceptance for incident and recovery email, including provider handoff, duplicate suppression, retry behavior and no cross-tenant recipients. Do not deploy production migrations without an explicit release authorization and verified backup.
 
-Current acceptance status: local Docker image builds, migration-first startup and web/API health checks pass. HTTPS staging login, site creation and connector pairing are working; inventory is now available for live acceptance. See [the acceptance procedure](docs/CONNECTOR_ACCEPTANCE.md).
+The owner has confirmed production UI verification. Earlier HTTPS staging login, site creation, connector pairing and inventory acceptance are documented in [the acceptance procedure](docs/CONNECTOR_ACCEPTANCE.md).
 
 Inventory requires migration `0002_minimal_inventory`. Commit SQL migrations together with `packages/database/migrations/meta/_journal.json` and their snapshots: Drizzle runs only journal entries. CI checks migration registration and exercises inventory reads/writes on a disposable database. Deployment applies registered migrations automatically before starting the application.

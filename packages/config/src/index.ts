@@ -10,6 +10,20 @@ const postgresUrl = z
   );
 export const databaseEnvironment = z.object({ DATABASE_URL: postgresUrl });
 export const workerEnvironment = databaseEnvironment.extend({
+  NODE_ENV: z
+    .enum(['development', 'test', 'production'])
+    .default('development'),
+  APP_ORIGIN: z
+    .string()
+    .url()
+    .default('http://localhost:3000')
+    .refine((value) => URL.parse(value)?.origin === value),
+  AUTH_MAIL_TRANSPORT: z.enum(['file', 'resend']).default('file'),
+  AUTH_MAIL_FROM: z.email().default('no-reply@localhost.test'),
+  RESEND_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(16).optional(),
+  ),
   HEARTBEAT_STALE_SECONDS: z.coerce
     .number()
     .int()
@@ -39,6 +53,23 @@ export function parseWorkerEnvironment(
 ) {
   const result = workerEnvironment.safeParse(input);
   if (!result.success) throw new Error('Invalid worker environment variables');
+  if (
+    result.data.AUTH_MAIL_TRANSPORT === 'resend' &&
+    !result.data.RESEND_API_KEY
+  )
+    throw new Error(
+      'RESEND_API_KEY is required for AUTH_MAIL_TRANSPORT=resend',
+    );
+  if (
+    result.data.NODE_ENV === 'production' &&
+    result.data.AUTH_MAIL_TRANSPORT !== 'resend'
+  )
+    throw new Error('AUTH_MAIL_TRANSPORT must be resend in production');
+  if (
+    result.data.NODE_ENV === 'production' &&
+    !result.data.APP_ORIGIN.startsWith('https://')
+  )
+    throw new Error('APP_ORIGIN must use HTTPS in production');
   return result.data;
 }
 const schema = databaseEnvironment.extend({

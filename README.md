@@ -284,7 +284,9 @@ Production 不会随推送自动部署。需要手动运行 **SitePulse checks**
 | `plugins/sitepulse-connector` | Installable single-site WordPress pairing/heartbeat plugin and PHP contract checks               |
 | `docs`                        | Full specification, architecture, API, security, deployment and milestone tracking               |
 
-Next task: run the documented staging acceptance for incident and recovery email, including provider handoff, duplicate suppression, retry behavior and no cross-tenant recipients. Do not deploy production migrations without an explicit release authorization and verified backup.
+Next task: run the [staging email acceptance procedure](docs/NOTIFICATION_ACCEPTANCE.md), including provider handoff, actual mailbox receipt, duplicate suppression, retry behavior and no cross-tenant recipients. It includes GitHub configuration, scoped read-only SQL and an evidence template. Do not deploy production migrations without an explicit release authorization and verified backup.
+
+Current evidence and outstanding staging access requirements are recorded in the [notification acceptance report](docs/NOTIFICATION_ACCEPTANCE_REPORT.md); local verification does not establish live email delivery.
 
 The owner has confirmed production UI verification. Earlier HTTPS staging login, site creation, connector pairing and inventory acceptance are documented in [the acceptance procedure](docs/CONNECTOR_ACCEPTANCE.md).
 

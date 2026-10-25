@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-25
 
+- Added a staging email acceptance runbook with environment configuration, controlled incident/recovery checks, privacy-preserving read-only SQL, isolated retry testing and an explicit pending evidence template. Live provider/mailbox acceptance remains unexecuted.
+
 - Added incident-open and recovery email alerts through a durable, tenant-scoped PostgreSQL outbox. Verified organization members receive deduplicated messages; worker leases, Resend idempotency keys, bounded retries, sanitized delivery state, local file transport, migration 0004 and staging acceptance documentation are included.
 - Applied DESIGN.md across the homepage, authentication and operational workspace: shared cream/ink tokens, monospace type, flat bordered sections, ASCII navigation/status markers, monochrome controls and responsive layouts. Added a clearly labeled illustrative homepage preview and retained session-aware actions.
 - Made DESIGN.md and UI implementation guidelines mandatory for future UI work through AGENTS.md; documented font fallback and accessible interaction requirements.

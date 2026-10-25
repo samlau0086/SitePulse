@@ -10,6 +10,8 @@ Local development uses the existing `AUTH_MAIL_TRANSPORT=file` setting and write
 
 ## Staging acceptance
 
+Follow the executable [staging email acceptance runbook](NOTIFICATION_ACCEPTANCE.md) for GitHub configuration, controlled failure/recovery, read-only delivery queries, retry isolation and an evidence template. Record provider handoff separately from actual mailbox receipt.
+
 1. Confirm a verified account belongs to the test organization's membership and an unverified account is excluded.
 2. Trigger a controlled HTTP/SSL failure that crosses the confirmation threshold. Verify one opening message per verified member and one delivery row per unique event key.
 3. Keep the incident failing across additional checks; verify no duplicate opening message is sent.

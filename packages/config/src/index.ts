@@ -45,9 +45,9 @@ export const workerEnvironment = databaseEnvironment.extend({
   MONITOR_INTERVAL_SECONDS: z.coerce
     .number()
     .int()
-    .min(300)
-    .max(86400)
-    .default(900),
+    .min(60)
+    .max(3600)
+    .default(300),
   SSL_INTERVAL_SECONDS: z.coerce
     .number()
     .int()

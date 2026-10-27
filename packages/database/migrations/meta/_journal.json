@@ -57,6 +57,13 @@
       "when": 1793104893045,
       "tag": "0007_neat_morlun",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793113574667,
+      "tag": "0008_flippant_shiver_man",
+      "breakpoints": true
     }
   ]
 }

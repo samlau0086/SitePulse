@@ -1,6 +1,6 @@
 # Email notifications
 
-Confirmed incidents and confirmed recovery events enter a PostgreSQL outbox in the same transaction as their incident state change. A single open incident emits one opening event; recovery is emitted only after the monitor's configured consecutive-success threshold. A connection reset is not described as recovery and does not send a recovery message.
+Confirmed incidents and confirmed recovery events enter a PostgreSQL outbox in the same transaction as their incident state change. A single open incident emits one opening event; HTTP/SSL recovery is emitted only after two consecutive successes. Connector `stale_data` warnings open after the server heartbeat-stale threshold and recover after one authenticated, non-replayed heartbeat, with independent Connector offline/restored mail wording. Connector freshness never asserts HTTP availability. A connection reset is not described as recovery and does not send a recovery message. See [responsiveness configuration and acceptance](MONITORING_RESPONSIVENESS.md).
 
 The `/app/notifications` sidebar destination manages recipients per workspace. Verified owners/admins may change settings, add recipients, resend verification, enable/disable/delete recipients and send test emails; other members are read-only. Platform allowlisting does not grant tenant access. The member directory comes from authenticated membership checks.
 

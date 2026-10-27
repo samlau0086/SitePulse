@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { recoverConnectorIncident } from '@sitepulse/database/incidents';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { and, desc, eq, schema, sql, type Database } from '@sitepulse/database';
@@ -593,6 +594,7 @@ export async function registerSiteRoutes(
                 connectorVersion: heartbeat.connectorVersion,
               })
               .where(eq(schema.sites.id, site.id));
+            await recoverConnectorIncident(tx, site);
           }
           return { success: true };
         });

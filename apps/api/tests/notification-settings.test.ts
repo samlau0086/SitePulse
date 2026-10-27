@@ -4,6 +4,8 @@ import { createDatabase, eq, schema, sql } from '@sitepulse/database';
 import { migrateDatabase } from '@sitepulse/database/migrate';
 import { parseEnvironment } from '@sitepulse/config';
 import { buildApp } from '../src/app';
+import { hashCredential } from '../src/sites';
+import { expireHeartbeats } from '../../worker/src/heartbeat';
 import type { AuthMail } from '../src/auth-mail';
 import {
   deliverNotificationBatch,
@@ -343,6 +345,82 @@ it('keeps saved recipients on mail failure, supports retry and revokes deleted p
     (await call('POST', '/notification-endpoints/verify', proof())).statusCode,
   ).toBe(400);
 });
+it.each([true, false])(
+  'applies member preference %s and endpoint policy to Connector loss/recovery',
+  async (includeMembers) => {
+    const endpoint = await add('notification-owner@example.com');
+    await verify();
+    await add('pending@example.com');
+    await call('PATCH', `${base()}/notification-settings`, { includeMembers });
+    const token = randomBytes(32).toString('base64url');
+    const [site] = await database.db
+      .insert(schema.sites)
+      .values({
+        organizationId,
+        name: 'Connector policy fixture',
+        canonicalUrl: 'https://connector-policy.example.com',
+        hostname: 'connector-policy.example.com',
+        status: 'active',
+        lastSeenAt: new Date(0),
+      })
+      .returning();
+    await database.db
+      .insert(schema.siteCredentials)
+      .values({ siteId: site!.id, credentialHash: hashCredential(token) });
+    const counts = await Promise.all([
+      expireHeartbeats(database.db),
+      expireHeartbeats(database.db),
+    ]);
+    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(1);
+    expect(await expireHeartbeats(database.db)).toBe(0);
+    const deliveries = () =>
+      database.db
+        .select()
+        .from(schema.notificationDeliveries)
+        .where(
+          eq(schema.notificationDeliveries.organizationId, organizationId),
+        );
+    const opened = await deliveries();
+    expect(opened).toHaveLength(includeMembers ? 3 : 1);
+    expect(
+      opened.every(
+        (row) => row.monitorType === 'stale_data' && row.eventType === 'opened',
+      ),
+    ).toBe(true);
+    expect(
+      opened.filter((row) => row.recipient === endpoint.destination),
+    ).toHaveLength(1);
+    expect(
+      opened.some((row) =>
+        [
+          'pending@example.com',
+          'notification-outsider@example.com',
+          'notification-unverified@example.com',
+        ].includes(row.recipient),
+      ),
+    ).toBe(false);
+    await call('PATCH', `${base()}/notification-endpoints/${endpoint.id}`, {
+      enabled: false,
+    });
+    const heartbeat = (sequence: number) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/connector/heartbeat',
+        headers: { origin, authorization: `Bearer ${token}` },
+        payload: { siteId: site!.id, sequence, connectorVersion: '0.1.0' },
+      });
+    expect((await heartbeat(1)).statusCode).toBe(200);
+    expect((await heartbeat(1)).statusCode).toBe(409);
+    expect((await heartbeat(2)).statusCode).toBe(200);
+    const recovered = (await deliveries()).filter(
+      (row) => row.eventType === 'recovered',
+    );
+    expect(recovered).toHaveLength(includeMembers ? 2 : 0);
+    expect(
+      recovered.some((row) => row.recipient === endpoint.destination),
+    ).toBe(false);
+  },
+);
 it('deduplicates verified endpoints against members and queues opening/recovery only for eligible recipients', async () => {
   const endpoint = await add('notification-owner@example.com');
   await verify();

@@ -2,6 +2,9 @@
 
 ## Unreleased — 2026-10-27
 
+- Optimized monitoring responsiveness: default HTTP interval 300 seconds with validated operator bounds 60–3600, propagated through Compose/GitHub deployment, and bounded shortening of existing healthy schedules. Kept 60-second first-failure/recovery confirmation and exposed clearer first/confirmed-failure labels.
+- Added independent Connector `stale_data` warning incidents, deduplicated recipient-policy-aware opening/recovery notifications, valid-heartbeat-only recovery and migration 0008. Preserved reset semantics, SSRF controls and server tenant checks; added schedule, delay, duplicate, replay, reset and UI/mail regression coverage.
+
 - Added workspace notification settings and recipient management with independent server membership/verified-owner/admin authorization, normalized verified email recipients, explicit confirmation pages, resend, enable/disable/delete and bounded test emails.
 - Added migration 0007, persisted mail cooldown/budgets, hash-only single-use opt-in proofs, security audits, automatic-member preferences and deduplicated recipient selection. Worker rechecks current eligibility before provider handoff and suppresses revoked recipients, including pending retries.
 - Added contracts, UI and transactional integration coverage for authorization, cross-tenant access, verification/replay/expiry, mail limits, deduplication, pending recipients and queued-mail suppression. Payments and advanced notification policies remain excluded.

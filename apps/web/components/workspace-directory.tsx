@@ -354,7 +354,9 @@ export function IncidentDirectory({
                       <span className="table-subtitle">
                         {incident.monitorType === 'uptime'
                           ? 'HTTP availability'
-                          : 'SSL certificate'}{' '}
+                          : incident.monitorType === 'stale_data'
+                            ? 'Connector heartbeat'
+                            : 'SSL certificate'}{' '}
                         · {organization?.name}
                       </span>
                     </td>

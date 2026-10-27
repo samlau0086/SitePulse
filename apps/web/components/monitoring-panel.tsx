@@ -9,8 +9,8 @@ import { IncidentSignal } from './incident-signal';
 const labels: Record<MonitorState['state'], string> = {
   pending: 'Awaiting first check',
   healthy: 'Healthy',
-  suspected: 'Suspected failure — awaiting confirmation',
-  down: 'Down',
+  suspected: 'First failure — awaiting confirmation',
+  down: 'Confirmed down',
   recovering: 'Recovering — awaiting confirmation',
   warning: 'Certificate warning',
 };
@@ -97,10 +97,13 @@ export function MonitoringPanel({
       <section className="card">
         <h2>Incident history</h2>
         <p>
-          Two consecutive failures confirm an incident; two consecutive
-          successes confirm recovery. Acknowledging an incident does not stop
-          checks or mark it recovered. Event states describe each incident, not
-          the site’s current availability.
+          HTTP and SSL incidents require two consecutive failures; two
+          consecutive successes confirm recovery. The first failure is rechecked
+          after 60 seconds. Connector alerts open when heartbeats expire and
+          recover on a valid heartbeat; connector loss does not mean the website
+          is down. Acknowledging an incident does not stop checks or mark it
+          recovered. Event states describe each incident, not the site’s current
+          availability.
         </p>
         {!incidents.length ? (
           <p>No incidents recorded.</p>

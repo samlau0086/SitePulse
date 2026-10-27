@@ -237,6 +237,48 @@ it.each(['warning', 'critical'] as const)(
     expect(html).not.toContain('>DOWN</strong>');
   },
 );
+it('shows connector loss and restoration without asserting website DOWN or UP', () => {
+  const offline = render(
+    createElement(IncidentSignal, {
+      incident: { ...incident, monitorType: 'stale_data', severity: 'warning' },
+    }),
+  );
+  expect(offline).toContain('Connector offline');
+  expect(offline).toContain('website availability is independent');
+  expect(offline).not.toContain('>DOWN</strong>');
+  const restored = render(
+    createElement(IncidentSignal, {
+      incident: {
+        ...incident,
+        monitorType: 'stale_data',
+        status: 'resolved',
+        resolutionReason: 'recovered',
+        resolvedAt: '2026-10-27T00:00:00Z',
+      },
+    }),
+  );
+  expect(restored).toContain('Connector restored');
+  expect(restored).not.toContain('>UP</strong>');
+});
+it('labels the first and confirmed failures distinctly', () => {
+  const html = render(
+    createElement(MonitoringPanel, {
+      monitoring: ['suspected', 'down'].map((state) => ({
+        monitorType: 'uptime',
+        state,
+        lastCheckedAt: null,
+        nextRunAt: '2026-10-27T00:00:00Z',
+      })) as Parameters<typeof MonitoringPanel>[0]['monitoring'],
+      checks: [],
+      incidents: [],
+      https: true,
+      canManage: false,
+    }),
+  );
+  expect(html).toContain('First failure');
+  expect(html).toContain('Confirmed down');
+  expect(html).toContain('60 seconds');
+});
 it('offers only owner/admin workspaces for site creation', async () => {
   organizations.mockResolvedValue({
     organizations: [

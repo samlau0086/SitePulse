@@ -609,7 +609,7 @@ The SaaS should use its own clock for receipt timestamps. Do not trust the clien
 
 ## 7.1 Uptime Checks
 
-Default interval: 5 minutes for paid sites and a less frequent interval for free sites.
+Current responsiveness milestone: default interval is 5 minutes for all paired sites. Operators may configure the global interval from 1–60 minutes through validated environment variables. Plan-specific intervals remain a future entitlement decision; clients cannot choose an interval to bypass server policy.
 
 The monitoring engine should:
 

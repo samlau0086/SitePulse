@@ -31,6 +31,12 @@ describe('environment validation', () => {
       ).toThrow('PLATFORM_ADMIN_USER_IDS');
   });
   it('validates monitoring switches and interval bounds without Boolean coercion', () => {
+    expect(parseWorkerEnvironment(valid).MONITOR_INTERVAL_SECONDS).toBe(300);
+    for (const seconds of ['60', '300', '3600'])
+      expect(
+        parseWorkerEnvironment({ ...valid, MONITOR_INTERVAL_SECONDS: seconds })
+          .MONITOR_INTERVAL_SECONDS,
+      ).toBe(Number(seconds));
     expect(parseWorkerEnvironment(valid).MONITORING_ENABLED).toBe(true);
     expect(
       parseWorkerEnvironment({ ...valid, MONITORING_ENABLED: 'false' })
@@ -39,6 +45,9 @@ describe('environment validation', () => {
     for (const input of [
       { MONITORING_ENABLED: 'yes' },
       { MONITOR_INTERVAL_SECONDS: '1' },
+      { MONITOR_INTERVAL_SECONDS: '59' },
+      { MONITOR_INTERVAL_SECONDS: '3601' },
+      { MONITOR_INTERVAL_SECONDS: '60.5' },
       { SSL_INTERVAL_SECONDS: '0' },
     ])
       expect(() => parseWorkerEnvironment({ ...valid, ...input })).toThrow(

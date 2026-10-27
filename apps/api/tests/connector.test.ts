@@ -439,6 +439,11 @@ it('serializes concurrent sequence replay', async () => {
 it('marks stale once across workers then recovers on the next valid heartbeat', async () => {
   await database.db
     .update(schema.sites)
+    .set({ lastSeenAt: sql`now() - interval '2680 seconds'` })
+    .where(eq(schema.sites.id, siteId));
+  expect(await expireHeartbeats(database.db)).toBe(0);
+  await database.db
+    .update(schema.sites)
     .set({ lastSeenAt: new Date(Date.now() - 46 * 60000) })
     .where(eq(schema.sites.id, siteId));
   const counts = await Promise.all([
@@ -446,17 +451,110 @@ it('marks stale once across workers then recovers on the next valid heartbeat', 
     expireHeartbeats(database.db),
   ]);
   expect(counts.reduce((a, b) => a + b, 0)).toBe(1);
+  const rows = await database.db
+    .select()
+    .from(schema.incidents)
+    .where(
+      and(
+        eq(schema.incidents.siteId, siteId),
+        eq(schema.incidents.monitorType, 'stale_data'),
+      ),
+    );
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ status: 'open', severity: 'warning' });
+  const incidentId = rows[0]!.id;
+  const deliveries = () =>
+    database.db
+      .select()
+      .from(schema.notificationDeliveries)
+      .where(eq(schema.notificationDeliveries.incidentId, incidentId));
+  expect((await deliveries()).map((row) => row.recipient)).toEqual([
+    'connector-owner@example.com',
+  ]);
+  expect(await expireHeartbeats(database.db)).toBe(0);
+  expect((await heartbeat(2)).statusCode).toBe(409);
+  expect(
+    (await heartbeat(3, randomBytes(32).toString('base64url'))).statusCode,
+  ).toBe(401);
+  expect((await deliveries()).map((row) => row.eventType)).toEqual(['opened']);
+  for (const path of [
+    `/sites/${siteId}/incidents`,
+    `/organizations/${organizationId}/incidents`,
+  ]) {
+    expect(
+      (await call('GET', path, undefined, outsider.cookie)).statusCode,
+    ).toBe(404);
+    expect((await call('GET', path, undefined, '')).statusCode).toBe(401);
+    const response = await call('GET', path);
+    expect(response.statusCode).toBe(200);
+    expect(
+      response
+        .json()
+        .incidents.some(
+          (row: { id: string; monitorType: string }) =>
+            row.id === incidentId && row.monitorType === 'stale_data',
+        ),
+    ).toBe(true);
+  }
   expect((await call('GET', `/sites/${siteId}`)).json().site.status).toBe(
     'degraded',
   );
   expect((await heartbeat(3)).statusCode).toBe(200);
+  expect((await heartbeat(3)).statusCode).toBe(409);
+  expect((await heartbeat(4)).statusCode).toBe(200);
+  expect((await deliveries()).map((row) => row.eventType).sort()).toEqual([
+    'opened',
+    'recovered',
+  ]);
+  const [resolved] = await database.db
+    .select()
+    .from(schema.incidents)
+    .where(eq(schema.incidents.id, incidentId));
+  expect(resolved).toMatchObject({
+    status: 'resolved',
+    resolutionReason: 'recovered',
+  });
   expect((await call('GET', `/sites/${siteId}`)).json().site.status).toBe(
     'active',
   );
 });
 it('rotation immediately revokes the old secret and requires re-pairing', async () => {
+  await database.db
+    .update(schema.sites)
+    .set({ status: 'degraded', lastSeenAt: new Date(Date.now() - 46 * 60000) })
+    .where(eq(schema.sites.id, siteId));
+  // Upgrades also alert for already-degraded sites from the old worker.
+  expect(await expireHeartbeats(database.db)).toBe(1);
+  const [active] = await database.db
+    .select()
+    .from(schema.incidents)
+    .where(
+      and(
+        eq(schema.incidents.siteId, siteId),
+        eq(schema.incidents.status, 'open'),
+      ),
+    );
   const response = await call('POST', `/sites/${siteId}/rotate-credential`, {});
   expect(response.statusCode).toBe(200);
+  const [closed] = await database.db
+    .select()
+    .from(schema.incidents)
+    .where(eq(schema.incidents.id, active!.id));
+  expect(closed).toMatchObject({
+    status: 'resolved',
+    resolutionReason: 'connection_reset',
+  });
+  expect(
+    await database.db
+      .select()
+      .from(schema.notificationDeliveries)
+      .where(
+        and(
+          eq(schema.notificationDeliveries.incidentId, active!.id),
+          eq(schema.notificationDeliveries.eventType, 'recovered'),
+        ),
+      ),
+  ).toHaveLength(0);
   challenge = response.json().challenge;
   expect((await heartbeat(4)).statusCode).toBe(401);
   expect(

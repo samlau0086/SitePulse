@@ -6,7 +6,8 @@
   "exports": {
     ".": "./client/index.ts",
     "./schema": "./schema/index.ts",
-    "./migrate": "./client/migrations.ts"
+    "./migrate": "./client/migrations.ts",
+    "./incidents": "./client/incidents.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

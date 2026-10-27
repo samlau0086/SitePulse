@@ -10,10 +10,19 @@ export function IncidentSignal({ incident }: { incident: Incident }) {
   if (incident.status === 'resolved') {
     if (incident.resolutionReason === 'recovered' && incident.resolvedAt) {
       label =
-        incident.monitorType === 'uptime' ? 'UP' : 'Certificate recovered';
+        incident.monitorType === 'uptime'
+          ? 'UP'
+          : incident.monitorType === 'stale_data'
+            ? 'Connector restored'
+            : 'Certificate recovered';
       description = 'Recovered in this incident';
       tone = 'success';
-      icon = incident.monitorType === 'uptime' ? 'up' : 'shield';
+      icon =
+        incident.monitorType === 'uptime'
+          ? 'up'
+          : incident.monitorType === 'stale_data'
+            ? 'connection'
+            : 'shield';
     } else {
       label = 'Closed';
       description =
@@ -28,6 +37,11 @@ export function IncidentSignal({ incident }: { incident: Incident }) {
     description = 'Awaiting confirmed recovery';
     tone = 'danger';
     icon = 'down';
+  } else if (incident.monitorType === 'stale_data') {
+    label = 'Connector offline';
+    description = 'Heartbeat overdue · website availability is independent';
+    tone = 'warning';
+    icon = 'connection';
   } else {
     label =
       incident.severity === 'warning'

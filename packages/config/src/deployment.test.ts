@@ -28,6 +28,23 @@ describe('GitHub deployment configuration', () => {
     ).toThrow('PLATFORM_ADMIN_USER_IDS');
   });
   it('preserves validated monitor settings in the private deployment config', () => {
+    expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
+      "MONITOR_INTERVAL_SECONDS='300'\n",
+    );
+    for (const seconds of ['60', '3600'])
+      expect(
+        prepareDeploymentConfiguration({
+          ...valid,
+          MONITOR_INTERVAL_SECONDS: seconds,
+        })['.env'],
+      ).toContain(`MONITOR_INTERVAL_SECONDS='${seconds}'\n`);
+    for (const seconds of ['59', '3601'])
+      expect(() =>
+        prepareDeploymentConfiguration({
+          ...valid,
+          MONITOR_INTERVAL_SECONDS: seconds,
+        }),
+      ).toThrow('Invalid worker');
     const config = prepareDeploymentConfiguration({
       ...valid,
       MONITORING_ENABLED: 'false',

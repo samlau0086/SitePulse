@@ -230,7 +230,7 @@ export type MonitorState = {
 export type Incident = {
   id: string;
   siteId: string;
-  monitorType: 'uptime' | 'ssl';
+  monitorType: 'uptime' | 'ssl' | 'stale_data';
   status: 'open' | 'acknowledged' | 'resolved';
   severity: 'warning' | 'critical';
   startedAt: string;

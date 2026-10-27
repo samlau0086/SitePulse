@@ -369,7 +369,9 @@ export const incidents = pgTable(
     siteId: uuid('site_id')
       .notNull()
       .references(() => sites.id, { onDelete: 'cascade' }),
-    monitorType: text('monitor_type', { enum: ['uptime', 'ssl'] }).notNull(),
+    monitorType: text('monitor_type', {
+      enum: ['uptime', 'ssl', 'stale_data'],
+    }).notNull(),
     status: text('status', { enum: ['open', 'acknowledged', 'resolved'] })
       .notNull()
       .default('open'),
@@ -390,7 +392,7 @@ export const incidents = pgTable(
     index('incidents_site_time_idx').on(table.siteId, table.startedAt),
     check(
       'incidents_type_valid',
-      sql`${table.monitorType} in ('uptime', 'ssl')`,
+      sql`${table.monitorType} in ('uptime', 'ssl', 'stale_data')`,
     ),
     check(
       'incidents_status_valid',
@@ -453,7 +455,9 @@ export const notificationDeliveries = pgTable(
     recipient: text('recipient').notNull(),
     siteName: text('site_name').notNull(),
     siteUrl: text('site_url').notNull(),
-    monitorType: text('monitor_type', { enum: ['uptime', 'ssl'] }).notNull(),
+    monitorType: text('monitor_type', {
+      enum: ['uptime', 'ssl', 'stale_data'],
+    }).notNull(),
     severity: text('severity', { enum: ['warning', 'critical'] }).notNull(),
     status: text('status', { enum: ['queued', 'sending', 'sent', 'failed'] })
       .notNull()

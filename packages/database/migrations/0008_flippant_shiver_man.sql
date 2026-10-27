@@ -1,0 +1,2 @@
+ALTER TABLE "incidents" DROP CONSTRAINT "incidents_type_valid";--> statement-breakpoint
+ALTER TABLE "incidents" ADD CONSTRAINT "incidents_type_valid" CHECK ("incidents"."monitor_type" in ('uptime', 'ssl', 'stale_data'));

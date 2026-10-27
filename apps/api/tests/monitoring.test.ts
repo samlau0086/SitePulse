@@ -9,12 +9,13 @@ import {
   finishMonitorJob,
   runMonitoring,
   seedMonitorJobs,
+  tightenMonitorSchedule,
 } from '../../worker/src/monitoring';
 import type { ProbeResult } from '../../worker/src/probe';
 import { deliverNotificationBatch } from '../../worker/src/notifications';
 
 const origin = 'http://localhost:3000';
-const options = { MONITOR_INTERVAL_SECONDS: 900, SSL_INTERVAL_SECONDS: 86400 };
+const options = { MONITOR_INTERVAL_SECONDS: 300, SSL_INTERVAL_SECONDS: 86400 };
 let database: ReturnType<typeof createDatabase>;
 let app: Awaited<ReturnType<typeof buildApp>>;
 let owner: { id: string; cookie: string };
@@ -194,14 +195,52 @@ it('seeds idempotent durable jobs, creates SSL only for HTTPS and leases exclusi
       true,
     );
 });
+it('tightens old healthy schedules without postponing work or touching leased/recovering jobs', async () => {
+  const before = await state();
+  await database.db
+    .update(schema.monitorJobs)
+    .set({ nextRunAt: sql`last_checked_at + interval '15 minutes'` })
+    .where(eq(schema.monitorJobs.id, before.id));
+  await tightenMonitorSchedule(database.db, 300);
+  const shortened = await state();
+  expect(
+    shortened.nextRunAt.getTime() - shortened.lastCheckedAt!.getTime(),
+  ).toBe(300000);
+  await tightenMonitorSchedule(database.db, 3600);
+  expect((await state()).nextRunAt).toEqual(shortened.nextRunAt);
+  await database.db
+    .update(schema.monitorJobs)
+    .set({ state: 'recovering' })
+    .where(eq(schema.monitorJobs.id, before.id));
+  await tightenMonitorSchedule(database.db, 60);
+  expect((await state()).nextRunAt).toEqual(shortened.nextRunAt);
+  await database.db
+    .update(schema.monitorJobs)
+    .set({
+      state: 'healthy',
+      leaseToken: randomUUID(),
+      leaseExpiresAt: sql`now() + interval '90 seconds'`,
+    })
+    .where(eq(schema.monitorJobs.id, before.id));
+  await tightenMonitorSchedule(database.db, 60);
+  expect((await state()).nextRunAt).toEqual(shortened.nextRunAt);
+  await database.db
+    .update(schema.monitorJobs)
+    .set({ leaseToken: null, leaseExpiresAt: null })
+    .where(eq(schema.monitorJobs.id, before.id));
+});
 it('suspects a single failure without opening an incident and schedules bounded retry', async () => {
   await tick(failure);
   const job = await state();
   expect(job.state).toBe('suspected');
   expect(job.failures).toBe(1);
+  expect(job.nextRunAt.getTime() - job.lastCheckedAt!.getTime()).toBe(60000);
   expect(job.nextRunAt.getTime() - Date.now()).toBeGreaterThan(50000);
   expect(job.nextRunAt.getTime() - Date.now()).toBeLessThan(65000);
   expect(await incidents()).toHaveLength(0);
+  expect(
+    await database.db.select().from(schema.notificationDeliveries),
+  ).toHaveLength(0);
 });
 it('does not count separated failures as consecutive', async () => {
   await tick(success);
@@ -321,12 +360,26 @@ it('acknowledges idempotently while preserving ongoing detection', async () => {
 it('requires two consecutive successes to resolve, including after a failed recovery', async () => {
   await tick(success);
   expect((await state()).state).toBe('recovering');
+  const recovering = await state();
+  expect(
+    recovering.nextRunAt.getTime() - recovering.lastCheckedAt!.getTime(),
+  ).toBe(60000);
+  expect(
+    await database.db
+      .select()
+      .from(schema.notificationDeliveries)
+      .where(eq(schema.notificationDeliveries.eventType, 'recovered')),
+  ).toHaveLength(0);
   expect((await incidents())[0]!.status).toBe('acknowledged');
   await tick(failure);
   expect((await state()).state).toBe('down');
   await tick(success);
   await tick(success);
   expect((await state()).state).toBe('healthy');
+  const healthy = await state();
+  expect(healthy.nextRunAt.getTime() - healthy.lastCheckedAt!.getTime()).toBe(
+    300000,
+  );
   expect((await incidents())[0]).toMatchObject({
     status: 'resolved',
     resolutionReason: 'recovered',

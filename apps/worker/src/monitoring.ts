@@ -1,72 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { enqueueIncidentNotifications } from '@sitepulse/database/incidents';
 import { and, eq, schema, sql, type Database } from '@sitepulse/database';
 import { probe, type ProbeResult } from './probe';
+import { nextProbeDelay } from './scheduling';
 
 type Job = typeof schema.monitorJobs.$inferSelect;
-type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type Options = {
   MONITOR_INTERVAL_SECONDS: number;
   SSL_INTERVAL_SECONDS: number;
 };
-
-async function enqueueIncidentNotifications(
-  tx: Transaction,
-  site: typeof schema.sites.$inferSelect,
-  incident: typeof schema.incidents.$inferSelect,
-  eventType: 'opened' | 'recovered',
-) {
-  const members = await tx
-    .select({ email: schema.users.email })
-    .from(schema.organizationMembers)
-    .innerJoin(
-      schema.users,
-      eq(schema.users.id, schema.organizationMembers.userId),
-    )
-    .where(
-      and(
-        eq(schema.organizationMembers.organizationId, site.organizationId),
-        eq(schema.users.emailVerified, true),
-      ),
-    );
-  const [settings] = await tx
-    .select()
-    .from(schema.notificationSettings)
-    .where(eq(schema.notificationSettings.organizationId, site.organizationId));
-  const endpoints = await tx
-    .select()
-    .from(schema.notificationEndpoints)
-    .where(
-      eq(schema.notificationEndpoints.organizationId, site.organizationId),
-    );
-  const recipients = new Map<string, string | null>();
-  if (settings?.includeMembers !== false)
-    for (const { email } of members) {
-      const normalized = email.toLowerCase();
-      if (!endpoints.some((row) => row.destination === normalized))
-        recipients.set(normalized, null);
-    }
-  for (const row of endpoints)
-    if (row.enabled && row.verifiedAt && !row.deletedAt)
-      recipients.set(row.destination, row.id);
-  if (!recipients.size) return;
-  await tx
-    .insert(schema.notificationDeliveries)
-    .values(
-      [...recipients].map(([email, endpointId]) => ({
-        organizationId: site.organizationId,
-        endpointId,
-        incidentId: incident.id,
-        eventKey: `${incident.id}:${eventType}:${email}`,
-        eventType,
-        recipient: email,
-        siteName: site.name,
-        siteUrl: site.canonicalUrl,
-        monitorType: incident.monitorType,
-        severity: incident.severity,
-      })),
-    )
-    .onConflictDoNothing();
-}
 const eligible = sql`exists (select 1 from sites s join site_credentials c on c.site_id = s.id
   where s.id = ${schema.monitorJobs.siteId} and s.deleted_at is null and s.status <> 'disconnected' and c.revoked_at is null)`;
 
@@ -214,11 +156,12 @@ export async function finishMonitorJob(
       job.monitorType === 'uptime'
         ? options.MONITOR_INTERVAL_SECONDS
         : options.SSL_INTERVAL_SECONDS;
-    const delay = bad
-      ? Math.min(interval, 60 * 2 ** Math.min(failures - 1, 4))
-      : state === 'recovering'
-        ? 60
-        : interval;
+    const delay = nextProbeDelay(
+      interval,
+      bad,
+      failures,
+      state === 'recovering',
+    );
     await tx
       .update(schema.monitorJobs)
       .set({
@@ -241,6 +184,7 @@ export async function runMonitoring(
   execute = probe,
 ) {
   await seedMonitorJobs(db);
+  await tightenMonitorSchedule(db, options.MONITOR_INTERVAL_SECONDS);
   const jobs = await claimMonitorJobs(db);
   await Promise.all(
     jobs.map(async (job) => {
@@ -256,4 +200,17 @@ export async function runMonitoring(
     sql`delete from incidents where id in (select id from incidents where status = 'resolved' and resolved_at < now() - interval '90 days' limit 500)`,
   );
   return jobs.length;
+}
+
+// Apply shorter intervals to existing healthy jobs, without delaying due work,
+// disturbing confirmation/recovery retries or stealing in-flight leases.
+export async function tightenMonitorSchedule(db: Database, interval: number) {
+  await db.execute(sql`with candidates as (
+    select id from monitor_jobs where monitor_type = 'uptime' and state = 'healthy'
+      and last_checked_at is not null
+      and (lease_expires_at is null or lease_expires_at <= now())
+      and next_run_at > last_checked_at + make_interval(secs => ${interval}::int)
+    order by next_run_at limit 200 for update skip locked
+  ) update monitor_jobs set next_run_at = last_checked_at + make_interval(secs => ${interval}::int)
+    where id in (select id from candidates)`);
 }

@@ -114,20 +114,36 @@ export async function claimNotificationDeliveries(db: Database) {
   });
 }
 
-async function sendMail(delivery: Delivery, options: MailOptions) {
+export function incidentMail(
+  delivery: Pick<
+    Delivery,
+    'eventType' | 'monitorType' | 'siteName' | 'siteUrl' | 'severity'
+  >,
+  origin: string,
+) {
   const recovered = delivery.eventType === 'recovered';
-  const subject = `${recovered ? 'Recovered' : 'Incident'}: ${delivery.siteName} (${delivery.monitorType})`;
+  const connector = delivery.monitorType === 'stale_data';
+  const subject = `${connector ? (recovered ? 'Connector restored' : 'Connector offline') : recovered ? 'Recovered' : 'Incident'}: ${delivery.siteName} (${delivery.monitorType})`;
   const text = [
     subject,
     '',
-    recovered
-      ? `Monitoring confirmed that ${delivery.siteName} has recovered.`
-      : `Monitoring confirmed a ${delivery.severity} ${delivery.monitorType} incident for ${delivery.siteName}.`,
+    connector
+      ? recovered
+        ? `A valid connector heartbeat was received from ${delivery.siteName}. This does not confirm HTTP availability.`
+        : `Connector heartbeats are overdue for ${delivery.siteName}. Website availability is monitored independently; this is not an HTTP downtime alert.`
+      : recovered
+        ? `Monitoring confirmed that ${delivery.siteName} has recovered.`
+        : `Monitoring confirmed a ${delivery.severity} ${delivery.monitorType} incident for ${delivery.siteName}.`,
     `Site: ${delivery.siteUrl}`,
-    `Incident history: ${options.APP_ORIGIN}/app/incidents`,
+    `Incident history: ${origin}/app/incidents`,
     '',
     'This alert was sent to a verified recipient of the site workspace.',
   ].join('\n');
+  return { subject, text };
+}
+
+async function sendMail(delivery: Delivery, options: MailOptions) {
+  const { subject, text } = incidentMail(delivery, options.APP_ORIGIN);
 
   if (options.AUTH_MAIL_TRANSPORT === 'file') {
     const directory = resolve(process.cwd(), '.local/alert-mail');

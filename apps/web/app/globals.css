@@ -1419,14 +1419,6 @@ h3 {
   background: var(--info-surface);
   color: var(--info-ink);
 }
-.app-navigation a[aria-current='page']::after {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  margin-left: auto;
-}
 .app-topbar {
   background: var(--product-surface);
   border-color: var(--product-border);
@@ -1843,9 +1835,6 @@ h3 {
     padding: 9px;
     font-size: 13px;
     gap: 6px;
-  }
-  .app-navigation a[aria-current='page']::after {
-    display: none;
   }
   .app-shell .metric {
     padding: 14px;

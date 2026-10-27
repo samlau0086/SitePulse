@@ -21,6 +21,7 @@ import { createAuth } from './auth';
 import { createAuthMailer, type SendAuthMail } from './auth-mail';
 import { HttpError } from './http-error';
 import { registerSiteRoutes } from './sites';
+import { isPlatformAdmin, registerPlatformAdminRoutes } from './platform-admin';
 import type { ResolveHost } from './site-url';
 
 function postgresCode(error: unknown): string | undefined {
@@ -382,6 +383,7 @@ export async function buildApp({
           email: user.email,
           name: user.name,
           emailVerified: user.emailVerified,
+          isPlatformAdmin: isPlatformAdmin(user, env),
         },
       };
     },
@@ -570,5 +572,6 @@ export async function buildApp({
     },
   );
   await registerSiteRoutes(app, { db, requireUser, resolveHost });
+  await registerPlatformAdminRoutes(app, { db, env, requireUser });
   return app;
 }

@@ -83,6 +83,8 @@ In the `samlau0086/SitePulse` repository, open **Settings → Environments**, cr
 
 Add these **Environment variables** in the same environment:
 
+Optional `PLATFORM_ADMIN_USER_IDS`: comma-separated verified Better Auth user UUIDs, empty by default (no platform administrators). Log in, open `/api/v1/auth/session` and copy `user.id`; add the UUID in this GitHub Environment and redeploy. This enables `/app/admin` workspace entitlement administration only. Organization roles do not grant platform authority. Removing a UUID and redeploying revokes its platform permission. See README and [ENTITLEMENTS.md](ENTITLEMENTS.md) for preview, audit and concurrency behavior. No manual VPS file editing is needed.
+
 | Variable                       | Value                                                                                                                       |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `APP_ORIGIN`                   | Public HTTPS origin without port, path or trailing slash                                                                    |

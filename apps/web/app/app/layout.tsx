@@ -22,7 +22,7 @@ export default async function AppLayout({
           SitePulse
         </Link>
         <p className="eyebrow sidebar-caption">OPERATIONS WORKSPACE</p>
-        <AppNavigation />
+        <AppNavigation isPlatformAdmin={user.isPlatformAdmin} />
         <div className="sidebar-account">
           <span className="avatar" aria-hidden="true">
             {user.name.slice(0, 1).toUpperCase()}

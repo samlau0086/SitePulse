@@ -1,5 +1,7 @@
 # Security controls and launch gaps
 
+Platform entitlement administration is isolated under `/api/v1/admin`. Every request requires a live Better Auth session, verified email and the validated server-only `PLATFORM_ADMIN_USER_IDS` UUID allowlist (empty by default). Organization roles, request headers and submitted identity/operator fields cannot grant platform authority. Mutations require the exact trusted Origin. This narrow cross-tenant capability exposes workspace identity/usage and allocation changes only; tenant APIs retain membership checks. Saves use row locks plus expected snapshots and atomically audit the authenticated actor, reason and before/after values. Allowlist changes require API restart/redeployment; no public elevation endpoint exists. Keep reasons free of secrets/customer content. Search is parameterized and literal; pagination and input lengths are bounded.
+
 Implemented controls:
 
 - Homepage and login/registration navigation validate sessions through the API on the server with no response caching. Cookie presence alone does not grant authenticated navigation; workspace APIs continue to enforce authorization independently.

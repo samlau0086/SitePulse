@@ -6,6 +6,7 @@ Read docs/PRODUCT_SPECIFICATION.md before changing architecture. Work on one mil
 
 - Use Next.js in apps/web, Fastify in apps/api, and Drizzle/PostgreSQL in packages/database.
 - All organization data access must check the authenticated user's membership on the server. Never trust a client-supplied user, role, owner, or plan.
+  Exception: `/api/v1/admin` permits only entitlement administration across organizations, with a verified Better Auth session and the server's validated `PLATFORM_ADMIN_USER_IDS` allowlist. This never bypasses membership on tenant APIs.
 - Use Better Auth for authentication. Never implement custom session or password protocols. Keep cookies HttpOnly, SameSite, and Secure in production; require a trusted Origin on mutations.
 - Validate environment variables through packages/config and requests through packages/api-contracts.
 - Never commit secrets, .env files, customer data, database volumes, or session tokens. Never log credentials, cookies, or request bodies.

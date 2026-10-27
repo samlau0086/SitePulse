@@ -51,6 +51,7 @@ export function prepareDeploymentConfiguration(
     NODE_ENV: 'production',
     AUTH_MAIL_TRANSPORT: 'resend',
     LOG_LEVEL: input.LOG_LEVEL,
+    PLATFORM_ADMIN_USER_IDS: input.PLATFORM_ADMIN_USER_IDS,
   });
   const worker = parseWorkerEnvironment({
     ...input,
@@ -67,6 +68,7 @@ export function prepareDeploymentConfiguration(
     AUTH_MAIL_FROM: api.AUTH_MAIL_FROM,
     RESEND_API_KEY: api.RESEND_API_KEY!,
     LOG_LEVEL: api.LOG_LEVEL,
+    PLATFORM_ADMIN_USER_IDS: api.PLATFORM_ADMIN_USER_IDS.join(','),
     HEARTBEAT_STALE_SECONDS: String(worker.HEARTBEAT_STALE_SECONDS),
     WORKER_POLL_SECONDS: String(worker.WORKER_POLL_SECONDS),
     MONITORING_ENABLED: String(worker.MONITORING_ENABLED),

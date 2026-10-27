@@ -1,5 +1,20 @@
 # SitePulse
 
+## Platform administration
+
+平台管理后台位于 `/app/admin`，支持按工作区名称、slug 或 UUID 搜索、查看套餐与用量、修改套餐或自定义站点额度，并填写必填原因。编辑后先点击 **Preview impact** 查看前后额度及新增限制，再 **Confirm and save**。保存会记录真实管理员用户 ID、原因和前后值；工作区 owner/admin 可在现有审计记录中查看。预览后套餐或用量发生变化，保存会返回冲突，需重新预览。
+
+首次启用步骤：
+
+1. 用准备作为平台管理员的账号登录并完成邮箱验证。在同一浏览器访问 `/api/v1/auth/session`，复制返回的 `user.id`（UUID）。不要复制 Cookie 或会话令牌。
+2. 本地：在未提交的根目录 `.env` 中设置 `PLATFORM_ADMIN_USER_IDS=<user.id>`，然后重启 API；Docker 开发环境需重新创建 API 容器。多管理员用英文逗号分隔 UUID。
+3. GitHub Actions：在部署工作流使用的 GitHub Environment → Variables 中添加 `PLATFORM_ADMIN_USER_IDS`，值同上，再通过正常流程部署。无需在 VPS 上手动修改数据库或配置。
+4. 刷新页面，侧栏会出现 **Platform admin**。普通组织 owner/admin 直接请求管理 API 也会被拒绝。
+
+变量默认留空，表示无人具有平台管理权限；非法 UUID 会阻止配置校验。API 每个请求都结合 Better Auth 会话及邮箱验证状态检查。移除 UUID 后重启/重新部署 API 即撤销权限。首次注册者、组织 owner、邮箱地址均不会自动获得平台权限。平台权限仅用于工作区套餐与额度管理，不授权读取其他租户站点、凭据或监控详情。不要在原因中填写密钥或敏感客户信息。
+
+本里程碑无需数据库迁移，未执行线上权限或套餐变更。正式授权及部署由维护者确认。CLI 仍可用于受控运维，详见 [套餐与额度](docs/ENTITLEMENTS.md)。
+
 ## UI design
 
 All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Shared design tokens live in `apps/web/app/globals.css`; follow [UI implementation guidelines](docs/UI_GUIDELINES.md) for future UI changes. The interface uses warm cream surfaces, monochrome controls, monospace typography, ASCII markers and flat hairline borders. Berkeley Mono is used when installed, with local monospace fallbacks; no commercial font is bundled or downloaded.

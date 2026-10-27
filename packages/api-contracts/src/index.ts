@@ -21,6 +21,47 @@ export type OrganizationUsage = {
   overLimit: boolean;
 };
 
+export const adminWorkspaceSearch = z
+  .object({
+    q: z.string().trim().max(100).default(''),
+    page: z
+      .string()
+      .regex(/^[1-9][0-9]{0,4}$/)
+      .default('1'),
+  })
+  .strict();
+export const adminEntitlementPreview = z
+  .object({
+    planCode,
+    siteLimitOverride: z.number().int().min(0).max(1000).nullable(),
+    reason: z.string().trim().min(1).max(300),
+  })
+  .strict();
+export const entitlementSnapshot = z
+  .object({
+    planCode,
+    siteLimitOverride: z.number().int().min(0).max(1000).nullable(),
+    sitesUsed: z.number().int().nonnegative(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export const adminEntitlementSave = adminEntitlementPreview
+  .extend({
+    expected: entitlementSnapshot,
+  })
+  .strict();
+export type AdminWorkspace = {
+  id: string;
+  name: string;
+  slug: string;
+  usage: OrganizationUsage;
+};
+export type EntitlementPreview = {
+  before: OrganizationUsage;
+  after: OrganizationUsage;
+  expected: z.infer<typeof entitlementSnapshot>;
+};
+
 const email = z.email().max(254).trim().toLowerCase();
 // Long passphrases are accepted; no silent truncation or character-class rules.
 const password = z.string().min(12).max(128);

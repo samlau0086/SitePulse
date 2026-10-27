@@ -1,5 +1,13 @@
 # SitePulse API
 
+## Platform administration
+
+Requires a live verified Better Auth session whose UUID is in the API's `PLATFORM_ADMIN_USER_IDS` allowlist. Missing session returns 401; ordinary organization owner/admin or unverified users receive 403. Mutations require trusted Origin. Tenant APIs still require membership.
+
+- `GET /api/v1/admin/workspaces?q=<name|slug|uuid>&page=1`: literal case-insensitive substring search, q ≤100 characters, page 1–99999, 25 records/page. Returns `{ workspaces: [{ id, name, slug, usage }], hasMore }`.
+- `POST /api/v1/admin/workspaces/:organizationId/entitlements/preview`: strict body `{ planCode, siteLimitOverride, reason }`; returns `{ before, after, expected }`. Plan: free/pro/agency/agency_plus; override: null (plan default) or integer 0–1000; trimmed reason: 1–300 characters. No write/audit event.
+- `PATCH /api/v1/admin/workspaces/:organizationId/entitlements`: same fields plus `expected` from preview (`planCode`, `siteLimitOverride`, `sitesUsed`, `updatedAt`). Returns `{ usage }`, atomically audits authenticated actor/reason/before-after. Changed snapshots return 409 `PREVIEW_EXPIRED`; missing workspace 404; invalid/extra fields 400. Client-supplied actor/operator fields are rejected.
+
 ## Plan usage and restoration
 
 `GET /organizations/:organizationId/usage` returns member-only `{ usage: { planCode, siteLimit, siteLimitOverride, sitesUsed, sitesRemaining, canAddSite, overLimit } }`. All non-deleted sites count, including pending/disconnected sites. Creation and restoration return 409 `SITE_LIMIT_REACHED` at capacity. Client-supplied plan/override fields are rejected.

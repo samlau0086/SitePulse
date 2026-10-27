@@ -688,6 +688,18 @@ ul {
   }
 }
 /* Shared primitives and page composition. Keep new UI within these tokens. */
+.creation-form fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+}
+.creation-form textarea {
+  width: 100%;
+  resize: vertical;
+}
 button,
 input,
 select,

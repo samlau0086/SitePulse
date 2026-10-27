@@ -16,6 +16,7 @@ const env = {
   BETTER_AUTH_SECRET: `fixture-${'b'.repeat(48)}${'$'}{LITERAL}`,
   AUTH_MAIL_FROM: 'auth@example.invalid',
   RESEND_API_KEY: 're_fixture-test-key',
+  PLATFORM_ADMIN_USER_IDS: 'd67deea0-0c5f-4f36-b47b-b57dc3b548c0',
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 try {
@@ -46,6 +47,10 @@ try {
     'Generated dotenv must be valid Compose input',
   );
   const config = JSON.parse(compose.stdout);
+  assert.equal(
+    config.services['sitepulse-api'].environment.PLATFORM_ADMIN_USER_IDS,
+    env.PLATFORM_ADMIN_USER_IDS,
+  );
   // Canonical Compose output escapes dollar signs for reuse as Compose input.
   assert.equal(
     config.services['sitepulse-api'].environment.BETTER_AUTH_SECRET.replaceAll(

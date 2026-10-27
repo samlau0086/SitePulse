@@ -9,7 +9,15 @@ This milestone enforces site counts only. Payments, renewals and premium feature
 | `agency`      |            30 |
 | `agency_plus` |           100 |
 
-Defaults are centralized in `packages/config/src/index.ts`. Each organization can have a nullable `site_limit_override` (0–1000). An explicit override takes precedence; null uses the plan default. There are no new environment variables. Migration 0006 leaves existing organizations on their stored plan and never removes sites, even if they exceed its limit.
+Defaults are centralized in `packages/config/src/index.ts`. Each organization can have a nullable `site_limit_override` (0–1000). An explicit override takes precedence; null uses the plan default. Migration 0006 leaves existing organizations on their stored plan and never removes sites, even if they exceed its limit.
+
+## Platform administration
+
+`/app/admin` provides a searchable directory (25 workspaces per page), plan/usage displays and an inline entitlement editor. Configure the server-only `PLATFORM_ADMIN_USER_IDS` comma-separated UUID allowlist and verify the account email; see README for local and GitHub Environment setup. Empty means deny all. No migration is needed. Organization owner/admin roles do not confer platform permission. Every admin API authenticates the current Better Auth session independently; tenant APIs still require membership.
+
+Choose a plan, enter a custom allowance (0–1000) or leave blank to use its default, and supply a reason (1–300 characters). Preview shows current/resulting usage and blocked creation/restoration; existing monitoring continues after downgrade. Editing clears the preview. Confirm submits the expected prior plan, override, usage and update timestamp. The server locks the organization and rejects changed snapshots with 409 `PREVIEW_EXPIRED`; preview again. This is concurrency protection, not a separate permission token. Every write rechecks platform authority.
+
+Saves atomically record `organization.entitlements.updated` with authenticated `actorUserId`, server request ID, reason and before/after values. Clients cannot choose actors/operators. Existing workspace audit visibility remains owner/admin-only. Failed or preview-only requests do not write allocation events. Undo with a new explicit change and reason; audit events remain. Allowlist changes require API restart/redeployment. No administrator assignment or payment UI is included.
 
 ## Counting and concurrency
 

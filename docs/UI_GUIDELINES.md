@@ -23,4 +23,6 @@ Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effec
 
 ## Verification
 
+Platform administration has a direct conditional sidebar link `/app/admin`, bounded search and an inline editor. Reuse `PlanUsage` for before/after impact. Require a reason, invalidate previews on edits, disable pending operations, announce errors/success and require a fresh preview after conflicts. Focus the editor heading when opening it. Page guards and hidden navigation are convenience only; the API independently checks platform authority. Use shared tokens and fieldset primitives.
+
 Review public and authenticated routes at desktop and mobile widths, including empty states, filters, errors and focused controls. Run `pnpm check`, `pnpm test:integration` against the dedicated disposable database, `pnpm build` and `pnpm compose:check`. Report any unavailable checks explicitly. Update README.md, CHANGELOG.md and these guidelines when shared UI behavior changes.

@@ -8,9 +8,14 @@ import type {
 import { serverApi } from './server-api';
 
 export const workspaceSession = cache(() =>
-  serverApi<{ user: { name: string; email: string; emailVerified: boolean } }>(
-    '/auth/session',
-  ),
+  serverApi<{
+    user: {
+      name: string;
+      email: string;
+      emailVerified: boolean;
+      isPlatformAdmin: boolean;
+    };
+  }>('/auth/session'),
 );
 export const workspaceOrganizations = cache(() =>
   serverApi<{ organizations: Organization[] }>('/organizations'),

@@ -62,7 +62,20 @@ export async function requireSiteSlot(tx: Transaction, organizationId: string) {
   return usage;
 }
 
-export async function changeEntitlements(db: Database, input: unknown) {
+export async function changeEntitlements(
+  db: Database,
+  input: unknown,
+  context?: {
+    actorUserId: string;
+    requestId: string;
+    expected: {
+      planCode: string;
+      siteLimitOverride: number | null;
+      sitesUsed: number;
+      updatedAt: string;
+    };
+  },
+) {
   const change = entitlementChange.parse(input);
   return db.transaction(async (tx) => {
     const [organization] = await tx
@@ -70,8 +83,25 @@ export async function changeEntitlements(db: Database, input: unknown) {
       .from(schema.organizations)
       .where(eq(schema.organizations.id, change.organizationId))
       .for('no key update');
-    if (!organization) throw new Error('Organization not found');
+    if (!organization)
+      throw new HttpError(
+        404,
+        'ORGANIZATION_NOT_FOUND',
+        'Organization not found.',
+      );
     const before = await organizationUsage(tx, organization);
+    if (
+      context &&
+      (context.expected.planCode !== before.planCode ||
+        context.expected.siteLimitOverride !== before.siteLimitOverride ||
+        context.expected.sitesUsed !== before.sitesUsed ||
+        context.expected.updatedAt !== organization.updatedAt.toISOString())
+    )
+      throw new HttpError(
+        409,
+        'PREVIEW_EXPIRED',
+        'Workspace changed. Preview the impact again before saving.',
+      );
     const [updated] = await tx
       .update(schema.organizations)
       .set({
@@ -86,7 +116,8 @@ export async function changeEntitlements(db: Database, input: unknown) {
     await tx.insert(schema.auditLogs).values({
       organizationId: organization.id,
       action: 'organization.entitlements.updated',
-      requestId: randomUUID(),
+      requestId: context?.requestId ?? randomUUID(),
+      actorUserId: context?.actorUserId ?? null,
       metadata: {
         operator: change.operator,
         reason: change.reason,

@@ -80,6 +80,15 @@ export function parseWorkerEnvironment(
   return result.data;
 }
 const schema = databaseEnvironment.extend({
+  PLATFORM_ADMIN_USER_IDS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value.trim() === ''
+        ? []
+        : value.split(',').map((id) => id.trim().toLowerCase()),
+    )
+    .pipe(z.array(z.uuid())),
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),

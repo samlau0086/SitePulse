@@ -11,6 +11,25 @@ const valid = {
   BETTER_AUTH_SECRET: 'a'.repeat(48),
 };
 describe('environment validation', () => {
+  it('defaults to no platform administrators and validates stable UUID allowlists', () => {
+    const id = 'd67deea0-0c5f-4f36-b47b-b57dc3b548c0';
+    expect(parseEnvironment(valid).PLATFORM_ADMIN_USER_IDS).toEqual([]);
+    expect(
+      parseEnvironment({
+        ...valid,
+        PLATFORM_ADMIN_USER_IDS: ` ${id.toUpperCase()},${id} `,
+      }).PLATFORM_ADMIN_USER_IDS,
+    ).toEqual([id, id]);
+    for (const value of [
+      'owner',
+      'admin@example.com',
+      `${id},`,
+      `${id}\nFORGED=true`,
+    ])
+      expect(() =>
+        parseEnvironment({ ...valid, PLATFORM_ADMIN_USER_IDS: value }),
+      ).toThrow('PLATFORM_ADMIN_USER_IDS');
+  });
   it('validates monitoring switches and interval bounds without Boolean coercion', () => {
     expect(parseWorkerEnvironment(valid).MONITORING_ENABLED).toBe(true);
     expect(

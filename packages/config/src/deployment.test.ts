@@ -10,6 +10,23 @@ const valid = {
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 describe('GitHub deployment configuration', () => {
+  it('propagates only validated platform administrator IDs', () => {
+    const id = 'd67deea0-0c5f-4f36-b47b-b57dc3b548c0';
+    expect(
+      prepareDeploymentConfiguration({ ...valid, PLATFORM_ADMIN_USER_IDS: id })[
+        '.env'
+      ],
+    ).toContain(`PLATFORM_ADMIN_USER_IDS='${id}'`);
+    expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
+      "PLATFORM_ADMIN_USER_IDS=''\n",
+    );
+    expect(() =>
+      prepareDeploymentConfiguration({
+        ...valid,
+        PLATFORM_ADMIN_USER_IDS: 'owner',
+      }),
+    ).toThrow('PLATFORM_ADMIN_USER_IDS');
+  });
   it('preserves validated monitor settings in the private deployment config', () => {
     const config = prepareDeploymentConfiguration({
       ...valid,

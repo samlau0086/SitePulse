@@ -23,11 +23,20 @@ export function PublicHeader() {
     </nav>
   );
 }
-export function AppNavigation() {
+export function AppNavigation({
+  isPlatformAdmin = false,
+}: {
+  isPlatformAdmin?: boolean;
+}) {
   const pathname = usePathname();
   return (
     <nav className="app-navigation" aria-label="Workspace navigation">
-      {navigation.map(({ href, label, icon }) => {
+      {[
+        ...navigation,
+        ...(isPlatformAdmin
+          ? [{ href: '/app/admin', label: 'Platform admin', icon: '[*]' }]
+          : []),
+      ].map(({ href, label, icon }) => {
         const active =
           href === '/app' ? pathname === href : pathname.startsWith(href);
         return (

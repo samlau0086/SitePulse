@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — 2026-10-27
+
+- Added a server-authorized platform workspace directory, plan/usage views and inline plan/custom-allowance editing with required reasons and impact previews.
+- Added validated `PLATFORM_ADMIN_USER_IDS` UUID allowlist, disabled by default, wired through Compose and GitHub deployment; organization owner/admin roles cannot elevate themselves.
+- Added transactional audit actors and snapshot conflict checks, preserving tenant isolation and monitoring without database migrations.
+- Added permission, search/pagination, preview, audit, override/downgrade, concurrent-save, configuration and page-guard regression tests; documented setup and APIs.
+
 ## Unreleased — 2026-10-25
 
 - Added server-enforced site allowances (Free 2, Pro 10, Agency 30, Agency Plus 100), per-organization overrides, tenant-scoped usage, concurrent quota locking and safe API restoration. Downgrades retain existing monitoring. Added an audited operator CLI, workspace/add-site usage UI, migration 0006 and quota/isolation/concurrency tests. Payments remain deferred.

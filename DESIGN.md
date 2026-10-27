@@ -220,6 +220,18 @@ components:
     rounded: '{rounded.none}'
 ---
 
+## SitePulse product direction — October 27, 2026
+
+The signed-in product prioritizes a friendly, graphical website-management interface in response to owner feedback. This section supersedes the terminal-inspired rules below for `/app` and authentication typography. The original reference remains applicable to public marketing pages.
+
+- Use the shared system sans-serif `--font-ui` for product and authentication text. Reserve monospace for code, credentials and terminal examples.
+- Product pages use a cool light `--product-background`, white `--product-surface`, dark `--product-ink`, and blue `--product-primary` actions, with shared accessible semantic color pairs.
+- Use 14px panel corners and 8px control corners. Separate white panels with borders and space; no gradients or decorative shadows.
+- Use consistent 20px inline SVG line icons instead of ASCII navigation/status markers. Keep visible labels and hide decorative icons from assistive technology.
+- Overview metrics have icon tiles and large values. Connector distribution uses a donut plus a complete textual count legend, calculated from the same authorized site list. Never infer HTTP availability from connector status or invent trend data.
+- Use site cards on the overview, searchable tables on the full directory, and an actionable attention panel. Preserve all Monitoring / Inventory / Connection destinations.
+- Keep keyboard focus visible, minimum 44px controls, textual status labels, responsive layouts and server authorization unchanged.
+
 ## Overview
 
 OpenCode's marketing site is rendered entirely in Berkeley Mono — every word on the page, from the 38px hero headline down to the 14px footer fine print, sits in the same monospaced face. The visual identity comes from that single typographic decision: the page reads like a manpage or a static-site README, complete with bracketed `[+]` / `[-]` / `[x]` ASCII markers used in place of icons or bullets, and a wordmark rendered as block-pixel ASCII art at the top of the nav. There is no sans-serif anywhere, no display face, no italics, no decorative ornament — the system is one font and one weight away from being a 1990s `whatis` page rendered at modern resolutions.

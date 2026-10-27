@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Icon, type IconName } from './icon';
 
 export const navigation = [
-  { href: '/app', label: 'Overview', icon: '[=]' },
-  { href: '/app/sites', label: 'Sites', icon: '[+]' },
-  { href: '/app/incidents', label: 'Incidents', icon: '[!]' },
-  { href: '/app/organizations', label: 'Workspaces', icon: '[#]' },
+  { href: '/app', label: 'Overview', icon: 'overview' },
+  { href: '/app/sites', label: 'Sites', icon: 'globe' },
+  { href: '/app/incidents', label: 'Incidents', icon: 'alert' },
+  { href: '/app/organizations', label: 'Workspaces', icon: 'workspace' },
 ];
 export function PublicHeader() {
   const pathname = usePathname();
@@ -34,7 +35,7 @@ export function AppNavigation({
       {[
         ...navigation,
         ...(isPlatformAdmin
-          ? [{ href: '/app/admin', label: 'Platform admin', icon: '[*]' }]
+          ? [{ href: '/app/admin', label: 'Platform admin', icon: 'shield' }]
           : []),
       ].map(({ href, label, icon }) => {
         const active =
@@ -45,7 +46,7 @@ export function AppNavigation({
             href={href}
             aria-current={active ? 'page' : undefined}
           >
-            <span aria-hidden="true">{icon}</span>
+            <Icon name={icon as IconName} />
             {label}
           </Link>
         );
@@ -57,6 +58,7 @@ export function RefreshButton() {
   const router = useRouter();
   return (
     <button className="secondary" onClick={() => router.refresh()}>
+      <Icon name="refresh" />
       Refresh data
     </button>
   );

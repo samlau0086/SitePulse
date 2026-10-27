@@ -29,18 +29,27 @@ function contrast(a: string, b: string) {
 }
 
 describe('shared UI contrast', () => {
-  it.each(['canvas', 'surface-soft', 'surface-card'])(
-    'keeps text and controls readable on %s',
-    (surface) => {
-      for (const ink of ['ink', 'body', 'muted']) {
-        expect(
-          contrast(ink, surface),
-          `${ink} on ${surface}`,
-        ).toBeGreaterThanOrEqual(4.5);
-      }
-      expect(contrast('border-control', surface)).toBeGreaterThanOrEqual(3);
-      expect(contrast('info-ink', surface)).toBeGreaterThanOrEqual(3);
-    },
+  it.each([
+    'canvas',
+    'surface-soft',
+    'surface-card',
+    'product-background',
+    'product-surface',
+  ])('keeps text and controls readable on %s', (surface) => {
+    for (const ink of ['ink', 'body', 'muted']) {
+      expect(
+        contrast(ink, surface),
+        `${ink} on ${surface}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast('border-control', surface)).toBeGreaterThanOrEqual(3);
+    expect(contrast('info-ink', surface)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(['product-primary', 'product-primary-hover'])(
+    'keeps product actions readable on %s',
+    (surface) =>
+      expect(contrast('product-surface', surface)).toBeGreaterThanOrEqual(4.5),
   );
 
   it.each(['info', 'success', 'warning', 'danger'])(

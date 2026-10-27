@@ -6,6 +6,7 @@ import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
 import { IncidentAction } from './incident-action';
 import { api } from '../lib/api';
 import { PlanUsage } from './plan-usage';
+import { Icon } from './icon';
 
 type DirectoryProps = {
   sites: Site[];
@@ -37,6 +38,17 @@ export function Timestamp({ value }: { value: string | null }) {
 export function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`status-badge status-${status}`}>
+      <Icon
+        name={
+          ['active', 'resolved', 'healthy'].includes(status)
+            ? 'check'
+            : ['degraded', 'warning', 'acknowledged'].includes(status)
+              ? 'clock'
+              : ['critical', 'open', 'down'].includes(status)
+                ? 'alert'
+                : 'info'
+        }
+      />
       {status === 'degraded' ? 'Stale heartbeat' : status.replaceAll('_', ' ')}
     </span>
   );
@@ -98,6 +110,9 @@ export function SiteDirectory({
       )}
       {!filtered.length ? (
         <div className="empty-state">
+          <span className="empty-illustration">
+            <Icon name="globe" />
+          </span>
           <h2>
             {sites.length ? 'No matching sites' : 'Your sites will appear here'}
           </h2>
@@ -111,6 +126,64 @@ export function SiteDirectory({
               Add your first site
             </Link>
           )}
+        </div>
+      ) : compact ? (
+        <div className="site-card-grid">
+          {filtered.map((site) => {
+            const unresolved = incidents.filter(
+              (incident) =>
+                incident.siteId === site.id && incident.status !== 'resolved',
+            ).length;
+            return (
+              <article className="site-overview-card" key={site.id}>
+                <div className="site-card-heading">
+                  <span className="icon-tile tone-info">
+                    <Icon name="globe" />
+                  </span>
+                  <StatusBadge status={site.status} />
+                </div>
+                <Link className="site-name" href={`/app/sites/${site.id}`}>
+                  {site.name}
+                </Link>
+                <p className="site-card-host">{site.hostname}</p>
+                <span className="workspace-label">
+                  <Icon name="workspace" />
+                  {
+                    organizations.find(
+                      (organization) => organization.id === site.organizationId,
+                    )?.name
+                  }
+                </span>
+                <dl className="site-card-facts">
+                  <div>
+                    <dt>
+                      <Icon name="clock" /> Last heartbeat
+                    </dt>
+                    <dd>
+                      <Timestamp value={site.lastSeenAt} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <Icon name="alert" /> Recent unresolved
+                    </dt>
+                    <dd>{unresolved}</dd>
+                  </div>
+                </dl>
+                <div className="row-actions">
+                  <Link href={`/app/sites/${site.id}?view=monitoring`}>
+                    <Icon name="pulse" /> Monitoring
+                  </Link>
+                  <Link href={`/app/sites/${site.id}?view=inventory`}>
+                    <Icon name="inventory" /> Inventory
+                  </Link>
+                  <Link href={`/app/sites/${site.id}?view=connection`}>
+                    <Icon name="connection" /> Connection
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
         </div>
       ) : (
         <div className="table-scroll">
@@ -159,12 +232,15 @@ export function SiteDirectory({
                   <td data-label="Quick access">
                     <div className="row-actions">
                       <Link href={`/app/sites/${site.id}?view=monitoring`}>
+                        <Icon name="pulse" />
                         Monitoring
                       </Link>
                       <Link href={`/app/sites/${site.id}?view=inventory`}>
+                        <Icon name="inventory" />
                         Inventory
                       </Link>
                       <Link href={`/app/sites/${site.id}?view=connection`}>
+                        <Icon name="connection" />
                         Connection
                       </Link>
                     </div>
@@ -230,6 +306,9 @@ export function IncidentDirectory({
       )}
       {!filtered.length ? (
         <div className="empty-state">
+          <span className="empty-illustration">
+            <Icon name="shield" />
+          </span>
           <h2>No incidents to show</h2>
           <p>
             {incidents.length

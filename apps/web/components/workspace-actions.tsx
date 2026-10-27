@@ -11,6 +11,7 @@ export function LogoutButton() {
   return (
     <>
       <button
+        className="secondary"
         onClick={async () => {
           try {
             await api('/auth/logout', {});

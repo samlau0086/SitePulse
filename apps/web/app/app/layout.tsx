@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AppNavigation, RefreshButton } from '../../components/app-navigation';
 import { LogoutButton } from '../../components/workspace-actions';
 import { workspaceSession } from '../../lib/workspace';
+import { Icon } from '../../components/icon';
 
 export default async function AppLayout({
   children,
@@ -17,11 +18,11 @@ export default async function AppLayout({
       <aside className="app-sidebar">
         <Link className="brand" href="/app">
           <span className="brand-mark" aria-hidden="true">
-            [s/p]
+            <Icon name="pulse" />
           </span>
           SitePulse
         </Link>
-        <p className="eyebrow sidebar-caption">OPERATIONS WORKSPACE</p>
+        <p className="eyebrow sidebar-caption">Workspace</p>
         <AppNavigation isPlatformAdmin={user.isPlatformAdmin} />
         <div className="sidebar-account">
           <span className="avatar" aria-hidden="true">

@@ -51,6 +51,7 @@ export function prepareDeploymentConfiguration(
     NODE_ENV: 'production',
     AUTH_MAIL_TRANSPORT: 'resend',
     LOG_LEVEL: input.LOG_LEVEL,
+    BARK_ENCRYPTION_KEY: input.BARK_ENCRYPTION_KEY,
     PLATFORM_ADMIN_USER_IDS: input.PLATFORM_ADMIN_USER_IDS,
   });
   const worker = parseWorkerEnvironment({
@@ -64,6 +65,7 @@ export function prepareDeploymentConfiguration(
     POSTGRES_DB: data.POSTGRES_DB,
     POSTGRES_PASSWORD: data.POSTGRES_PASSWORD,
     BETTER_AUTH_SECRET: api.BETTER_AUTH_SECRET,
+    BARK_ENCRYPTION_KEY: api.BARK_ENCRYPTION_KEY ?? '',
     AUTH_MAIL_TRANSPORT: api.AUTH_MAIL_TRANSPORT,
     AUTH_MAIL_FROM: api.AUTH_MAIL_FROM,
     RESEND_API_KEY: api.RESEND_API_KEY!,

@@ -11,6 +11,25 @@ const valid = {
   BETTER_AUTH_SECRET: 'a'.repeat(48),
 };
 describe('environment validation', () => {
+  it('validates the optional independent Bark encryption key on API and worker', () => {
+    for (const parse of [parseEnvironment, parseWorkerEnvironment]) {
+      expect(parse(valid).BARK_ENCRYPTION_KEY).toBeUndefined();
+      expect(
+        parse({ ...valid, BARK_ENCRYPTION_KEY: '' }).BARK_ENCRYPTION_KEY,
+      ).toBeUndefined();
+      expect(
+        parse({ ...valid, BARK_ENCRYPTION_KEY: 'a'.repeat(64) })
+          .BARK_ENCRYPTION_KEY,
+      ).toBe('a'.repeat(64));
+      for (const value of [
+        'short',
+        'x'.repeat(64),
+        'a'.repeat(63),
+        'a'.repeat(65),
+      ])
+        expect(() => parse({ ...valid, BARK_ENCRYPTION_KEY: value })).toThrow();
+    }
+  });
   it('defaults to no platform administrators and validates stable UUID allowlists', () => {
     const id = 'd67deea0-0c5f-4f36-b47b-b57dc3b548c0';
     expect(parseEnvironment(valid).PLATFORM_ADMIN_USER_IDS).toEqual([]);

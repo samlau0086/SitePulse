@@ -56,6 +56,8 @@ export async function enqueueIncidentNotifications(
         eventKey: `${incident.id}:${eventType}:${email}`,
         eventType,
         recipient: email,
+        channel:
+          endpoints.find((row) => row.id === endpointId)?.type ?? 'email',
         siteName: site.name,
         siteUrl: site.canonicalUrl,
         monitorType: incident.monitorType,

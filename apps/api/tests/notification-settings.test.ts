@@ -5,6 +5,7 @@ import { migrateDatabase } from '@sitepulse/database/migrate';
 import { parseEnvironment } from '@sitepulse/config';
 import { buildApp } from '../src/app';
 import { hashCredential } from '../src/sites';
+import { barkDestination, type BarkMessage } from '@sitepulse/shared/bark';
 import { expireHeartbeats } from '../../worker/src/heartbeat';
 import type { AuthMail } from '../src/auth-mail';
 import {
@@ -28,8 +29,13 @@ let owner: Identity,
   unverified: Identity;
 let organizationId: string;
 const mails: AuthMail[] = [];
+const barkMessages: BarkMessage[] = [];
+const barkEncryptionKey = 'a'.repeat(64);
 const mailer = vi.fn(async (mail: AuthMail) => {
   mails.push(mail);
+});
+const barkSender = vi.fn(async (message: BarkMessage) => {
+  barkMessages.push(message);
 });
 const base = () => `/organizations/${organizationId}`;
 function call(
@@ -60,9 +66,28 @@ async function add(destination = 'client@example.com') {
       row.destination === destination.toLowerCase(),
   ) as { id: string; destination: string };
 }
+async function addBark(
+  label = 'Operations phone',
+  deviceKey = 'device_key_12345',
+) {
+  const response = await call('POST', `${base()}/notification-endpoints/bark`, {
+    label,
+    deviceKey,
+  });
+  expect(response.statusCode, response.body).toBe(201);
+  return (await configuration()).endpoints.find(
+    (row: { type: string; label: string | null }) =>
+      row.type === 'bark' && row.label === label,
+  ) as { id: string; type: 'bark'; label: string; destination: string };
+}
 function proof() {
   return Object.fromEntries(
     new URLSearchParams(new URL(mails.at(-1)!.url).hash.slice(1)),
+  );
+}
+function barkProof() {
+  return Object.fromEntries(
+    new URLSearchParams(new URL(barkMessages.at(-1)!.url).hash.slice(1)),
   );
 }
 async function verify() {
@@ -95,9 +120,11 @@ beforeAll(async () => {
       DATABASE_URL: url,
       APP_ORIGIN: origin,
       BETTER_AUTH_SECRET: randomBytes(48).toString('base64url'),
+      BARK_ENCRYPTION_KEY: barkEncryptionKey,
       LOG_LEVEL: 'silent',
     }),
     sendAuthMail: mailer,
+    sendBark: barkSender,
   });
   async function register(name: string, verified = true) {
     const response = await app.inject({
@@ -130,7 +157,9 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   mailer.mockClear();
+  barkSender.mockClear();
   mails.length = 0;
+  barkMessages.length = 0;
   const response = await call('POST', '/organizations', {
     name: 'Notification workspace',
     slug: randomUUID(),
@@ -142,6 +171,298 @@ beforeEach(async () => {
     { organizationId, userId: admin.id, role: 'admin' },
     { organizationId, userId: unverified.id, role: 'admin' },
   ]);
+});
+
+it('stores multiple Bark devices encrypted and never exposes device keys', async () => {
+  const firstKey = 'device_key_alpha';
+  const secondKey = 'device_key_beta';
+  const first = await addBark('On-call phone', firstKey);
+  await addBark('Office tablet', secondKey);
+  const data = await configuration();
+  expect(data.endpoints).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: first.id,
+        type: 'bark',
+        label: 'On-call phone',
+        destination: 'Bark device (key hidden)',
+      }),
+      expect.objectContaining({ type: 'bark', label: 'Office tablet' }),
+    ]),
+  );
+  expect(JSON.stringify(data)).not.toContain(firstKey);
+  expect(JSON.stringify(data)).not.toContain(secondKey);
+  const rows = await database.db
+    .select()
+    .from(schema.notificationEndpoints)
+    .where(eq(schema.notificationEndpoints.organizationId, organizationId));
+  const stored = rows.find((row) => row.id === first.id)!;
+  expect(stored.destination).toBe(barkDestination(firstKey));
+  expect(stored.encryptedKey).toBeTruthy();
+  expect(stored.encryptedKey).not.toContain(firstKey);
+  expect(barkMessages).toHaveLength(2);
+  expect(barkMessages[0]).toMatchObject({
+    deviceKey: firstKey,
+    title: 'Verify SitePulse notifications',
+  });
+});
+
+it('validates, authorizes and tenant-scopes Bark endpoint management', async () => {
+  for (const identity of [
+    member,
+    unverified,
+    outsider,
+    { id: '', cookie: '' },
+  ]) {
+    const response = await call(
+      'POST',
+      `${base()}/notification-endpoints/bark`,
+      { label: 'Denied device', deviceKey: 'device_key_denied' },
+      identity,
+    );
+    expect(response.statusCode).toBe(
+      identity === outsider ? 404 : identity.cookie ? 403 : 401,
+    );
+  }
+  for (const payload of [
+    { label: '', deviceKey: 'device_key_valid' },
+    { label: 'URL rejected', deviceKey: 'https://api.day.app/private' },
+    { label: 'Short key', deviceKey: 'short' },
+    {
+      label: 'Forged',
+      deviceKey: 'device_key_forged',
+      verifiedAt: new Date().toISOString(),
+    },
+  ])
+    expect(
+      (await call('POST', `${base()}/notification-endpoints/bark`, payload))
+        .statusCode,
+    ).toBe(400);
+  const endpoint = await addBark('Tenant device', 'device_key_tenant');
+  expect(
+    (
+      await call(
+        'PATCH',
+        `${base()}/notification-endpoints/${endpoint.id}`,
+        { enabled: false },
+        outsider,
+      )
+    ).statusCode,
+  ).toBe(404);
+  expect(
+    (
+      await call('POST', `${base()}/notification-endpoints/bark`, {
+        label: 'Duplicate device',
+        deviceKey: 'device_key_tenant',
+      })
+    ).statusCode,
+  ).toBe(409);
+});
+
+it('requires single-use Bark opt-in before test and incident delivery', async () => {
+  const endpoint = await addBark('Verified device', 'device_key_verified');
+  const verification = barkProof();
+  expect(
+    (
+      await call(
+        'POST',
+        `${base()}/notification-endpoints/${endpoint.id}/test`,
+        {},
+      )
+    ).statusCode,
+  ).toBe(429);
+  await expireCooldown(endpoint.id);
+  expect(
+    (
+      await call(
+        'POST',
+        `${base()}/notification-endpoints/${endpoint.id}/test`,
+        {},
+      )
+    ).statusCode,
+  ).toBe(409);
+  expect(
+    (
+      await call('POST', '/notification-endpoints/verify', verification, {
+        id: '',
+        cookie: '',
+      })
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await call('POST', '/notification-endpoints/verify', verification, {
+        id: '',
+        cookie: '',
+      })
+    ).statusCode,
+  ).toBe(400);
+  await expireCooldown(endpoint.id);
+  expect(
+    (
+      await call(
+        'POST',
+        `${base()}/notification-endpoints/${endpoint.id}/test`,
+        {},
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(barkMessages.at(-1)).toMatchObject({
+    deviceKey: 'device_key_verified',
+    title: 'SitePulse test notification',
+  });
+});
+
+it('keeps Bark recipients after sanitized provider failure and permits retry', async () => {
+  barkSender.mockRejectedValueOnce(
+    new Error('provider leaked device_key_secret'),
+  );
+  const response = await call('POST', `${base()}/notification-endpoints/bark`, {
+    label: 'Retry device',
+    deviceKey: 'device_key_retry',
+  });
+  expect(response.statusCode).toBe(502);
+  expect(response.body).not.toContain('device_key_secret');
+  const endpoint = (await configuration()).endpoints.find(
+    (row: { type: string }) => row.type === 'bark',
+  );
+  expect(endpoint).toBeTruthy();
+  await expireCooldown(endpoint.id);
+  expect(
+    (
+      await call(
+        'POST',
+        `${base()}/notification-endpoints/${endpoint.id}/resend`,
+        {},
+      )
+    ).statusCode,
+  ).toBe(200);
+});
+
+it('queues each verified Bark device once for Connector loss and recovery, with bounded sanitized retries', async () => {
+  await call('PATCH', `${base()}/notification-settings`, {
+    includeMembers: false,
+  });
+  const first = await addBark('Primary phone', 'device_key_primary');
+  const firstProof = barkProof();
+  expect(
+    (
+      await call('POST', '/notification-endpoints/verify', firstProof, {
+        id: '',
+        cookie: '',
+      })
+    ).statusCode,
+  ).toBe(200);
+  const second = await addBark('Backup phone', 'device_key_backup');
+  const secondProof = barkProof();
+  expect(
+    (
+      await call('POST', '/notification-endpoints/verify', secondProof, {
+        id: '',
+        cookie: '',
+      })
+    ).statusCode,
+  ).toBe(200);
+  await database.db
+    .update(schema.notificationDeliveries)
+    .set({ status: 'sent' });
+  const token = randomBytes(32).toString('base64url');
+  const [site] = await database.db
+    .insert(schema.sites)
+    .values({
+      organizationId,
+      name: 'Bark Connector fixture',
+      canonicalUrl: 'https://bark-connector.example.com',
+      hostname: 'bark-connector.example.com',
+      status: 'active',
+      lastSeenAt: new Date(0),
+    })
+    .returning();
+  await database.db.insert(schema.siteCredentials).values({
+    siteId: site!.id,
+    credentialHash: hashCredential(token),
+  });
+  await expireHeartbeats(database.db);
+  await database.db
+    .update(schema.notificationDeliveries)
+    .set({ status: 'sent' })
+    .where(
+      sql`${schema.notificationDeliveries.organizationId} <> ${organizationId}`,
+    );
+  const opened = await database.db
+    .select()
+    .from(schema.notificationDeliveries)
+    .where(eq(schema.notificationDeliveries.organizationId, organizationId));
+  expect(opened).toHaveLength(2);
+  expect(opened.map((row) => row.endpointId).sort()).toEqual(
+    [first.id, second.id].sort(),
+  );
+  expect(opened.every((row) => row.channel === 'bark')).toBe(true);
+  const failedSender = vi.fn(async () => {
+    throw new Error('secret provider response');
+  });
+  expect(
+    await deliverNotificationBatch(
+      database.db,
+      {
+        AUTH_MAIL_TRANSPORT: 'file',
+        AUTH_MAIL_FROM: 'alerts@example.com',
+        APP_ORIGIN: origin,
+        BARK_ENCRYPTION_KEY: barkEncryptionKey,
+      },
+      failedSender,
+    ),
+  ).toBe(2);
+  const failed = await database.db
+    .select()
+    .from(schema.notificationDeliveries)
+    .where(eq(schema.notificationDeliveries.organizationId, organizationId));
+  expect(failed.every((row) => row.status === 'queued')).toBe(true);
+  expect(failed.every((row) => row.attempts === 1)).toBe(true);
+  expect(
+    failed.every((row) => row.lastErrorCode === 'PROVIDER_UNAVAILABLE'),
+  ).toBe(true);
+  expect(JSON.stringify(failed)).not.toContain('secret provider response');
+  await database.db
+    .update(schema.notificationDeliveries)
+    .set({ nextAttemptAt: new Date(0) })
+    .where(eq(schema.notificationDeliveries.organizationId, organizationId));
+  const delivered: BarkMessage[] = [];
+  const workerSender = vi.fn(async (message: BarkMessage) => {
+    delivered.push(message);
+  });
+  expect(
+    await deliverNotificationBatch(
+      database.db,
+      {
+        AUTH_MAIL_TRANSPORT: 'file',
+        AUTH_MAIL_FROM: 'alerts@example.com',
+        APP_ORIGIN: origin,
+        BARK_ENCRYPTION_KEY: barkEncryptionKey,
+      },
+      workerSender,
+    ),
+  ).toBe(2);
+  expect(delivered.map((message) => message.deviceKey).sort()).toEqual([
+    'device_key_backup',
+    'device_key_primary',
+  ]);
+  expect(
+    delivered.every((message) => message.title.includes('Connector offline')),
+  ).toBe(true);
+  const heartbeat = await app.inject({
+    method: 'POST',
+    url: '/api/v1/connector/heartbeat',
+    headers: { origin, authorization: `Bearer ${token}` },
+    payload: { siteId: site!.id, sequence: 1, connectorVersion: '0.1.0' },
+  });
+  expect(heartbeat.statusCode, heartbeat.body).toBe(200);
+  const all = await database.db
+    .select()
+    .from(schema.notificationDeliveries)
+    .where(eq(schema.notificationDeliveries.organizationId, organizationId));
+  expect(all.filter((row) => row.eventType === 'recovered')).toHaveLength(2);
+  expect(new Set(all.map((row) => row.eventKey)).size).toBe(4);
 });
 afterAll(async () => {
   await app?.close();

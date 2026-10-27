@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import { z } from 'zod';
 import type { Environment } from '@sitepulse/config';
+import type { SendBark } from '@sitepulse/shared/bark';
 import { and, desc, eq, schema, sql, type Database } from '@sitepulse/database';
 import {
   createOrganization,
@@ -35,11 +36,13 @@ export async function buildApp({
   db,
   env,
   sendAuthMail,
+  sendBark,
   resolveHost,
 }: {
   db: Database;
   env: Environment;
   sendAuthMail?: SendAuthMail;
+  sendBark?: SendBark;
   resolveHost?: ResolveHost;
 }) {
   const app = Fastify({
@@ -217,7 +220,13 @@ export async function buildApp({
     return session.user;
   }
   const security = [{ sessionCookie: [] }];
-  await registerNotificationRoutes(app, { db, env, requireUser, mailer });
+  await registerNotificationRoutes(app, {
+    db,
+    env,
+    requireUser,
+    mailer,
+    ...(sendBark ? { barkSender: sendBark } : {}),
+  });
   const jsonSchema = (value: z.ZodType) => {
     const { $schema: _schema, ...result } = z.toJSONSchema(value, {
       io: 'input',

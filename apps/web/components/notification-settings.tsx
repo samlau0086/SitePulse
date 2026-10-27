@@ -26,9 +26,9 @@ export function NotificationSettings({
       await api(path, body, method);
       setMessage(
         path.endsWith('/test')
-          ? 'Test email accepted by the mail transport. Check the recipient inbox.'
+          ? 'Test notification accepted by the transport. Check the recipient inbox or Bark device.'
           : path.endsWith('/resend') || method === 'POST'
-            ? 'Verification email sent. Open it and confirm; no login is required.'
+            ? 'Verification notification sent. Open it and confirm; no login is required.'
             : 'Notification settings saved.',
       );
     } catch (cause) {
@@ -58,6 +58,17 @@ export function NotificationSettings({
     const destination = new FormData(form).get('destination');
     await run(`${base}/notification-endpoints`, { destination });
   }
+  async function addBark(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const input = {
+      label: values.get('label'),
+      deviceKey: values.get('deviceKey'),
+    };
+    form.reset();
+    await run(`${base}/notification-endpoints/bark`, input);
+  }
   return (
     <section aria-label="Notification recipients">
       {error && <p role="alert">{error}</p>}
@@ -71,7 +82,7 @@ export function NotificationSettings({
       <div className="card">
         <h2>Workspace members</h2>
         <p>
-          Automatically notify currently verified members:{' '}
+          Automatically email currently verified members:{' '}
           <strong>{data.includeMembers ? 'On' : 'Off'}</strong>
         </p>
         <p className="muted">
@@ -114,6 +125,37 @@ export function NotificationSettings({
           <button>Add and send verification</button>
         </fieldset>
       </form>
+      <form className="creation-form" onSubmit={addBark}>
+        <fieldset disabled={pending || !data.canManage}>
+          <legend>Add a Bark device</legend>
+          <label htmlFor="bark-label">Device or recipient name</label>
+          <input
+            id="bark-label"
+            name="label"
+            required
+            maxLength={80}
+            autoComplete="off"
+          />
+          <label htmlFor="bark-key">Bark device Key</label>
+          <input
+            id="bark-key"
+            name="deviceKey"
+            type="password"
+            required
+            minLength={8}
+            maxLength={256}
+            autoComplete="new-password"
+            spellCheck={false}
+          />
+          <p className="muted">
+            Enter only the Key from the official Bark app, not its full URL.
+            Keys are encrypted and never shown again. Tap the verification push
+            and confirm before this device receives alerts. Self-hosted servers
+            are not supported in this release.
+          </p>
+          <button>Add Bark and send verification</button>
+        </fieldset>
+      </form>
       <h2>Managed recipients ({data.endpoints.length}/20)</h2>
       <p className="muted">
         Managed addresses override automatic member delivery, including while
@@ -124,7 +166,12 @@ export function NotificationSettings({
       {!data.endpoints.length && <p>No managed recipients yet.</p>}
       {data.endpoints.map((row) => (
         <article className="card" key={row.id}>
-          <h3 className="recipient-address">{row.destination}</h3>
+          <h3 className="recipient-address">
+            {row.type === 'bark' ? row.label : row.destination}
+          </h3>
+          <p className="muted">
+            {row.type === 'bark' ? 'Bark · device Key hidden' : 'Email'}
+          </p>
           <p>
             {row.verifiedAt ? 'Verified' : 'Pending verification'} ·{' '}
             {row.enabled ? 'Enabled' : 'Disabled'}
@@ -166,7 +213,7 @@ export function NotificationSettings({
                 void run(`${base}/notification-endpoints/${row.id}/test`, {})
               }
             >
-              Send test email
+              {row.type === 'bark' ? 'Send test push' : 'Send test email'}
             </button>
             <button
               className="secondary danger"
@@ -174,7 +221,7 @@ export function NotificationSettings({
               onClick={() => {
                 if (
                   window.confirm(
-                    `Delete recipient ${row.destination}? Pending alerts will be suppressed; emails already handed off cannot be recalled.`,
+                    `Delete recipient ${row.label ?? row.destination}? Pending alerts will be suppressed; notifications already handed off cannot be recalled.`,
                   )
                 )
                   void run(
@@ -190,10 +237,12 @@ export function NotificationSettings({
         </article>
       ))}
       <p className="muted">
-        Verification and test emails share a 60-second recipient cooldown and a
-        10-per-hour workspace limit. Disabling recipients suppresses pending
-        alerts; messages already in flight or accepted by the provider cannot be
-        recalled.
+        Verification and test notifications share a 60-second recipient cooldown
+        and a 10-per-hour workspace limit. Disabling recipients suppresses
+        pending alerts; messages already in flight or accepted by the provider
+        cannot be recalled. Email and Bark share the 20 managed-recipient limit.
+        Bark receives the same confirmed incidents and recovery events; device
+        delivery timing depends on the provider, network and iOS settings.
       </p>
     </section>
   );

@@ -394,8 +394,10 @@ Add a unique constraint or transactional deduplication mechanism for open incide
 |---|---|---|
 | id | UUID | Primary key |
 | organization_id | UUID | Tenant reference |
-| type | TEXT | email |
-| destination | TEXT | Validated destination |
+| type | TEXT | email or bark |
+| destination | TEXT | Normalized email or non-reversible Bark-key fingerprint |
+| label | TEXT | Nullable display name; required for Bark |
+| encrypted_key | TEXT | Nullable AES-256-GCM Bark device key; server-only |
 | verified_at | TIMESTAMPTZ | Nullable |
 | enabled | BOOLEAN | Default true |
 | created_at | TIMESTAMPTZ | Required |
@@ -407,6 +409,7 @@ Add a unique constraint or transactional deduplication mechanism for open incide
 | id | UUID | Primary key |
 | incident_id | UUID | Nullable for recovery events |
 | endpoint_id | UUID | Nullable |
+| channel | TEXT | email or bark |
 | event_key | TEXT | Idempotency key |
 | status | TEXT | queued, sent, failed |
 | attempts | INTEGER | Default 0 |
@@ -494,11 +497,14 @@ Monitoring execution should be handled by background workers rather than user-fa
 
 - `GET /organizations/:organizationId/notification-endpoints`
 - `POST /organizations/:organizationId/notification-endpoints`
-- `PATCH /notification-endpoints/:endpointId`
-- `DELETE /notification-endpoints/:endpointId`
-- `POST /notification-endpoints/:endpointId/verify`
+- `POST /organizations/:organizationId/notification-endpoints/bark`
+- `PATCH /organizations/:organizationId/notification-endpoints/:endpointId`
+- `DELETE /organizations/:organizationId/notification-endpoints/:endpointId`
+- `POST /organizations/:organizationId/notification-endpoints/:endpointId/resend`
+- `POST /organizations/:organizationId/notification-endpoints/:endpointId/test`
+- `POST /notification-endpoints/verify`
 
-Email addresses must be verified before being used for routine alert delivery.
+Email addresses and Bark devices must complete a hash-only, single-use possession proof before routine alert delivery. Bark supports multiple labeled devices per organization and uses only the fixed official provider endpoint; arbitrary push URLs and self-hosted Bark servers are outside this milestone. Device keys are encrypted at rest, hidden from API reads and cleared on endpoint deletion.
 
 ## 5.7 API Error Format
 

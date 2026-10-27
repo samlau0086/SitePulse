@@ -11,6 +11,7 @@ x-api-environment: &api-environment
   AUTH_MAIL_TRANSPORT: ${AUTH_MAIL_TRANSPORT:-resend}
   AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-no-reply@localhost.test}
   RESEND_API_KEY: ${RESEND_API_KEY:-}
+  BARK_ENCRYPTION_KEY: ${BARK_ENCRYPTION_KEY:-}
 
 services:
   sitepulse-db:
@@ -83,6 +84,7 @@ services:
       AUTH_MAIL_TRANSPORT: ${AUTH_MAIL_TRANSPORT:-resend}
       AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-no-reply@localhost.test}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      BARK_ENCRYPTION_KEY: ${BARK_ENCRYPTION_KEY:-}
     networks: [database, monitoring]
     depends_on:
       sitepulse-migrate:

@@ -30,6 +30,7 @@ jobs:
       BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
       AUTH_MAIL_FROM: ${{ vars.AUTH_MAIL_FROM }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      BARK_ENCRYPTION_KEY: ${{ secrets.BARK_ENCRYPTION_KEY }}
       PLATFORM_ADMIN_USER_IDS: ${{ vars.PLATFORM_ADMIN_USER_IDS }}
       BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
       MONITORING_ENABLED: ${{ vars.MONITORING_ENABLED || 'true' }}
@@ -67,7 +68,7 @@ jobs:
           trap 'rm -f "$key" "$hosts" "$archive" "$config_archive"; rm -rf -- "$config_directory"' EXIT
           node --import tsx scripts/prepare-vps-config.mjs "$config_directory"
           tar -cf "$config_archive" -C "$config_directory" .env public-origin.txt backup-recipient.txt
-          unset POSTGRES_PASSWORD BETTER_AUTH_SECRET RESEND_API_KEY
+          unset POSTGRES_PASSWORD BETTER_AUTH_SECRET RESEND_API_KEY BARK_ENCRYPTION_KEY
           printf '%s\n' "$VPS_SSH_KEY" > "$key"
           phase='SSH host key discovery'
           if [[ -n "$VPS_KNOWN_HOSTS" ]]; then

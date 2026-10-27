@@ -424,6 +424,11 @@ export const notificationEndpoints = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     destination: text('destination').notNull(),
+    type: text('type', { enum: ['email', 'bark'] })
+      .notNull()
+      .default('email'),
+    label: text('label'),
+    encryptedKey: text('encrypted_key'),
     enabled: boolean('enabled').notNull().default(true),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     tokenHash: text('token_hash'),
@@ -436,6 +441,14 @@ export const notificationEndpoints = pgTable(
     uniqueIndex('notification_endpoints_active_email_unique')
       .on(table.organizationId, table.destination)
       .where(sql`${table.deletedAt} is null`),
+    check(
+      'notification_endpoints_type_valid',
+      sql`${table.type} in ('email', 'bark')`,
+    ),
+    check(
+      'notification_endpoints_bark_key_required',
+      sql`${table.type} <> 'bark' or ${table.deletedAt} is not null or (${table.encryptedKey} is not null and ${table.label} is not null)`,
+    ),
   ],
 );
 
@@ -453,6 +466,9 @@ export const notificationDeliveries = pgTable(
     eventKey: text('event_key').notNull().unique(),
     eventType: text('event_type', { enum: ['opened', 'recovered'] }).notNull(),
     recipient: text('recipient').notNull(),
+    channel: text('channel', { enum: ['email', 'bark'] })
+      .notNull()
+      .default('email'),
     siteName: text('site_name').notNull(),
     siteUrl: text('site_url').notNull(),
     monitorType: text('monitor_type', {
@@ -477,6 +493,10 @@ export const notificationDeliveries = pgTable(
     index('notification_deliveries_due_idx').on(
       table.status,
       table.nextAttemptAt,
+    ),
+    check(
+      'notification_deliveries_channel_valid',
+      sql`${table.channel} in ('email', 'bark')`,
     ),
     check(
       'notification_deliveries_event_valid',

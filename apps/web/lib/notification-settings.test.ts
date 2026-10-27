@@ -26,6 +26,8 @@ it('renders recipient state, permissions and pending/test restrictions without e
         endpoints: [
           {
             id: 'endpoint',
+            type: 'email',
+            label: null,
             destination: 'client@example.com',
             enabled: true,
             verifiedAt: null,
@@ -49,4 +51,44 @@ it('requires explicit opt-in confirmation and does not imply workspace authoriza
     'does not create an account or grant workspace access',
   );
   expect(html).toContain('disabled=""');
+});
+
+it('renders multiple Bark devices with hidden keys and the same verification and management controls', () => {
+  const html = renderToStaticMarkup(
+    createElement(NotificationSettings, {
+      organizationId: 'workspace',
+      initial: {
+        canManage: true,
+        includeMembers: false,
+        memberEmails: [],
+        endpoints: [
+          {
+            id: 'phone',
+            type: 'bark',
+            label: 'Personal iPhone',
+            destination: 'Bark device (key hidden)',
+            enabled: true,
+            verifiedAt: '2026-10-27',
+            lastMailAt: null,
+          },
+          {
+            id: 'tablet',
+            type: 'bark',
+            label: 'Team iPad',
+            destination: 'Bark device (key hidden)',
+            enabled: false,
+            verifiedAt: null,
+            lastMailAt: null,
+          },
+        ],
+      },
+    }),
+  );
+  expect(html).toContain('Personal iPhone');
+  expect(html).toContain('Team iPad');
+  expect(html).toContain('Send test push');
+  expect(html).toContain('type="password"');
+  expect(html).toContain('Self-hosted servers');
+  expect(html).not.toContain('encryptedKey');
+  expect(html).not.toContain('device_key');
 });

@@ -10,6 +10,23 @@ const valid = {
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 describe('GitHub deployment configuration', () => {
+  it('preserves only validated optional Bark encryption configuration', () => {
+    expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
+      "BARK_ENCRYPTION_KEY=''\n",
+    );
+    const key = 'b'.repeat(64);
+    expect(
+      prepareDeploymentConfiguration({ ...valid, BARK_ENCRYPTION_KEY: key })[
+        '.env'
+      ],
+    ).toContain(`BARK_ENCRYPTION_KEY='${key}'\n`);
+    expect(() =>
+      prepareDeploymentConfiguration({
+        ...valid,
+        BARK_ENCRYPTION_KEY: 'invalid',
+      }),
+    ).toThrow('BARK_ENCRYPTION_KEY');
+  });
   it('propagates only validated platform administrator IDs', () => {
     const id = 'd67deea0-0c5f-4f36-b47b-b57dc3b548c0';
     expect(

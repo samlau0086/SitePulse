@@ -2,10 +2,41 @@ import { expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   confirmNotificationEndpoint,
+  createBarkEndpoint,
   createNotificationEndpoint,
   updateNotificationEndpoint,
   updateNotificationSettings,
 } from './index';
+
+it('accepts only bounded Bark device keys and labels, never URLs or client verification state', () => {
+  expect(
+    createBarkEndpoint.parse({
+      label: ' My phone ',
+      deviceKey: ' FixtureDeviceKey ',
+    }),
+  ).toEqual({ label: 'My phone', deviceKey: 'FixtureDeviceKey' });
+  for (const deviceKey of [
+    'https://api.day.app/key',
+    'http://127.0.0.1/key',
+    'a/b',
+    'a'.repeat(257),
+    'short',
+    'a\r\nheader',
+  ])
+    expect(
+      createBarkEndpoint.safeParse({ label: 'Phone', deviceKey }).success,
+    ).toBe(false);
+  for (const input of [
+    { label: '', deviceKey: 'FixtureDeviceKey' },
+    { label: 'Phone', deviceKey: 'FixtureDeviceKey', verifiedAt: 'now' },
+    {
+      label: 'Phone',
+      deviceKey: 'FixtureDeviceKey',
+      server: 'https://internal/',
+    },
+  ])
+    expect(createBarkEndpoint.safeParse(input).success).toBe(false);
+});
 
 it('normalizes recipient addresses and rejects header injection and forged verification state', () => {
   expect(

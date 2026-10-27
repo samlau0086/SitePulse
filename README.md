@@ -2,17 +2,17 @@
 
 ## 通知设置与收件人管理
 
-侧栏 **Notifications** → 选择工作区，可管理故障和恢复邮件。已验证的工作区 owner/admin 可添加邮箱、重发验证、启停、删除、发送测试邮件，以及关闭/开启成员自动接收；其他成员只读。平台管理员身份不绕过工作区权限。
+侧栏 **Notifications** → 选择工作区，可管理故障和恢复的邮件与 Bark 推送。已验证的工作区 owner/admin 可添加多个邮箱或 Bark 设备、重发验证、启停、删除、发送测试通知，以及关闭/开启成员自动接收邮件；其他成员只读。平台管理员身份不绕过工作区权限。
 
 - 默认保留已验证成员自动接收。独立邮箱必须点击验证邮件中的链接，并在页面确认后才可接收；不需要注册 SitePulse，也不获得工作区访问权。
-- 每个工作区最多 20 个有效收件人，邮箱不区分大小写，同一事件同一邮箱仅投递一次。托管邮箱覆盖同地址的成员自动接收，待验证、停用或删除后不会回退到成员投递；需要恢复时重新添加并验证。
-- 验证链接一小时有效、单次使用，重发使旧链接失效。验证与测试共用每邮箱 60 秒冷却、每工作区每小时 10 次额度。创建时即发送验证；发送失败仍保留收件人，可稍后重发。
-- 测试仅允许已验证且启用的邮箱，成功表示邮件服务接受，不代表已到达收件箱。故障与恢复继续使用持久化队列；验证和测试同步交给邮件服务，不自动重试。
+- 每个工作区最多 20 个有效收件人（邮箱和 Bark 设备合计），邮箱不区分大小写，同一事件同一收件人仅投递一次。托管邮箱覆盖同地址的成员自动接收，待验证、停用或删除后不会回退到成员投递；需要恢复时重新添加并验证。
+- 验证链接一小时有效、单次使用，重发使旧链接失效。验证与测试共用每个收件人 60 秒冷却、每工作区每小时 10 次额度。创建时即发送验证；发送失败仍保留收件人，可稍后重发。
+- 测试仅允许已验证且启用的收件人，成功表示服务商接受，不代表邮件到达或手机展示。故障与恢复使用持久化队列；验证和测试同步交给服务商，不自动重试。
 - 停用、删除、关闭成员自动接收和撤销成员资格会抑制对应的待投递告警；已在发送中或服务商已接受的邮件不能撤回。新增收件人不补发历史告警。
 
-本地继续使用 `AUTH_MAIL_TRANSPORT=file`，验证/测试邮件查看 `.local/mail`，监控告警查看 `.local/alert-mail`；不要分享包含验证链接的文件。线上沿用 Resend 配置，无新增环境变量。正常部署需先备份再应用迁移 `0007_neat_morlun`，本任务不执行生产迁移或部署。
+本地继续使用 `AUTH_MAIL_TRANSPORT=file`，验证/测试邮件查看 `.local/mail`，监控邮件查看 `.local/alert-mail`；不要分享包含验证链接的文件。启用 Bark 时设置稳定的 `BARK_ENCRYPTION_KEY`，它用于加密数据库中的设备 Key，API 和 worker 必须使用相同值。正常部署需先备份再应用迁移 `0009_melted_jigsaw`，本任务不执行生产迁移或部署。
 
-验收：添加测试邮箱 → 确认验证链接 → 刷新通知页 → 冷却后发送测试 → 在受控测试站点触发故障/恢复 → 检查去重 → 停用后确认不再投递。详见 [通知说明](docs/NOTIFICATIONS.md)。
+Bark App 中复制设备 Key，在通知页填写设备名称和 Key。收到验证推送后点击通知，再在公开确认页明确确认；该证明不授予账号或工作区权限。首版固定使用官方 `api.day.app`，不接受完整 URL 或自建 Bark 服务。验收：分别添加两个设备并确认 → 冷却后发送测试 → 在受控测试站点触发故障/恢复 → 检查每台设备各一条 → 停用后确认不再投递。详见 [通知说明](docs/NOTIFICATIONS.md)。
 
 ## Platform administration
 
@@ -39,7 +39,7 @@ All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Sh
 
 Interactive controls use stronger outlines, bold button labels and 44px minimum heights. Active navigation uses bold blue text/icons on a light blue background, without notification-like dots; inline links remain underlined and card actions have outlined touch targets. Operational badges distinguish healthy, warning and critical states with readable semantic colors, icons and text. Errors and feedback appear in bordered tinted panels; quota and verification warnings are highlighted separately. Connector failures are announced as errors, and destructive actions retain confirmation dialogs.
 
-SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents, deduplicated email incident/recovery alerts and verified workspace recipient management are implemented. Billing and additional notification channels remain separate milestones.
+SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents, and deduplicated email/Bark incident and recovery alerts are implemented. Billing and additional notification channels remain separate milestones.
 
 ## Workspace navigation
 
@@ -61,7 +61,7 @@ Connector freshness is separate: WordPress still sends heartbeats every 15 minut
 
 Migration `0008_flippant_shiver_man` permits Connector incidents. The normal deployment must back up before applying it; no production changes were performed during implementation. Follow [responsiveness acceptance](docs/MONITORING_RESPONSIVENESS.md) after deployment.
 
-Migrations `0003_external_monitoring`, `0004_cold_zemo`, `0005_strange_nocturne` and `0007_neat_morlun` add monitoring jobs, checks, incidents, the durable notification outbox with stale-worker fencing, workspace notification settings and verified recipients. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs and five email deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts use the workspace's verified, enabled recipient policy and the configured file/Resend mail transport. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
+Migrations `0003_external_monitoring`, `0004_cold_zemo`, `0005_strange_nocturne`, `0007_neat_morlun` and `0009_melted_jigsaw` add monitoring jobs, checks, incidents, the durable notification outbox with stale-worker fencing, workspace notification settings, verified recipients and channel metadata. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs plus five email and five Bark deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts use the workspace's verified, enabled recipient policy. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
 
 ## Plans and site allowances
 
@@ -196,6 +196,14 @@ See [deployment and rollback](docs/DEPLOYMENT.md) and [security limits](docs/SEC
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
+如需启用 Bark，再生成一个独立且稳定的 32 字节十六进制加密密钥，保存为 GitHub Environment Secret `BARK_ENCRYPTION_KEY`：
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+不要在每次部署时重新生成。丢失或替换此值会使已保存的 Bark 设备 Key 无法解密；应恢复旧值，或删除并重新添加设备。它不是 Bark 设备 Key，两者不要混用。
+
 在自己的电脑使用 `age-keygen -o sitepulse-backup.key` 生成备份密钥，只把输出的 `age1…` 公钥填入 GitHub Variable `BACKUP_AGE_RECIPIENT`。私钥保存在 VPS 和 GitHub 之外，用于恢复备份。无需在 VPS 上运行此命令。异地备份与恢复演练见[完整部署指南](docs/GITHUB_ACTIONS_VPS.md)。
 
 ### 2. 配置域名与 HTTPS
@@ -210,16 +218,17 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'
 
 进入仓库 **Settings → Environments → New environment**，创建名称完全一致的 `staging` 环境，在 **Environment secrets** 中添加：
 
-| Secret 名称          | 填写内容                                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| `VPS_HOST`           | VPS 主机名或 IPv4 公网地址，不加协议、路径或端口；当前工作流不支持 IPv6 字面地址         |
-| `VPS_PORT`           | SSH 端口，例如 `22`；未设置时默认 `22`                                                   |
-| `VPS_USER`           | 已配置部署公钥且有 Docker 操作权限的 SSH 用户                                            |
-| `VPS_SSH_KEY`        | 完整 OpenSSH 私钥，包含首尾标记和原始换行                                                |
-| `VPS_KNOWN_HOSTS`    | 可选：已核验的 VPS SSH 主机公钥记录；不配置时自动扫描；非默认端口使用 `[host]:port` 形式 |
-| `POSTGRES_PASSWORD`  | 至少 32 位随机 base64url 或十六进制数据库密码，保持稳定                                  |
-| `BETTER_AUTH_SECRET` | 独立随机认证密钥，至少 32 位，保持稳定                                                   |
-| `RESEND_API_KEY`     | 真实 Resend API key                                                                      |
+| Secret 名称           | 填写内容                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `VPS_HOST`            | VPS 主机名或 IPv4 公网地址，不加协议、路径或端口；当前工作流不支持 IPv6 字面地址         |
+| `VPS_PORT`            | SSH 端口，例如 `22`；未设置时默认 `22`                                                   |
+| `VPS_USER`            | 已配置部署公钥且有 Docker 操作权限的 SSH 用户                                            |
+| `VPS_SSH_KEY`         | 完整 OpenSSH 私钥，包含首尾标记和原始换行                                                |
+| `VPS_KNOWN_HOSTS`     | 可选：已核验的 VPS SSH 主机公钥记录；不配置时自动扫描；非默认端口使用 `[host]:port` 形式 |
+| `POSTGRES_PASSWORD`   | 至少 32 位随机 base64url 或十六进制数据库密码，保持稳定                                  |
+| `BETTER_AUTH_SECRET`  | 独立随机认证密钥，至少 32 位，保持稳定                                                   |
+| `RESEND_API_KEY`      | 真实 Resend API key                                                                      |
+| `BARK_ENCRYPTION_KEY` | 可选；64 位十六进制加密密钥。启用 Bark 时必须配置并保持稳定                              |
 
 在同一个环境的 **Environment variables** 添加：
 

@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./network": "./src/network.ts"
+    "./network": "./src/network.ts",
+    "./bark": "./src/bark.ts"
   },
   "dependencies": {
     "ipaddr.js": "^2.5.0"

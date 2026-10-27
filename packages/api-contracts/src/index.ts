@@ -100,6 +100,15 @@ export const createNotificationEndpoint = z
     destination: z.string().trim().toLowerCase().pipe(z.email().max(254)),
   })
   .strict();
+export const createBarkEndpoint = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+    deviceKey: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_-]{8,256}$/),
+  })
+  .strict();
 export const updateNotificationEndpoint = z
   .object({ enabled: z.boolean() })
   .strict();
@@ -114,6 +123,8 @@ export const confirmNotificationEndpoint = z
   .strict();
 export type NotificationEndpoint = {
   id: string;
+  type: 'email' | 'bark';
+  label: string | null;
   destination: string;
   enabled: boolean;
   verifiedAt: string | null;

@@ -2,8 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { and, eq, schema, sql, type Database } from '@sitepulse/database';
+import {
+  decryptBarkKey,
+  sendBark,
+  type SendBark,
+} from '@sitepulse/shared/bark';
 
 type MailOptions = {
+  BARK_ENCRYPTION_KEY?: string | undefined;
   AUTH_MAIL_TRANSPORT: 'file' | 'resend';
   AUTH_MAIL_FROM: string;
   RESEND_API_KEY?: string;
@@ -32,9 +38,11 @@ export async function recipientStillEnabled(db: Database, delivery: Delivery) {
       endpoint.enabled &&
       !!endpoint.verifiedAt &&
       !endpoint.deletedAt &&
-      endpoint.destination === delivery.recipient
+      endpoint.destination === delivery.recipient &&
+      endpoint.type === delivery.channel
     );
   }
+  if (delivery.channel !== 'email') return false;
   const [settings] = await db
     .select()
     .from(schema.notificationSettings)
@@ -72,7 +80,10 @@ export async function recipientStillEnabled(db: Database, delivery: Delivery) {
   return members.length > 0;
 }
 
-export async function claimNotificationDeliveries(db: Database) {
+export async function claimNotificationDeliveries(
+  db: Database,
+  channel?: 'email' | 'bark',
+) {
   return db.transaction(async (tx) => {
     await tx
       .update(schema.notificationDeliveries)
@@ -91,6 +102,9 @@ export async function claimNotificationDeliveries(db: Database) {
         and(
           sql`(${schema.notificationDeliveries.status} = 'queued' and ${schema.notificationDeliveries.nextAttemptAt} <= now()) or (${schema.notificationDeliveries.status} = 'sending' and ${schema.notificationDeliveries.leaseExpiresAt} <= now())`,
           sql`${schema.notificationDeliveries.attempts} < 8`,
+          channel
+            ? eq(schema.notificationDeliveries.channel, channel)
+            : undefined,
         ),
       )
       .orderBy(schema.notificationDeliveries.nextAttemptAt)
@@ -244,8 +258,15 @@ async function finishDelivery(
 export async function deliverNotificationBatch(
   db: Database,
   options: MailOptions,
+  barkSender: SendBark = sendBark,
 ) {
-  const deliveries = await claimNotificationDeliveries(db);
+  // Separate bounded batches prevent an email backlog from starving push alerts.
+  const deliveries = (
+    await Promise.all([
+      claimNotificationDeliveries(db, 'email'),
+      claimNotificationDeliveries(db, 'bark'),
+    ])
+  ).flat();
   await Promise.all(
     deliveries.map(async (delivery) => {
       try {
@@ -269,14 +290,60 @@ export async function deliverNotificationBatch(
             );
           return;
         }
-        const providerMessageId = await sendMail(delivery, options);
+        let providerMessageId: string;
+        if (delivery.channel === 'bark') {
+          if (!options.BARK_ENCRYPTION_KEY)
+            throw new Error('BARK_NOT_CONFIGURED');
+          const [endpoint] = await db
+            .select()
+            .from(schema.notificationEndpoints)
+            .where(
+              and(
+                eq(schema.notificationEndpoints.id, delivery.endpointId!),
+                eq(
+                  schema.notificationEndpoints.organizationId,
+                  delivery.organizationId!,
+                ),
+                eq(
+                  schema.notificationEndpoints.destination,
+                  delivery.recipient,
+                ),
+                eq(schema.notificationEndpoints.type, 'bark'),
+                eq(schema.notificationEndpoints.enabled, true),
+                sql`${schema.notificationEndpoints.verifiedAt} is not null`,
+                sql`${schema.notificationEndpoints.deletedAt} is null`,
+              ),
+            );
+          if (!endpoint?.encryptedKey) throw new Error('BARK_KEY_UNAVAILABLE');
+          let deviceKey: string;
+          try {
+            deviceKey = decryptBarkKey(
+              endpoint.encryptedKey,
+              options.BARK_ENCRYPTION_KEY,
+              delivery.organizationId!,
+            );
+          } catch {
+            throw new Error('BARK_KEY_UNAVAILABLE');
+          }
+          const { subject, text } = incidentMail(delivery, options.APP_ORIGIN);
+          await barkSender({
+            deviceKey,
+            title: subject,
+            body: text,
+            url: `${options.APP_ORIGIN}/app/incidents`,
+          });
+          providerMessageId = `bark:${delivery.id}`;
+        } else providerMessageId = await sendMail(delivery, options);
         await finishDelivery(db, delivery, { providerMessageId });
       } catch (error) {
         const errorCode =
           error instanceof Error &&
-          ['PROVIDER_REJECTED', 'PROVIDER_INVALID_RESPONSE'].includes(
-            error.message,
-          )
+          [
+            'PROVIDER_REJECTED',
+            'PROVIDER_INVALID_RESPONSE',
+            'BARK_NOT_CONFIGURED',
+            'BARK_KEY_UNAVAILABLE',
+          ].includes(error.message)
             ? error.message
             : 'PROVIDER_UNAVAILABLE';
         await finishDelivery(db, delivery, { errorCode });

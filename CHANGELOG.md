@@ -2,6 +2,9 @@
 
 ## Unreleased — 2026-10-27
 
+- Added multiple verified Bark devices per workspace, encrypted device-key storage, test pushes, enable/disable/delete controls, and Bark delivery for incident and Connector opening/recovery events. The official Bark service is the only supported endpoint in this milestone.
+- Added migration 0009 channel metadata, shared recipient limits/rate budgets, per-channel worker batches, bounded Bark retries and sanitized provider errors. Added contract, crypto, UI and PostgreSQL integration coverage for opt-in, tenant isolation, deduplication, secret handling and retry behavior.
+
 - Optimized monitoring responsiveness: default HTTP interval 300 seconds with validated operator bounds 60–3600, propagated through Compose/GitHub deployment, and bounded shortening of existing healthy schedules. Kept 60-second first-failure/recovery confirmation and exposed clearer first/confirmed-failure labels.
 - Added independent Connector `stale_data` warning incidents, deduplicated recipient-policy-aware opening/recovery notifications, valid-heartbeat-only recovery and migration 0008. Preserved reset semantics, SSRF controls and server tenant checks; added schedule, delay, duplicate, replay, reset and UI/mail regression coverage.
 

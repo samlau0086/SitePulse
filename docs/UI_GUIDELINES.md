@@ -23,7 +23,7 @@ Homepage illustrations must be labeled as examples and must not invent live cust
 
 Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effective allowance, used slots and a textual full/over-limit message. Disable site creation when the fetched allowance is full while retaining server quota checks and errors for concurrent changes. Existing sites remain accessible after a downgrade.
 
-Notification settings use the direct `/app/notifications` sidebar destination and a workspace selector rather than nested workspace navigation. Show member-default status, recipient verification/enabled state and all available commands in the same view. Keep member reads visible but disable management controls when `canManage` is false. Recipient addresses must wrap, action groups must wrap at narrow widths, destructive removal requires confirmation, and verification links must use the public confirmation page without implying account or workspace access.
+Notification settings use the direct `/app/notifications` sidebar destination and a workspace selector rather than nested workspace navigation. Show member-default status, recipient channel, label, verification/enabled state and all available commands in the same view. Keep member reads visible but disable management controls when `canManage` is false. Email addresses must wrap; Bark rows show a label and hidden-key notice, never the device key or its fingerprint. Action groups must wrap at narrow widths, destructive removal requires confirmation, and verification links must use the public confirmation page without implying account or workspace access.
 
 ## Visibility and feedback
 

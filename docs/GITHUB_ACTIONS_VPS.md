@@ -45,6 +45,7 @@ Required values:
 | `AUTH_MAIL_TRANSPORT`          | `resend`                                                                          |
 | `AUTH_MAIL_FROM`               | Sender email on your verified Resend domain                                       |
 | `RESEND_API_KEY`               | Real provider key stored in a GitHub Environment secret and private VPS config    |
+| `BARK_ENCRYPTION_KEY`          | Optional stable 64-character hex key used to encrypt Bark device keys at rest     |
 
 Compose constructs the internal database URL. Do not add localhost `DATABASE_URL` or `TEST_DATABASE_URL`; no test suite runs against this database. Production cookie/HTTPS validation remains enabled even for staging. File email transport is intentionally refused here.
 
@@ -70,16 +71,17 @@ Preserve browser `Origin`, reject unknown hosts, apply a 1 MB body cap and bound
 
 In the `samlau0086/SitePulse` repository, open **Settings → Environments**, create `staging` and `production`, and add these secrets separately to each environment:
 
-| Secret               | Content                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `VPS_HOST`           | VPS hostname or IPv4 address, without protocol/path (IPv6 literals are not supported by this workflow)                |
-| `VPS_PORT`           | SSH port; defaults to `22`                                                                                            |
-| `VPS_USER`           | Dedicated deploy account                                                                                              |
-| `VPS_SSH_KEY`        | Complete OpenSSH private key, dedicated to this deployment; use a non-interactive key                                 |
-| `VPS_KNOWN_HOSTS`    | Optional trusted OpenSSH known_hosts entry; omitted means automatic per-run discovery; custom ports use `[host]:port` |
-| `POSTGRES_PASSWORD`  | Stable independent random URL-safe password, at least 32 characters                                                   |
-| `BETTER_AUTH_SECRET` | Stable independent random authentication secret, at least 32 characters                                               |
-| `RESEND_API_KEY`     | Real Resend API key                                                                                                   |
+| Secret                | Content                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `VPS_HOST`            | VPS hostname or IPv4 address, without protocol/path (IPv6 literals are not supported by this workflow)                |
+| `VPS_PORT`            | SSH port; defaults to `22`                                                                                            |
+| `VPS_USER`            | Dedicated deploy account                                                                                              |
+| `VPS_SSH_KEY`         | Complete OpenSSH private key, dedicated to this deployment; use a non-interactive key                                 |
+| `VPS_KNOWN_HOSTS`     | Optional trusted OpenSSH known_hosts entry; omitted means automatic per-run discovery; custom ports use `[host]:port` |
+| `POSTGRES_PASSWORD`   | Stable independent random URL-safe password, at least 32 characters                                                   |
+| `BETTER_AUTH_SECRET`  | Stable independent random authentication secret, at least 32 characters                                               |
+| `RESEND_API_KEY`      | Real Resend API key                                                                                                   |
+| `BARK_ENCRYPTION_KEY` | Optional stable 64-character lowercase hex key; required before users add Bark devices                                |
 
 Add these **Environment variables** in the same environment:
 
@@ -96,7 +98,7 @@ Optional `PLATFORM_ADMIN_USER_IDS`: comma-separated verified Better Auth user UU
 | `MONITOR_INTERVAL_SECONDS`     | Optional HTTP interval, default `300`, allowed `60`–`3600`                                                                  |
 | `SSL_INTERVAL_SECONDS`         | Optional SSL interval, default `86400`, allowed `3600`–`604800`                                                             |
 
-The deployment forces production mode and Resend transport. Invalid/missing application settings fail before any SSH connection. Keep runtime credentials stable; no local development or test credentials are injected.
+The deployment forces production mode and Resend transport. Invalid/missing application settings fail before any SSH connection. Keep runtime credentials stable; no local development or test credentials are injected. Generate the optional Bark encryption key on a trusted administrator machine with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Do not rotate it as part of routine deployment: replacing or losing it makes saved Bark device keys undecryptable, requiring restoration of the old key or deletion and re-enrollment of every Bark endpoint.
 
 Monitoring variables are validated and installed in the generated private dotenv alongside existing settings. The worker needs outbound DNS and public HTTP/HTTPS access through its monitoring network; it exposes no port and PostgreSQL remains internal. A process health check does not establish monitoring correctness. After migration 0003, complete [monitoring acceptance](MONITORING_ACCEPTANCE.md) with a controlled target. Set MONITORING_ENABLED=false and redeploy to pause probes; stored state/history stays visible and connector freshness continues.
 

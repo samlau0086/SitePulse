@@ -16,7 +16,15 @@ const postgresUrl = z
     'Expected a PostgreSQL URL',
   );
 export const databaseEnvironment = z.object({ DATABASE_URL: postgresUrl });
+const barkEncryptionKey = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .regex(/^[a-fA-F0-9]{64}$/)
+    .optional(),
+);
 export const workerEnvironment = databaseEnvironment.extend({
+  BARK_ENCRYPTION_KEY: barkEncryptionKey,
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
@@ -80,6 +88,7 @@ export function parseWorkerEnvironment(
   return result.data;
 }
 const schema = databaseEnvironment.extend({
+  BARK_ENCRYPTION_KEY: barkEncryptionKey,
   PLATFORM_ADMIN_USER_IDS: z
     .string()
     .default('')

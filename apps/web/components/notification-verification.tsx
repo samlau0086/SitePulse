@@ -40,8 +40,8 @@ export function NotificationVerification() {
       ) : (
         <>
           <p>
-            Confirm that this address may receive SitePulse workspace incident
-            and recovery emails. This does not create an account or grant
+            Confirm that this recipient may receive SitePulse workspace incident
+            and recovery notifications. This does not create an account or grant
             workspace access.
           </p>
           <button
@@ -52,8 +52,8 @@ export function NotificationVerification() {
           </button>
           {!credentials.token && (
             <p>
-              Open the full link from the verification email. If you refreshed
-              this page, reopen the email link.
+              Open the full link from the verification email or Bark push. If
+              you refreshed this page, reopen the notification link.
             </p>
           )}
         </>

@@ -4,6 +4,7 @@ import { and, eq, schema, sql, type Database } from '@sitepulse/database';
 import {
   confirmNotificationEndpoint,
   createNotificationEndpoint,
+  createBarkEndpoint,
   emptyRequest,
   notificationEndpointParams,
   organizationParams,
@@ -11,19 +12,31 @@ import {
   updateNotificationSettings,
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
+import {
+  barkDestination,
+  encryptBarkKey,
+  decryptBarkKey,
+  sendBark,
+  type SendBark,
+  type BarkMessage,
+} from '@sitepulse/shared/bark';
 import type { Environment } from '@sitepulse/config';
 import type { SendAuthMail, AuthMail } from './auth-mail';
 import { HttpError } from './http-error';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type User = { id: string; emailVerified: boolean };
+type PreparedNotification = AuthMail | { kind: 'bark'; message: BarkMessage };
 const hash = (token: string) =>
   createHash('sha256').update(token).digest('hex');
 const missing = () =>
   new HttpError(404, 'NOT_FOUND', 'Notification configuration not found.');
 const view = (row: typeof schema.notificationEndpoints.$inferSelect) => ({
   id: row.id,
-  destination: row.destination,
+  type: row.type,
+  label: row.label,
+  destination:
+    row.type === 'bark' ? 'Bark device (key hidden)' : row.destination,
   enabled: row.enabled,
   verifiedAt: row.verifiedAt,
   lastMailAt: row.lastMailAt,
@@ -36,11 +49,13 @@ export async function registerNotificationRoutes(
     env,
     requireUser,
     mailer,
+    barkSender = sendBark,
   }: {
     db: Database;
     env: Environment;
     requireUser: (request: FastifyRequest) => Promise<User>;
     mailer: SendAuthMail;
+    barkSender?: SendBark;
   },
 ) {
   async function scoped<T>(
@@ -119,7 +134,7 @@ export async function registerNotificationRoutes(
       throw new HttpError(
         429,
         'RATE_LIMITED',
-        'Workspace email limit reached. Try again in one hour.',
+        'Workspace verification/test limit reached. Try again in one hour.',
       );
     await tx
       .update(schema.notificationSettings)
@@ -149,7 +164,7 @@ export async function registerNotificationRoutes(
     organizationId: string,
     row: typeof schema.notificationEndpoints.$inferSelect,
     test: boolean,
-  ): Promise<AuthMail> {
+  ): Promise<PreparedNotification> {
     if (row.lastMailAt && Date.now() - row.lastMailAt.getTime() < 60000)
       throw new HttpError(
         429,
@@ -169,6 +184,12 @@ export async function registerNotificationRoutes(
         'This recipient is already verified.',
       );
     await budget(tx, organizationId);
+    if (row.type === 'bark' && (!env.BARK_ENCRYPTION_KEY || !row.encryptedKey))
+      throw new HttpError(
+        503,
+        'BARK_NOT_CONFIGURED',
+        'Bark is unavailable. Ask the operator to configure its encryption key.',
+      );
     const token = randomBytes(32).toString('base64url');
     await tx
       .update(schema.notificationEndpoints)
@@ -182,22 +203,53 @@ export async function registerNotificationRoutes(
           : {}),
       })
       .where(eq(schema.notificationEndpoints.id, row.id));
+    const url = test
+      ? `${env.APP_ORIGIN}/app/notifications`
+      : `${env.APP_ORIGIN}/verify-notification#endpointId=${row.id}&token=${token}`;
+    if (row.type === 'bark') {
+      let deviceKey: string;
+      try {
+        deviceKey = decryptBarkKey(
+          row.encryptedKey!,
+          env.BARK_ENCRYPTION_KEY!,
+          organizationId,
+        );
+      } catch {
+        throw new HttpError(
+          503,
+          'BARK_KEY_UNAVAILABLE',
+          'Bark device key is unavailable. Contact the operator.',
+        );
+      }
+      return {
+        kind: 'bark',
+        message: {
+          deviceKey,
+          title: test
+            ? 'SitePulse test notification'
+            : 'Verify SitePulse notifications',
+          body: test
+            ? 'Bark accepted this test request. This does not confirm monitoring status.'
+            : 'Tap this notification, then confirm to opt in to workspace alerts. This does not grant workspace access.',
+          url,
+        },
+      };
+    }
     return {
       to: row.destination,
       kind: test ? 'notification-test' : 'notification-verify',
-      url: test
-        ? `${env.APP_ORIGIN}/app/notifications`
-        : `${env.APP_ORIGIN}/verify-notification#endpointId=${row.id}&token=${token}`,
+      url,
     };
   }
-  async function send(mail: AuthMail) {
+  async function send(mail: PreparedNotification) {
     try {
-      await mailer(mail);
+      if (mail.kind === 'bark') await barkSender(mail.message);
+      else await mailer(mail);
     } catch {
       throw new HttpError(
         502,
-        'MAIL_DELIVERY_FAILED',
-        'Email delivery failed. The recipient was saved; wait one minute and retry.',
+        mail.kind === 'bark' ? 'BARK_DELIVERY_FAILED' : 'MAIL_DELIVERY_FAILED',
+        'Notification delivery failed. The recipient was saved; wait one minute and retry.',
       );
     }
   }
@@ -260,41 +312,78 @@ export async function registerNotificationRoutes(
       return change;
     }),
   );
-  app.post(`${base}/notification-endpoints`, async (request, reply) => {
-    const mail = await scoped(
-      request,
-      true,
-      async (tx, organizationId, user) => {
-        const { destination } = createNotificationEndpoint.parse(request.body);
-        const [counts] = await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(schema.notificationEndpoints)
-          .where(
-            and(
-              eq(schema.notificationEndpoints.organizationId, organizationId),
-              sql`${schema.notificationEndpoints.deletedAt} is null`,
-            ),
-          );
-        if (counts!.count >= 20)
-          throw new HttpError(
-            409,
-            'RECIPIENT_LIMIT',
-            'A workspace supports at most 20 recipients.',
-          );
-        const [row] = await tx
-          .insert(schema.notificationEndpoints)
-          .values({ organizationId, destination })
-          .returning();
-        const mail = await prepareMail(tx, organizationId, row!, false);
-        await audit(tx, request, organizationId, user.id, 'endpoint.created', {
-          endpointId: row!.id,
-        });
-        return mail;
+  for (const channel of ['email', 'bark'] as const)
+    app.post(
+      `${base}/notification-endpoints${channel === 'bark' ? '/bark' : ''}`,
+      async (request, reply) => {
+        const mail = await scoped(
+          request,
+          true,
+          async (tx, organizationId, user) => {
+            const input =
+              channel === 'bark'
+                ? createBarkEndpoint.parse(request.body)
+                : createNotificationEndpoint.parse(request.body);
+            if (channel === 'bark' && !env.BARK_ENCRYPTION_KEY)
+              throw new HttpError(
+                503,
+                'BARK_NOT_CONFIGURED',
+                'Bark is unavailable. Ask the operator to configure its encryption key.',
+              );
+            const [counts] = await tx
+              .select({ count: sql<number>`count(*)::int` })
+              .from(schema.notificationEndpoints)
+              .where(
+                and(
+                  eq(
+                    schema.notificationEndpoints.organizationId,
+                    organizationId,
+                  ),
+                  sql`${schema.notificationEndpoints.deletedAt} is null`,
+                ),
+              );
+            if (counts!.count >= 20)
+              throw new HttpError(
+                409,
+                'RECIPIENT_LIMIT',
+                'A workspace supports at most 20 recipients.',
+              );
+            const [row] = await tx
+              .insert(schema.notificationEndpoints)
+              .values(
+                'deviceKey' in input
+                  ? {
+                      organizationId,
+                      type: 'bark',
+                      label: input.label,
+                      destination: barkDestination(input.deviceKey),
+                      encryptedKey: encryptBarkKey(
+                        input.deviceKey,
+                        env.BARK_ENCRYPTION_KEY!,
+                        organizationId,
+                      ),
+                    }
+                  : { organizationId, destination: input.destination },
+              )
+              .returning();
+            const mail = await prepareMail(tx, organizationId, row!, false);
+            await audit(
+              tx,
+              request,
+              organizationId,
+              user.id,
+              'endpoint.created',
+              {
+                endpointId: row!.id,
+              },
+            );
+            return mail;
+          },
+        );
+        await send(mail);
+        return reply.code(201).send({ status: 'verification_sent' });
       },
     );
-    await send(mail);
-    return reply.code(201).send({ status: 'verification_sent' });
-  });
   const item = `${base}/notification-endpoints/:endpointId`;
   for (const method of ['PATCH', 'DELETE'] as const)
     app.route({
@@ -315,6 +404,7 @@ export async function registerNotificationRoutes(
                   deletedAt: new Date(),
                   tokenHash: null,
                   tokenExpiresAt: null,
+                  encryptedKey: null,
                 });
           await tx
             .update(schema.notificationEndpoints)

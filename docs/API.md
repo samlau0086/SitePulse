@@ -25,6 +25,23 @@ Authentication lifecycle routes (all POST, strict JSON, trusted Origin, 5 reques
 
 Only these adapters are mounted; raw Better Auth callback routes stay private. The session response includes `emailVerified`. Reset tokens expire in 30 minutes, verification tokens in one hour. No callback URL or user ID is accepted from clients.
 
+## Notification settings and recipients
+
+Tenant notification reads require organization membership. Mutations require a verified owner/admin session and trusted Origin; platform administrator status does not bypass this tenant check. Foreign organizations and endpoint IDs return 404. Bodies are strict and never accept actor, verification or tenant state from the client.
+
+| Method / path                                                                   | Body                    | Access/result                                                                              |
+| ------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------ |
+| `GET /organizations/:organizationId/notification-endpoints`                     | —                       | Member; sanitized settings, verified member addresses, recipients and `canManage`          |
+| `PATCH /organizations/:organizationId/notification-settings`                    | `{ includeMembers }`    | Verified owner/admin; enable or disable automatic verified-member delivery                 |
+| `POST /organizations/:organizationId/notification-endpoints`                    | `{ destination }`       | Verified owner/admin; save recipient and send verification; at most 20 active recipients   |
+| `PATCH /organizations/:organizationId/notification-endpoints/:endpointId`       | `{ enabled }`           | Verified owner/admin; enable or disable future and queued delivery                         |
+| `DELETE /organizations/:organizationId/notification-endpoints/:endpointId`      | `{}`                    | Verified owner/admin; soft-delete recipient, invalidate proof and suppress queued delivery |
+| `POST /organizations/:organizationId/notification-endpoints/:endpointId/resend` | `{}`                    | Verified owner/admin; rotate the one-hour proof and send a new verification email          |
+| `POST /organizations/:organizationId/notification-endpoints/:endpointId/test`   | `{}`                    | Verified owner/admin; send only when the recipient is verified and enabled                 |
+| `POST /notification-endpoints/verify`                                           | `{ endpointId, token }` | Public possession proof; single use, grants no session or membership                       |
+
+Managed addresses override automatic member delivery for the same normalized email, including pending, disabled and deleted records; this prevents an address from silently falling back to member delivery. Verification/test sends have a persisted 60-second per-recipient cooldown and a shared ten-per-hour workspace allowance. Provider failures consume the allowance and never expose provider response data. Mutations and proof confirmation are audited without email addresses or token material. See [NOTIFICATIONS.md](NOTIFICATIONS.md).
+
 Base path: `/api/v1`. Requests and responses use JSON. OpenAPI is generated from Fastify route metadata and request schemas at `/api/v1/docs/json`; a documentation entry page is at `/api/v1/docs/`.
 
 Every state-changing request requires `Origin` exactly equal to `APP_ORIGIN`, including command-line clients. Browser sessions use HttpOnly, SameSite=Lax cookies and Secure cookies in production. Cookies are host-only. Use browser credentials or a cookie jar; never copy session tokens into local storage. Request bodies are capped at 16 KiB. Unknown properties are rejected rather than silently stripped.
@@ -79,7 +96,7 @@ Connector POST requests send `Origin: <APP_ORIGIN>` and (except pairing) `Author
 
 Non-members and deleted sites return `SITE_NOT_FOUND` (404); insufficient roles or unverified managing users return 403. Invalid/expired/consumed codes return `INVALID_CHALLENGE` (400), invalid/revoked bearer credentials `INVALID_CREDENTIAL` (401), duplicate/reordered heartbeat `HEARTBEAT_REPLAY` (409). Heartbeats use database receipt time and do not accept client timestamps. Version is a numeric three-part version, sequence is 1–2147483647. Re-pair after sequence exhaustion. Pairing allows 20 requests/minute/IP and each authenticated connector endpoint 120/minute/IP. These process-local limits require tuning and shared storage before public scale.
 
-Member administration, dashboard aggregate metrics, usage, alert delivery and billing endpoints are not mounted. Unimplemented endpoints return the standard 404. Inventory contains only WordPress/PHP versions, active plugin/theme identifiers and versions, update counts, and a server receipt timestamp.
+Member administration, arbitrary alert-policy/channel management and billing endpoints are not mounted. Unimplemented endpoints return the standard 404. Inventory contains only WordPress/PHP versions, active plugin/theme identifiers and versions, update counts, and a server receipt timestamp.
 
 ## External monitoring and incidents
 

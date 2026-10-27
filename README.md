@@ -1,5 +1,19 @@
 # SitePulse
 
+## 通知设置与收件人管理
+
+侧栏 **Notifications** → 选择工作区，可管理故障和恢复邮件。已验证的工作区 owner/admin 可添加邮箱、重发验证、启停、删除、发送测试邮件，以及关闭/开启成员自动接收；其他成员只读。平台管理员身份不绕过工作区权限。
+
+- 默认保留已验证成员自动接收。独立邮箱必须点击验证邮件中的链接，并在页面确认后才可接收；不需要注册 SitePulse，也不获得工作区访问权。
+- 每个工作区最多 20 个有效收件人，邮箱不区分大小写，同一事件同一邮箱仅投递一次。托管邮箱覆盖同地址的成员自动接收，待验证、停用或删除后不会回退到成员投递；需要恢复时重新添加并验证。
+- 验证链接一小时有效、单次使用，重发使旧链接失效。验证与测试共用每邮箱 60 秒冷却、每工作区每小时 10 次额度。创建时即发送验证；发送失败仍保留收件人，可稍后重发。
+- 测试仅允许已验证且启用的邮箱，成功表示邮件服务接受，不代表已到达收件箱。故障与恢复继续使用持久化队列；验证和测试同步交给邮件服务，不自动重试。
+- 停用、删除、关闭成员自动接收和撤销成员资格会抑制对应的待投递告警；已在发送中或服务商已接受的邮件不能撤回。新增收件人不补发历史告警。
+
+本地继续使用 `AUTH_MAIL_TRANSPORT=file`，验证/测试邮件查看 `.local/mail`，监控告警查看 `.local/alert-mail`；不要分享包含验证链接的文件。线上沿用 Resend 配置，无新增环境变量。正常部署需先备份再应用迁移 `0007_neat_morlun`，本任务不执行生产迁移或部署。
+
+验收：添加测试邮箱 → 确认验证链接 → 刷新通知页 → 冷却后发送测试 → 在受控测试站点触发故障/恢复 → 检查去重 → 停用后确认不再投递。详见 [通知说明](docs/NOTIFICATIONS.md)。
+
 ## Platform administration
 
 平台管理后台位于 `/app/admin`，支持按工作区名称、slug 或 UUID 搜索、查看套餐与用量、修改套餐或自定义站点额度，并填写必填原因。编辑后先点击 **Preview impact** 查看前后额度及新增限制，再 **Confirm and save**。保存会记录真实管理员用户 ID、原因和前后值；工作区 owner/admin 可在现有审计记录中查看。预览后套餐或用量发生变化，保存会返回冲突，需重新预览。
@@ -25,7 +39,7 @@ All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Sh
 
 Interactive controls use stronger outlines, bold button labels and 44px minimum heights. Active navigation uses bold blue text/icons on a light blue background, without notification-like dots; inline links remain underlined and card actions have outlined touch targets. Operational badges distinguish healthy, warning and critical states with readable semantic colors, icons and text. Errors and feedback appear in bordered tinted panels; quota and verification warnings are highlighted separately. Connector failures are announced as errors, and destructive actions retain confirmation dialogs.
 
-SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents and deduplicated email incident/recovery alerts are implemented. Billing and alert endpoint management remain separate milestones.
+SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents, deduplicated email incident/recovery alerts and verified workspace recipient management are implemented. Billing and additional notification channels remain separate milestones.
 
 ## Workspace navigation
 
@@ -41,7 +55,7 @@ Only public HTTP(S) destinations on standard ports are allowed. Every connection
 
 Optional validated settings in `.env` or GitHub Environment Variables: `MONITORING_ENABLED=true`, `MONITOR_INTERVAL_SECONDS=900` (300–86400), `SSL_INTERVAL_SECONDS=86400` (3600–604800). Set `MONITORING_ENABLED=false` and restart/redeploy to pause external probes; stored status/history remains visible. The worker needs outbound DNS and public HTTP/HTTPS access. PostgreSQL remains private and no worker port is published.
 
-Migrations `0003_external_monitoring`, `0004_cold_zemo` and `0005_strange_nocturne` add monitoring jobs, checks, incidents and the durable notification outbox with stale-worker fencing. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs and five email deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts go to verified organization members and use the configured file/Resend mail transport. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
+Migrations `0003_external_monitoring`, `0004_cold_zemo`, `0005_strange_nocturne` and `0007_neat_morlun` add monitoring jobs, checks, incidents, the durable notification outbox with stale-worker fencing, workspace notification settings and verified recipients. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs and five email deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts use the workspace's verified, enabled recipient policy and the configured file/Resend mail transport. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
 
 ## Plans and site allowances
 

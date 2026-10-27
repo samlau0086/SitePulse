@@ -21,6 +21,7 @@ import { createAuth } from './auth';
 import { createAuthMailer, type SendAuthMail } from './auth-mail';
 import { HttpError } from './http-error';
 import { registerSiteRoutes } from './sites';
+import { registerNotificationRoutes } from './notification-settings';
 import { isPlatformAdmin, registerPlatformAdminRoutes } from './platform-admin';
 import type { ResolveHost } from './site-url';
 
@@ -216,6 +217,7 @@ export async function buildApp({
     return session.user;
   }
   const security = [{ sessionCookie: [] }];
+  await registerNotificationRoutes(app, { db, env, requireUser, mailer });
   const jsonSchema = (value: z.ZodType) => {
     const { $schema: _schema, ...result } = z.toJSONSchema(value, {
       io: 'input',

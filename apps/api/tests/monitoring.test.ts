@@ -360,6 +360,7 @@ it('retries transient delivery failures and records only provider handoff state'
     .values({
       incidentId: incident.id,
       eventKey: `${incident.id}:test-retry:${randomBytes(8).toString('hex')}`,
+      organizationId,
       eventType: 'opened',
       recipient: 'monitor-owner@example.com',
       siteName: 'Monitor WP',

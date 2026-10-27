@@ -23,6 +23,8 @@ Homepage illustrations must be labeled as examples and must not invent live cust
 
 Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effective allowance, used slots and a textual full/over-limit message. Disable site creation when the fetched allowance is full while retaining server quota checks and errors for concurrent changes. Existing sites remain accessible after a downgrade.
 
+Notification settings use the direct `/app/notifications` sidebar destination and a workspace selector rather than nested workspace navigation. Show member-default status, recipient verification/enabled state and all available commands in the same view. Keep member reads visible but disable management controls when `canManage` is false. Recipient addresses must wrap, action groups must wrap at narrow widths, destructive removal requires confirmation, and verification links must use the public confirmation page without implying account or workspace access.
+
 ## Visibility and feedback
 
 - Reuse `IncidentSignal` for incident outcomes: HTTP incidents show a directional icon plus DOWN until confirmed recovery, then UP. Retain lifecycle status separately. SSL uses certificate wording; reset/unknown closures must say recovery unverified. Explain that historical event states do not report current availability. Use semantic icon tiles and visible words together.

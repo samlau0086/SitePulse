@@ -2,20 +2,25 @@
 
 Migration `0006_tearful_morlocks.sql` adds nullable `organizations.site_limit_override` (0–1000) and `agency_plus`. Existing sites, credentials and jobs are unchanged. Quota decisions and manual entitlement updates serialize on the organization row; see [ENTITLEMENTS.md](ENTITLEMENTS.md). Existing migrations remain immutable.
 
+Migration `0007_neat_morlun.sql` adds `notification_settings`, `notification_endpoints`, and tenant/endpoint references on `notification_deliveries`. It backfills the organization of existing incident deliveries through the incident's site before adding foreign keys. Old orphan history remains nullable and fails closed in the worker. Active managed addresses are unique per workspace; deleted rows remain as tombstones so an address cannot silently fall back to automatic member delivery. Existing migrations remain immutable.
+
 All IDs are UUIDs. Timestamps are `timestamptz`; PostgreSQL stores instants, and API serialization uses ISO timestamps. Production clients should use UTC. Email is normalized to lowercase and trimmed by the API and constrained in SQL; uniqueness is enforced by the database.
 
-| Table                  | Purpose and constraints                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `users`                | Unique normalized email; Better Auth profile and verification fields                                                |
-| `auth_accounts`        | Auth-library credential accounts; unique provider/account; Argon2id `password_hash`; FK to users                    |
-| `auth_sessions`        | Signed-cookie lookup tokens, expirations, user FK; user/expiry indexes                                              |
-| `auth_verifications`   | Better Auth verification/reset lifecycle records                                                                    |
-| `organizations`        | Unique validated slug; owner FK; plan check and default free                                                        |
-| `organization_members` | Composite organization/user PK, constrained owner/admin/member role, user index, at most one owner per organization |
-| `audit_logs`           | Nullable organization and actor FKs; action, request ID, timestamps, allowlisted metadata; tenant/time index        |
-| `sites`                | Organization FK, immutable canonical identity, partial unique org/URL for undeleted rows; heartbeat freshness       |
-| `site_credentials`     | One credential hash per site, unique hash, rotation version, revocation timestamp, monotonic sequence               |
-| `pairing_challenges`   | Site FK, unique random-code hash, expiration and consumption timestamps                                             |
+| Table                     | Purpose and constraints                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `users`                   | Unique normalized email; Better Auth profile and verification fields                                                |
+| `auth_accounts`           | Auth-library credential accounts; unique provider/account; Argon2id `password_hash`; FK to users                    |
+| `auth_sessions`           | Signed-cookie lookup tokens, expirations, user FK; user/expiry indexes                                              |
+| `auth_verifications`      | Better Auth verification/reset lifecycle records                                                                    |
+| `organizations`           | Unique validated slug; owner FK; plan check and default free                                                        |
+| `organization_members`    | Composite organization/user PK, constrained owner/admin/member role, user index, at most one owner per organization |
+| `audit_logs`              | Nullable organization and actor FKs; action, request ID, timestamps, allowlisted metadata; tenant/time index        |
+| `sites`                   | Organization FK, immutable canonical identity, partial unique org/URL for undeleted rows; heartbeat freshness       |
+| `site_credentials`        | One credential hash per site, unique hash, rotation version, revocation timestamp, monotonic sequence               |
+| `pairing_challenges`      | Site FK, unique random-code hash, expiration and consumption timestamps                                             |
+| `notification_settings`   | Per-workspace verified-member default and persisted verification/test mail allowance                                |
+| `notification_endpoints`  | Managed normalized email recipients, enable/verification state, expiring proof hash and deletion tombstone          |
+| `notification_deliveries` | Durable incident/recovery outbox, tenant and optional managed-recipient identity, leases and delivery outcome       |
 
 The service ensures the owner gets a matching owner membership in the creation transaction. No membership administration is exposed. Direct administrative SQL must preserve this invariant; the database does not enforce that every organization has an owner membership. User deletion is restricted for organization owners; an account deletion/ownership transfer workflow is not implemented. Audit organization deletion is restricted to preserve security history; retention and deletion need an explicit policy before launch.
 

@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-27
 
+- Added workspace notification settings and recipient management with independent server membership/verified-owner/admin authorization, normalized verified email recipients, explicit confirmation pages, resend, enable/disable/delete and bounded test emails.
+- Added migration 0007, persisted mail cooldown/budgets, hash-only single-use opt-in proofs, security audits, automatic-member preferences and deduplicated recipient selection. Worker rechecks current eligibility before provider handoff and suppresses revoked recipients, including pending retries.
+- Added contracts, UI and transactional integration coverage for authorization, cross-tenant access, verification/replay/expiry, mail limits, deduplication, pending recipients and queued-mail suppression. Payments and advanced notification policies remain excluded.
+
 - Added graphical UP / DOWN incident signals with visible text, preserved lifecycle statuses, and reused the signals in site history. Distinguished SSL certificate issues and unverified connection-reset closures from HTTP recovery; historical outcomes do not assert current availability.
 
 - Removed the active sidebar item's trailing dot to avoid confusion with unread/pending notifications. Selection retains blue text/icons, a light blue background and `aria-current`.

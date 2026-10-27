@@ -11,6 +11,67 @@ type MailOptions = {
 };
 type Delivery = typeof schema.notificationDeliveries.$inferSelect;
 
+export async function recipientStillEnabled(db: Database, delivery: Delivery) {
+  // Pre-migration orphan history has no live organization and must not be delivered.
+  if (!delivery.organizationId) return false;
+  if (delivery.endpointId) {
+    const [endpoint] = await db
+      .select()
+      .from(schema.notificationEndpoints)
+      .where(
+        and(
+          eq(schema.notificationEndpoints.id, delivery.endpointId),
+          eq(
+            schema.notificationEndpoints.organizationId,
+            delivery.organizationId,
+          ),
+        ),
+      );
+    return (
+      !!endpoint &&
+      endpoint.enabled &&
+      !!endpoint.verifiedAt &&
+      !endpoint.deletedAt &&
+      endpoint.destination === delivery.recipient
+    );
+  }
+  const [settings] = await db
+    .select()
+    .from(schema.notificationSettings)
+    .where(
+      eq(schema.notificationSettings.organizationId, delivery.organizationId),
+    );
+  if (settings?.includeMembers === false) return false;
+  const overrides = await db
+    .select({ id: schema.notificationEndpoints.id })
+    .from(schema.notificationEndpoints)
+    .where(
+      and(
+        eq(
+          schema.notificationEndpoints.organizationId,
+          delivery.organizationId,
+        ),
+        eq(schema.notificationEndpoints.destination, delivery.recipient),
+      ),
+    );
+  if (overrides.length) return false;
+  const members = await db
+    .select({ id: schema.users.id })
+    .from(schema.organizationMembers)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.organizationMembers.userId),
+    )
+    .where(
+      and(
+        eq(schema.organizationMembers.organizationId, delivery.organizationId),
+        eq(schema.users.email, delivery.recipient),
+        eq(schema.users.emailVerified, true),
+      ),
+    );
+  return members.length > 0;
+}
+
 export async function claimNotificationDeliveries(db: Database) {
   return db.transaction(async (tx) => {
     await tx
@@ -65,7 +126,7 @@ async function sendMail(delivery: Delivery, options: MailOptions) {
     `Site: ${delivery.siteUrl}`,
     `Incident history: ${options.APP_ORIGIN}/app/incidents`,
     '',
-    'This alert was sent to a verified member of the site organization.',
+    'This alert was sent to a verified recipient of the site workspace.',
   ].join('\n');
 
   if (options.AUTH_MAIL_TRANSPORT === 'file') {
@@ -172,6 +233,26 @@ export async function deliverNotificationBatch(
   await Promise.all(
     deliveries.map(async (delivery) => {
       try {
+        if (!(await recipientStillEnabled(db, delivery))) {
+          await db
+            .update(schema.notificationDeliveries)
+            .set({
+              status: 'failed',
+              lastErrorCode: 'RECIPIENT_DISABLED',
+              leaseToken: null,
+              leaseExpiresAt: null,
+            })
+            .where(
+              and(
+                eq(schema.notificationDeliveries.id, delivery.id),
+                eq(
+                  schema.notificationDeliveries.leaseToken,
+                  delivery.leaseToken!,
+                ),
+              ),
+            );
+          return;
+        }
         const providerMessageId = await sendMail(delivery, options);
         await finishDelivery(db, delivery, { providerMessageId });
       } catch (error) {

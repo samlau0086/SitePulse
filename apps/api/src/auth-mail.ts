@@ -3,16 +3,27 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { Environment } from '@sitepulse/config';
 
-export type AuthMail = { to: string; kind: 'reset' | 'verify'; url: string };
+export type AuthMail = {
+  to: string;
+  kind: 'reset' | 'verify' | 'notification-verify' | 'notification-test';
+  url: string;
+};
 export type SendAuthMail = (mail: AuthMail) => Promise<void>;
 
 export function createAuthMailer(env: Environment): SendAuthMail {
   return async (mail) => {
     const subject =
-      mail.kind === 'reset'
-        ? 'Reset your SitePulse password'
-        : 'Verify your SitePulse email';
-    const text = `${subject}\n\nOpen this link, then confirm on the page:\n${mail.url}\n\nThis link expires in ${mail.kind === 'reset' ? '30 minutes' : '1 hour'}. If you did not request it, ignore this message.`;
+      mail.kind === 'notification-test'
+        ? 'SitePulse notification test'
+        : mail.kind === 'notification-verify'
+          ? 'Verify your SitePulse alert recipient'
+          : mail.kind === 'reset'
+            ? 'Reset your SitePulse password'
+            : 'Verify your SitePulse email';
+    const text =
+      mail.kind === 'notification-test'
+        ? `${subject}\n\nYour verified alert recipient is configured. This is a test, not an incident.\n${mail.url}`
+        : `${subject}\n\nOpen this link, then confirm on the page:\n${mail.url}\n\nThis link expires in ${mail.kind === 'reset' ? '30 minutes' : '1 hour'}. If you did not request it, ignore this message.`;
     if (env.AUTH_MAIL_TRANSPORT === 'file') {
       // Never print links/tokens. The development outbox is ignored by Git and Docker.
       const directory = resolve(import.meta.dirname, '../../../.local/mail');

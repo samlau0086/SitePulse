@@ -92,6 +92,39 @@ export const updateOrganization = z
   .strict();
 export const organizationParams = z.object({ organizationId: z.uuid() });
 export const emptyRequest = z.object({}).strict();
+export const notificationEndpointParams = organizationParams
+  .extend({ endpointId: z.uuid() })
+  .strict();
+export const createNotificationEndpoint = z
+  .object({
+    destination: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+  })
+  .strict();
+export const updateNotificationEndpoint = z
+  .object({ enabled: z.boolean() })
+  .strict();
+export const updateNotificationSettings = z
+  .object({ includeMembers: z.boolean() })
+  .strict();
+export const confirmNotificationEndpoint = z
+  .object({
+    endpointId: z.uuid(),
+    token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  })
+  .strict();
+export type NotificationEndpoint = {
+  id: string;
+  destination: string;
+  enabled: boolean;
+  verifiedAt: string | null;
+  lastMailAt: string | null;
+};
+export type NotificationConfiguration = {
+  includeMembers: boolean;
+  canManage: boolean;
+  memberEmails: string[];
+  endpoints: NotificationEndpoint[];
+};
 export const createSite = z
   .object({
     name: z.string().trim().min(1).max(100),

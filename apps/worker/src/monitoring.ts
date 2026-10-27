@@ -15,7 +15,7 @@ async function enqueueIncidentNotifications(
   incident: typeof schema.incidents.$inferSelect,
   eventType: 'opened' | 'recovered',
 ) {
-  const recipients = await tx
+  const members = await tx
     .select({ email: schema.users.email })
     .from(schema.organizationMembers)
     .innerJoin(
@@ -28,11 +28,33 @@ async function enqueueIncidentNotifications(
         eq(schema.users.emailVerified, true),
       ),
     );
-  if (!recipients.length) return;
+  const [settings] = await tx
+    .select()
+    .from(schema.notificationSettings)
+    .where(eq(schema.notificationSettings.organizationId, site.organizationId));
+  const endpoints = await tx
+    .select()
+    .from(schema.notificationEndpoints)
+    .where(
+      eq(schema.notificationEndpoints.organizationId, site.organizationId),
+    );
+  const recipients = new Map<string, string | null>();
+  if (settings?.includeMembers !== false)
+    for (const { email } of members) {
+      const normalized = email.toLowerCase();
+      if (!endpoints.some((row) => row.destination === normalized))
+        recipients.set(normalized, null);
+    }
+  for (const row of endpoints)
+    if (row.enabled && row.verifiedAt && !row.deletedAt)
+      recipients.set(row.destination, row.id);
+  if (!recipients.size) return;
   await tx
     .insert(schema.notificationDeliveries)
     .values(
-      recipients.map(({ email }) => ({
+      [...recipients].map(([email, endpointId]) => ({
+        organizationId: site.organizationId,
+        endpointId,
         incidentId: incident.id,
         eventKey: `${incident.id}:${eventType}:${email}`,
         eventType,

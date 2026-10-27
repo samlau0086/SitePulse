@@ -403,10 +403,48 @@ export const incidents = pgTable(
   ],
 );
 
+export const notificationSettings = pgTable('notification_settings', {
+  organizationId: uuid('organization_id')
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  includeMembers: boolean('include_members').notNull().default(true),
+  mailWindowAt: timestamp('mail_window_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  mailCount: integer('mail_count').notNull().default(0),
+});
+
+export const notificationEndpoints = pgTable(
+  'notification_endpoints',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    destination: text('destination').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    tokenHash: text('token_hash'),
+    tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
+    lastMailAt: timestamp('last_mail_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('notification_endpoints_active_email_unique')
+      .on(table.organizationId, table.destination)
+      .where(sql`${table.deletedAt} is null`),
+  ],
+);
+
 export const notificationDeliveries = pgTable(
   'notification_deliveries',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
+    endpointId: uuid('endpoint_id').references(() => notificationEndpoints.id),
     incidentId: uuid('incident_id').references(() => incidents.id, {
       onDelete: 'set null',
     }),

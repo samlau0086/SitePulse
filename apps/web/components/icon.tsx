@@ -1,4 +1,5 @@
 const paths = {
+  mail: 'M3 5h18v14H3z M3 5l9 7 9-7',
   overview: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
   globe:
     'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3c4 5 4 13 0 18-4-5-4-13 0-18',

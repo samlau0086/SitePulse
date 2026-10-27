@@ -1,5 +1,15 @@
 @import 'tailwindcss';
 
+.recipient-address {
+  overflow-wrap: anywhere;
+}
+
+.notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 :root {
   color-scheme: light;
   --ink: #201d1d;

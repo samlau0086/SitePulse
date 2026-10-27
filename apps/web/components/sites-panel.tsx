@@ -76,6 +76,7 @@ export function SiteControls({ siteId }: { siteId: string }) {
   const router = useRouter();
   const [code, setCode] = useState('');
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   async function action(operation: string) {
     if (
@@ -90,6 +91,7 @@ export function SiteControls({ siteId }: { siteId: string }) {
     setPending(true);
     setCode('');
     setMessage('');
+    setError('');
     try {
       const result = await api<{ challenge?: string; expiresAt?: string }>(
         `/sites/${siteId}/${operation}`,
@@ -104,7 +106,7 @@ export function SiteControls({ siteId }: { siteId: string }) {
         setMessage('Site disconnected. The previous credential is revoked.');
       router.refresh();
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'Request failed.');
+      setError(cause instanceof Error ? cause.message : 'Request failed.');
     } finally {
       setPending(false);
     }
@@ -120,13 +122,22 @@ export function SiteControls({ siteId }: { siteId: string }) {
       <button disabled={pending} onClick={() => action('pairing-challenges')}>
         Create pairing code
       </button>{' '}
-      <button disabled={pending} onClick={() => action('rotate-credential')}>
+      <button
+        className="secondary danger"
+        disabled={pending}
+        onClick={() => action('rotate-credential')}
+      >
         Revoke and re-pair
       </button>{' '}
-      <button disabled={pending} onClick={() => action('disconnect')}>
+      <button
+        className="secondary danger"
+        disabled={pending}
+        onClick={() => action('disconnect')}
+      >
         Disconnect
       </button>
       {message && <p role="status">{message}</p>}
+      {error && <p role="alert">{error}</p>}
       {code && (
         <>
           <label htmlFor="pairing-code">Single-use pairing code</label>

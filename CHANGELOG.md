@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-27
 
+- Improved shared UI visibility with stronger input/action borders, bold 44px controls, visible product links, persistent navigation selection, high-contrast focus outlines and distinct semantic status badges. Added tinted error/information/warning panels, separated connector errors from feedback, and visually distinguished destructive connector controls without changing authorization or confirmations. Added palette contrast regression tests.
+
 - Added a server-authorized platform workspace directory, plan/usage views and inline plan/custom-allowance editing with required reasons and impact previews.
 - Added validated `PLATFORM_ADMIN_USER_IDS` UUID allowlist, disabled by default, wired through Compose and GitHub deployment; organization owner/admin roles cannot elevate themselves.
 - Added transactional audit actors and snapshot conflict checks, preserving tenant isolation and monitoring without database migrations.

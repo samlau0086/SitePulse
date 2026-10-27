@@ -15,7 +15,7 @@ export function PlanUsage({ usage }: { usage: OrganizationUsage }) {
         {usage.siteLimitOverride !== null ? ' · Custom allowance' : ''}
       </p>
       {!usage.canAddSite ? (
-        <p role="status">
+        <p role="status" className="notice-warning">
           [!] {usage.overLimit ? 'Over site limit.' : 'Site limit reached.'}{' '}
           Existing sites continue monitoring. Delete a site or contact your
           operator to adjust your allowance.

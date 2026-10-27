@@ -21,7 +21,15 @@ Homepage illustrations must be labeled as examples and must not invent live cust
 
 Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effective allowance, used slots and a textual full/over-limit message. Disable site creation when the fetched allowance is full while retaining server quota checks and errors for concurrent changes. Existing sites remain accessible after a downgrade.
 
-## Verification
+## Visibility and feedback
+
+- Keep primary buttons ink-filled with bold labels and secondary actions visibly outlined. Controls have a 44px minimum height; use `--border-control` rather than decorative `--hairline` for input and action boundaries. Disabled buttons retain readable labels and dashed borders, including inside disabled fieldsets, without enabled hover/pressed styling.
+- Keep product action links underlined; directory row actions also have outlined touch targets. Active sidebar items use a solid leading rule on a neutral fill, and selected site tabs use an ink underline and neutral fill. Keyboard focus uses the shared high-contrast outline.
+- Use the shared `--success-*`, `--warning-*`, `--danger-*` and `--info-*` ink/surface pairs for operational signals. Status badges retain words and ASCII markers as well as color. Do not use the bright illustrative terminal colors for small text on light surfaces.
+- Errors (`role="alert"`) and paragraph feedback (`role="status"`) get bordered, tinted panels with a stronger leading edge. Status feedback is informational, not automatically successful. Quota warnings use `.notice-warning`; verification banners use warning tokens. Keep inline result counts compact. Report failed connector actions as alerts, separately from informational pairing feedback. Destructive connector actions use `.secondary.danger` and retain confirmation dialogs.
+- Verify text contrast of at least 4.5:1 and control/focus boundaries of at least 3:1 against adjacent light surfaces; keep these palette checks covered by unit tests.
+
+## Verification workflow
 
 Platform administration has a direct conditional sidebar link `/app/admin`, bounded search and an inline editor. Reuse `PlanUsage` for before/after impact. Require a reason, invalidate previews on edits, disable pending operations, announce errors/success and require a fresh preview after conflicts. Focus the editor heading when opening it. Page guards and hidden navigation are convenience only; the API independently checks platform authority. Use shared tokens and fieldset primitives.
 

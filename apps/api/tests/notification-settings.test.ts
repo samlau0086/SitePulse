@@ -6,6 +6,11 @@ import { parseEnvironment } from '@sitepulse/config';
 import { buildApp } from '../src/app';
 import { hashCredential } from '../src/sites';
 import { barkDestination, type BarkMessage } from '@sitepulse/shared/bark';
+import {
+  decryptChatSecret,
+  type ChatMessage,
+} from '@sitepulse/shared/chat-notifications';
+import { enqueueIncidentNotifications } from '../../../packages/database/client/incidents';
 import { expireHeartbeats } from '../../worker/src/heartbeat';
 import type { AuthMail } from '../src/auth-mail';
 import {
@@ -28,8 +33,15 @@ let owner: Identity,
   admin: Identity,
   unverified: Identity;
 let organizationId: string;
+let clientSequence = 0;
+let clientAddress = '192.0.2.1';
 const mails: AuthMail[] = [];
 const barkMessages: BarkMessage[] = [];
+const chatMessages: ChatMessage[] = [];
+const chatEncryptionKey = 'c'.repeat(64);
+const chatSender = vi.fn(async (message: ChatMessage) => {
+  chatMessages.push(message);
+});
 const barkEncryptionKey = 'a'.repeat(64);
 const mailer = vi.fn(async (mail: AuthMail) => {
   mails.push(mail);
@@ -46,6 +58,7 @@ function call(
 ) {
   return app.inject({
     method,
+    remoteAddress: clientAddress,
     url: `/api/v1${path}`,
     headers: { origin, cookie: user.cookie },
     ...(payload ? { payload } : {}),
@@ -121,10 +134,12 @@ beforeAll(async () => {
       APP_ORIGIN: origin,
       BETTER_AUTH_SECRET: randomBytes(48).toString('base64url'),
       BARK_ENCRYPTION_KEY: barkEncryptionKey,
+      NOTIFICATION_ENCRYPTION_KEY: chatEncryptionKey,
       LOG_LEVEL: 'silent',
     }),
     sendAuthMail: mailer,
     sendBark: barkSender,
+    sendChat: chatSender,
   });
   async function register(name: string, verified = true) {
     const response = await app.inject({
@@ -156,8 +171,12 @@ beforeAll(async () => {
   unverified = await register('notification-unverified', false);
 });
 beforeEach(async () => {
+  // Independent test clients must not exhaust each other's public opt-in IP budget.
+  clientAddress = `192.0.2.${++clientSequence}`;
   mailer.mockClear();
   barkSender.mockClear();
+  chatSender.mockClear();
+  chatMessages.length = 0;
   mails.length = 0;
   barkMessages.length = 0;
   const response = await call('POST', '/organizations', {
@@ -172,6 +191,349 @@ beforeEach(async () => {
     { organizationId, userId: unverified.id, role: 'admin' },
   ]);
 });
+
+it('enforces the public opt-in IP rate limit independently of destination channel', async () => {
+  const proof = {
+    endpointId: randomUUID(),
+    token: randomBytes(32).toString('base64url'),
+  };
+  for (let attempt = 0; attempt < 20; attempt++)
+    expect(
+      (
+        await call('POST', '/notification-endpoints/verify', proof, {
+          id: '',
+          cookie: '',
+        })
+      ).statusCode,
+    ).toBe(400);
+  expect(
+    (
+      await call('POST', '/notification-endpoints/verify', proof, {
+        id: '',
+        cookie: '',
+      })
+    ).statusCode,
+  ).toBe(429);
+});
+
+const chatInput = (channel: 'slack' | 'telegram', index = 1) =>
+  channel === 'slack'
+    ? {
+        label: `Ops ${index}`,
+        webhookUrl: `https://hooks.slack.com/services/Tfixture/Bfixture/secret${index}`,
+      }
+    : {
+        label: `On-call ${index}`,
+        botToken: `123456:${'x'.repeat(30)}`,
+        chatId: `-1001234${index}`,
+      };
+async function addChat(channel: 'slack' | 'telegram', index = 1) {
+  const input = chatInput(channel, index);
+  const response = await call(
+    'POST',
+    `${base()}/notification-endpoints/${channel}`,
+    input,
+  );
+  expect(response.statusCode, response.body).toBe(201);
+  return (await configuration()).endpoints.find(
+    (row: { label: string }) => row.label === input.label,
+  ) as { id: string };
+}
+const chatProof = () =>
+  Object.fromEntries(
+    new URLSearchParams(new URL(chatMessages.at(-1)!.url).hash.slice(1)),
+  );
+async function verifyChat() {
+  const response = await call(
+    'POST',
+    '/notification-endpoints/verify',
+    chatProof(),
+    { id: '', cookie: '' },
+  );
+  expect(response.statusCode, response.body).toBe(200);
+}
+
+it.each(['slack', 'telegram'] as const)(
+  'stores multiple %s destinations encrypted and independently authorizes each tenant operation',
+  async (channel) => {
+    for (const identity of [
+      member,
+      unverified,
+      outsider,
+      { id: '', cookie: '' },
+    ]) {
+      const response = await call(
+        'POST',
+        `${base()}/notification-endpoints/${channel}`,
+        chatInput(channel),
+        identity,
+      );
+      expect(response.statusCode).toBe(
+        identity === outsider ? 404 : identity.cookie ? 403 : 401,
+      );
+    }
+    const first = await addChat(channel);
+    await addChat(channel, 2);
+    const data = await configuration();
+    expect(data.endpoints).toHaveLength(2);
+    expect(
+      data.endpoints.every((row: { type: string }) => row.type === channel),
+    ).toBe(true);
+    for (const secret of [
+      'hooks.slack.com',
+      'secret1',
+      'xxxxxxxx',
+      'encryptedKey',
+      'tokenHash',
+      '-10012341',
+    ])
+      expect(JSON.stringify(data)).not.toContain(secret);
+    const [stored] = await database.db
+      .select()
+      .from(schema.notificationEndpoints)
+      .where(eq(schema.notificationEndpoints.id, first.id));
+    expect(stored!.encryptedKey).toBeTruthy();
+    expect(stored!.destination).toMatch(
+      new RegExp(`^${channel}:[a-f0-9]{64}$`),
+    );
+    const secret = decryptChatSecret(
+      stored!.encryptedKey!,
+      chatEncryptionKey,
+      organizationId,
+      channel,
+    );
+    expect(secret).toBe(chatMessages[0]!.secret);
+    expect(() =>
+      decryptChatSecret(
+        stored!.encryptedKey!,
+        chatEncryptionKey,
+        'other-tenant',
+        channel,
+      ),
+    ).toThrow();
+    expect(
+      (
+        await call(
+          'POST',
+          `${base()}/notification-endpoints/${channel}`,
+          chatInput(channel),
+        )
+      ).statusCode,
+    ).toBe(409);
+    for (const [method, suffix, payload] of [
+      ['PATCH', '', { enabled: false }],
+      ['DELETE', '', {}],
+      ['POST', '/resend', {}],
+      ['POST', '/test', {}],
+    ] as const)
+      expect(
+        (
+          await call(
+            method,
+            `${base()}/notification-endpoints/${first.id}${suffix}`,
+            payload,
+            outsider,
+          )
+        ).statusCode,
+      ).toBe(404);
+  },
+);
+
+it.each(['slack', 'telegram'] as const)(
+  'requires explicit %s opt-in, replaces proofs and clears credentials on deletion',
+  async (channel) => {
+    const endpoint = await addChat(channel);
+    const old = chatProof();
+    await expireCooldown(endpoint.id);
+    expect(
+      (
+        await call(
+          'POST',
+          `${base()}/notification-endpoints/${endpoint.id}/test`,
+          {},
+        )
+      ).statusCode,
+    ).toBe(409);
+    expect(
+      (
+        await call(
+          'POST',
+          `${base()}/notification-endpoints/${endpoint.id}/resend`,
+          {},
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await call('POST', '/notification-endpoints/verify', old)).statusCode,
+    ).toBe(400);
+    await verifyChat();
+    expect(
+      (await call('POST', '/notification-endpoints/verify', chatProof()))
+        .statusCode,
+    ).toBe(400);
+    await expireCooldown(endpoint.id);
+    expect(
+      (
+        await call(
+          'POST',
+          `${base()}/notification-endpoints/${endpoint.id}/test`,
+          {},
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect(chatMessages.at(-1)!.title).toBe('SitePulse test notification');
+    expect(
+      (
+        await call(
+          'DELETE',
+          `${base()}/notification-endpoints/${endpoint.id}`,
+          {},
+        )
+      ).statusCode,
+    ).toBe(200);
+    const [stored] = await database.db
+      .select()
+      .from(schema.notificationEndpoints)
+      .where(eq(schema.notificationEndpoints.id, endpoint.id));
+    expect(stored!.encryptedKey).toBeNull();
+    expect(stored!.tokenHash).toBeNull();
+  },
+);
+
+it.each(['slack', 'telegram'] as const)(
+  'keeps saved %s destinations after a sanitized provider failure',
+  async (channel) => {
+    chatSender.mockRejectedValueOnce(new Error('secret webhook and bot token'));
+    const response = await call(
+      'POST',
+      `${base()}/notification-endpoints/${channel}`,
+      chatInput(channel),
+    );
+    expect(response.statusCode).toBe(502);
+    expect(response.body).not.toContain('secret webhook');
+    const endpoint = (await configuration()).endpoints[0];
+    await expireCooldown(endpoint.id);
+    expect(
+      (
+        await call(
+          'POST',
+          `${base()}/notification-endpoints/${endpoint.id}/resend`,
+          {},
+        )
+      ).statusCode,
+    ).toBe(200);
+  },
+);
+
+it.each(['slack', 'telegram'] as const)(
+  'deduplicates %s events per recipient, retries failures and suppresses disabled recipients',
+  async (channel) => {
+    await call('PATCH', `${base()}/notification-settings`, {
+      includeMembers: false,
+    });
+    const first = await addChat(channel);
+    await verifyChat();
+    const second = await addChat(channel, 2);
+    await verifyChat();
+    await addChat(channel, 3); // Pending recipients must never enter the outbox.
+    await database.db
+      .update(schema.notificationDeliveries)
+      .set({ status: 'sent' });
+    const [site] = await database.db
+      .insert(schema.sites)
+      .values({
+        organizationId,
+        name: 'Chat outbox fixture',
+        canonicalUrl: 'https://chat.example.com',
+        hostname: 'chat.example.com',
+        status: 'disconnected',
+      })
+      .returning();
+    const [incident] = await database.db
+      .insert(schema.incidents)
+      .values({
+        siteId: site!.id,
+        fingerprint: `${site!.id}:uptime`,
+        monitorType: 'uptime',
+        severity: 'critical',
+      })
+      .returning();
+    await database.db.transaction(async (tx) => {
+      await tx
+        .select()
+        .from(schema.sites)
+        .where(eq(schema.sites.id, site!.id))
+        .for('update');
+      await enqueueIncidentNotifications(tx, site!, incident!, 'opened');
+      await enqueueIncidentNotifications(tx, site!, incident!, 'opened');
+    });
+    const rows = () =>
+      database.db
+        .select()
+        .from(schema.notificationDeliveries)
+        .where(
+          eq(schema.notificationDeliveries.organizationId, organizationId),
+        );
+    expect(await rows()).toHaveLength(2);
+    const options = {
+      AUTH_MAIL_TRANSPORT: 'file' as const,
+      AUTH_MAIL_FROM: 'alerts@example.com',
+      APP_ORIGIN: origin,
+      NOTIFICATION_ENCRYPTION_KEY: chatEncryptionKey,
+    };
+    const failure = vi.fn(async () => {
+      throw new Error('private provider response');
+    });
+    expect(
+      await deliverNotificationBatch(database.db, options, barkSender, failure),
+    ).toBe(2);
+    expect(
+      (await rows()).every(
+        (row) =>
+          row.status === 'queued' &&
+          row.attempts === 1 &&
+          row.lastErrorCode === 'PROVIDER_UNAVAILABLE',
+      ),
+    ).toBe(true);
+    await call('PATCH', `${base()}/notification-endpoints/${second.id}`, {
+      enabled: false,
+    });
+    await database.db
+      .update(schema.notificationDeliveries)
+      .set({ nextAttemptAt: new Date(0) })
+      .where(eq(schema.notificationDeliveries.organizationId, organizationId));
+    const sent: ChatMessage[] = [];
+    const sender = vi.fn(async (message: ChatMessage) => {
+      sent.push(message);
+    });
+    expect(
+      await deliverNotificationBatch(database.db, options, barkSender, sender),
+    ).toBe(2);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.channel).toBe(channel);
+    expect(
+      (await rows()).find((row) => row.endpointId === second.id)!.lastErrorCode,
+    ).toBe('RECIPIENT_DISABLED');
+    await database.db.transaction(async (tx) => {
+      await tx
+        .select()
+        .from(schema.sites)
+        .where(eq(schema.sites.id, site!.id))
+        .for('update');
+      await enqueueIncidentNotifications(tx, site!, incident!, 'recovered');
+      await enqueueIncidentNotifications(tx, site!, incident!, 'recovered');
+    });
+    expect(
+      (await rows())
+        .filter((row) => row.eventType === 'recovered')
+        .map((row) => row.endpointId),
+    ).toEqual([first.id]);
+    await deliverNotificationBatch(database.db, options, barkSender, sender);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.title).toContain('Recovered');
+    expect(new Set((await rows()).map((row) => row.eventKey)).size).toBe(3);
+  },
+);
 
 it('stores multiple Bark devices encrypted and never exposes device keys', async () => {
   const firstKey = 'device_key_alpha';

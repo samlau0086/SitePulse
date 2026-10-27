@@ -10,6 +10,24 @@ const valid = {
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 describe('GitHub deployment configuration', () => {
+  it('validates and transfers optional stable chat encryption configuration', () => {
+    expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
+      "NOTIFICATION_ENCRYPTION_KEY=''\n",
+    );
+    const key = 'c'.repeat(64);
+    expect(
+      prepareDeploymentConfiguration({
+        ...valid,
+        NOTIFICATION_ENCRYPTION_KEY: key,
+      })['.env'],
+    ).toContain(`NOTIFICATION_ENCRYPTION_KEY='${key}'\n`);
+    expect(() =>
+      prepareDeploymentConfiguration({
+        ...valid,
+        NOTIFICATION_ENCRYPTION_KEY: 'invalid',
+      }),
+    ).toThrow('NOTIFICATION_ENCRYPTION_KEY');
+  });
   it('preserves only validated optional Bark encryption configuration', () => {
     expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
       "BARK_ENCRYPTION_KEY=''\n",

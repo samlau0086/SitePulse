@@ -6,6 +6,7 @@ import swagger from '@fastify/swagger';
 import { z } from 'zod';
 import type { Environment } from '@sitepulse/config';
 import type { SendBark } from '@sitepulse/shared/bark';
+import type { SendChat } from '@sitepulse/shared/chat-notifications';
 import { and, desc, eq, schema, sql, type Database } from '@sitepulse/database';
 import {
   createOrganization,
@@ -37,12 +38,14 @@ export async function buildApp({
   env,
   sendAuthMail,
   sendBark,
+  sendChat,
   resolveHost,
 }: {
   db: Database;
   env: Environment;
   sendAuthMail?: SendAuthMail;
   sendBark?: SendBark;
+  sendChat?: SendChat;
   resolveHost?: ResolveHost;
 }) {
   const app = Fastify({
@@ -226,6 +229,7 @@ export async function buildApp({
     requireUser,
     mailer,
     ...(sendBark ? { barkSender: sendBark } : {}),
+    ...(sendChat ? { chatSender: sendChat } : {}),
   });
   const jsonSchema = (value: z.ZodType) => {
     const { $schema: _schema, ...result } = z.toJSONSchema(value, {

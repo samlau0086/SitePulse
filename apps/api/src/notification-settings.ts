@@ -5,6 +5,8 @@ import {
   confirmNotificationEndpoint,
   createNotificationEndpoint,
   createBarkEndpoint,
+  createSlackEndpoint,
+  createTelegramEndpoint,
   emptyRequest,
   notificationEndpointParams,
   organizationParams,
@@ -21,12 +23,23 @@ import {
   type BarkMessage,
 } from '@sitepulse/shared/bark';
 import type { Environment } from '@sitepulse/config';
+import {
+  chatDestination,
+  encryptChatSecret,
+  decryptChatSecret,
+  sendChat,
+  type SendChat,
+  type ChatMessage,
+} from '@sitepulse/shared/chat-notifications';
 import type { SendAuthMail, AuthMail } from './auth-mail';
 import { HttpError } from './http-error';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type User = { id: string; emailVerified: boolean };
-type PreparedNotification = AuthMail | { kind: 'bark'; message: BarkMessage };
+type PreparedNotification =
+  | AuthMail
+  | { kind: 'bark'; message: BarkMessage }
+  | { kind: 'chat'; message: ChatMessage };
 const hash = (token: string) =>
   createHash('sha256').update(token).digest('hex');
 const missing = () =>
@@ -36,7 +49,11 @@ const view = (row: typeof schema.notificationEndpoints.$inferSelect) => ({
   type: row.type,
   label: row.label,
   destination:
-    row.type === 'bark' ? 'Bark device (key hidden)' : row.destination,
+    row.type === 'email'
+      ? row.destination
+      : row.type === 'bark'
+        ? 'Bark device (key hidden)'
+        : `${row.type} recipient (credentials hidden)`,
   enabled: row.enabled,
   verifiedAt: row.verifiedAt,
   lastMailAt: row.lastMailAt,
@@ -50,12 +67,14 @@ export async function registerNotificationRoutes(
     requireUser,
     mailer,
     barkSender = sendBark,
+    chatSender = sendChat,
   }: {
     db: Database;
     env: Environment;
     requireUser: (request: FastifyRequest) => Promise<User>;
     mailer: SendAuthMail;
     barkSender?: SendBark;
+    chatSender?: SendChat;
   },
 ) {
   async function scoped<T>(
@@ -206,6 +225,43 @@ export async function registerNotificationRoutes(
     const url = test
       ? `${env.APP_ORIGIN}/app/notifications`
       : `${env.APP_ORIGIN}/verify-notification#endpointId=${row.id}&token=${token}`;
+    if (row.type === 'slack' || row.type === 'telegram') {
+      if (!env.NOTIFICATION_ENCRYPTION_KEY || !row.encryptedKey)
+        throw new HttpError(
+          503,
+          'CHANNEL_NOT_CONFIGURED',
+          'Configure NOTIFICATION_ENCRYPTION_KEY to enable chat notifications.',
+        );
+      let secret: string;
+      try {
+        secret = decryptChatSecret(
+          row.encryptedKey,
+          env.NOTIFICATION_ENCRYPTION_KEY,
+          organizationId,
+          row.type,
+        );
+      } catch {
+        throw new HttpError(
+          503,
+          'CHANNEL_KEY_UNAVAILABLE',
+          'Notification credentials are unavailable. Contact the operator.',
+        );
+      }
+      return {
+        kind: 'chat',
+        message: {
+          channel: row.type,
+          secret,
+          url,
+          title: test
+            ? 'SitePulse test notification'
+            : 'Verify SitePulse notifications',
+          body: test
+            ? 'This is a test notification; it does not confirm monitoring status.'
+            : 'Open SitePulse and explicitly confirm to enable workspace alerts for this destination. This grants no workspace access.',
+        },
+      };
+    }
     if (row.type === 'bark') {
       let deviceKey: string;
       try {
@@ -244,11 +300,16 @@ export async function registerNotificationRoutes(
   async function send(mail: PreparedNotification) {
     try {
       if (mail.kind === 'bark') await barkSender(mail.message);
+      else if (mail.kind === 'chat') await chatSender(mail.message);
       else await mailer(mail);
     } catch {
       throw new HttpError(
         502,
-        mail.kind === 'bark' ? 'BARK_DELIVERY_FAILED' : 'MAIL_DELIVERY_FAILED',
+        mail.kind === 'bark'
+          ? 'BARK_DELIVERY_FAILED'
+          : mail.kind === 'chat'
+            ? 'CHANNEL_DELIVERY_FAILED'
+            : 'MAIL_DELIVERY_FAILED',
         'Notification delivery failed. The recipient was saved; wait one minute and retry.',
       );
     }
@@ -312,24 +373,54 @@ export async function registerNotificationRoutes(
       return change;
     }),
   );
-  for (const channel of ['email', 'bark'] as const)
+  for (const channel of ['email', 'bark', 'slack', 'telegram'] as const)
     app.post(
-      `${base}/notification-endpoints${channel === 'bark' ? '/bark' : ''}`,
+      `${base}/notification-endpoints${channel === 'email' ? '' : `/${channel}`}`,
       async (request, reply) => {
         const mail = await scoped(
           request,
           true,
           async (tx, organizationId, user) => {
             const input =
-              channel === 'bark'
-                ? createBarkEndpoint.parse(request.body)
-                : createNotificationEndpoint.parse(request.body);
+              channel === 'slack'
+                ? createSlackEndpoint.parse(request.body)
+                : channel === 'telegram'
+                  ? createTelegramEndpoint.parse(request.body)
+                  : channel === 'bark'
+                    ? createBarkEndpoint.parse(request.body)
+                    : createNotificationEndpoint.parse(request.body);
             if (channel === 'bark' && !env.BARK_ENCRYPTION_KEY)
               throw new HttpError(
                 503,
                 'BARK_NOT_CONFIGURED',
                 'Bark is unavailable. Ask the operator to configure its encryption key.',
               );
+            if (
+              (channel === 'slack' || channel === 'telegram') &&
+              !env.NOTIFICATION_ENCRYPTION_KEY
+            )
+              throw new HttpError(
+                503,
+                'CHANNEL_NOT_CONFIGURED',
+                'Configure NOTIFICATION_ENCRYPTION_KEY to enable chat notifications.',
+              );
+            const chat =
+              'webhookUrl' in input
+                ? {
+                    channel: 'slack' as const,
+                    secret: input.webhookUrl,
+                    label: input.label,
+                  }
+                : 'botToken' in input
+                  ? {
+                      channel: 'telegram' as const,
+                      secret: JSON.stringify({
+                        botToken: input.botToken,
+                        chatId: input.chatId,
+                      }),
+                      label: input.label,
+                    }
+                  : null;
             const [counts] = await tx
               .select({ count: sql<number>`count(*)::int` })
               .from(schema.notificationEndpoints)
@@ -351,19 +442,36 @@ export async function registerNotificationRoutes(
             const [row] = await tx
               .insert(schema.notificationEndpoints)
               .values(
-                'deviceKey' in input
+                chat
                   ? {
                       organizationId,
-                      type: 'bark',
-                      label: input.label,
-                      destination: barkDestination(input.deviceKey),
-                      encryptedKey: encryptBarkKey(
-                        input.deviceKey,
-                        env.BARK_ENCRYPTION_KEY!,
+                      type: chat.channel,
+                      label: chat.label,
+                      destination: chatDestination(chat.channel, chat.secret),
+                      encryptedKey: encryptChatSecret(
+                        chat.secret,
+                        env.NOTIFICATION_ENCRYPTION_KEY!,
                         organizationId,
+                        chat.channel,
                       ),
                     }
-                  : { organizationId, destination: input.destination },
+                  : 'deviceKey' in input
+                    ? {
+                        organizationId,
+                        type: 'bark',
+                        label: input.label,
+                        destination: barkDestination(input.deviceKey),
+                        encryptedKey: encryptBarkKey(
+                          input.deviceKey,
+                          env.BARK_ENCRYPTION_KEY!,
+                          organizationId,
+                        ),
+                      }
+                    : {
+                        organizationId,
+                        destination:
+                          'destination' in input ? input.destination : '',
+                      },
               )
               .returning();
             const mail = await prepareMail(tx, organizationId, row!, false);

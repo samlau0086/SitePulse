@@ -24,6 +24,7 @@ const barkEncryptionKey = z.preprocess(
     .optional(),
 );
 export const workerEnvironment = databaseEnvironment.extend({
+  NOTIFICATION_ENCRYPTION_KEY: barkEncryptionKey,
   BARK_ENCRYPTION_KEY: barkEncryptionKey,
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -88,6 +89,7 @@ export function parseWorkerEnvironment(
   return result.data;
 }
 const schema = databaseEnvironment.extend({
+  NOTIFICATION_ENCRYPTION_KEY: barkEncryptionKey,
   BARK_ENCRYPTION_KEY: barkEncryptionKey,
   PLATFORM_ADMIN_USER_IDS: z
     .string()

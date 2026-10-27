@@ -36,16 +36,17 @@ Generate two independent stable credentials on your own trusted computer using `
 
 Required values:
 
-| Name                           | Value                                                                             |
-| ------------------------------ | --------------------------------------------------------------------------------- |
-| `APP_ORIGIN`                   | Exact public HTTPS origin, without path/trailing slash                            |
-| `POSTGRES_USER`, `POSTGRES_DB` | Dedicated application database role/name                                          |
-| `POSTGRES_PASSWORD`            | Random password; changing this file does not rotate an existing database password |
-| `BETTER_AUTH_SECRET`           | Independent random secret, retained across releases                               |
-| `AUTH_MAIL_TRANSPORT`          | `resend`                                                                          |
-| `AUTH_MAIL_FROM`               | Sender email on your verified Resend domain                                       |
-| `RESEND_API_KEY`               | Real provider key stored in a GitHub Environment secret and private VPS config    |
-| `BARK_ENCRYPTION_KEY`          | Optional stable 64-character hex key used to encrypt Bark device keys at rest     |
+| Name                           | Value                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `APP_ORIGIN`                   | Exact public HTTPS origin, without path/trailing slash                                   |
+| `POSTGRES_USER`, `POSTGRES_DB` | Dedicated application database role/name                                                 |
+| `POSTGRES_PASSWORD`            | Random password; changing this file does not rotate an existing database password        |
+| `BETTER_AUTH_SECRET`           | Independent random secret, retained across releases                                      |
+| `AUTH_MAIL_TRANSPORT`          | `resend`                                                                                 |
+| `AUTH_MAIL_FROM`               | Sender email on your verified Resend domain                                              |
+| `RESEND_API_KEY`               | Real provider key stored in a GitHub Environment secret and private VPS config           |
+| `BARK_ENCRYPTION_KEY`          | Optional stable 64-character hex key used to encrypt Bark device keys at rest            |
+| `NOTIFICATION_ENCRYPTION_KEY`  | Optional stable 64-character hex key required for Slack/Telegram; same on API and worker |
 
 Compose constructs the internal database URL. Do not add localhost `DATABASE_URL` or `TEST_DATABASE_URL`; no test suite runs against this database. Production cookie/HTTPS validation remains enabled even for staging. File email transport is intentionally refused here.
 
@@ -71,17 +72,20 @@ Preserve browser `Origin`, reject unknown hosts, apply a 1 MB body cap and bound
 
 In the `samlau0086/SitePulse` repository, open **Settings → Environments**, create `staging` and `production`, and add these secrets separately to each environment:
 
-| Secret                | Content                                                                                                               |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `VPS_HOST`            | VPS hostname or IPv4 address, without protocol/path (IPv6 literals are not supported by this workflow)                |
-| `VPS_PORT`            | SSH port; defaults to `22`                                                                                            |
-| `VPS_USER`            | Dedicated deploy account                                                                                              |
-| `VPS_SSH_KEY`         | Complete OpenSSH private key, dedicated to this deployment; use a non-interactive key                                 |
-| `VPS_KNOWN_HOSTS`     | Optional trusted OpenSSH known_hosts entry; omitted means automatic per-run discovery; custom ports use `[host]:port` |
-| `POSTGRES_PASSWORD`   | Stable independent random URL-safe password, at least 32 characters                                                   |
-| `BETTER_AUTH_SECRET`  | Stable independent random authentication secret, at least 32 characters                                               |
-| `RESEND_API_KEY`      | Real Resend API key                                                                                                   |
-| `BARK_ENCRYPTION_KEY` | Optional stable 64-character lowercase hex key; required before users add Bark devices                                |
+| Secret                        | Content                                                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `VPS_HOST`                    | VPS hostname or IPv4 address, without protocol/path (IPv6 literals are not supported by this workflow)                |
+| `VPS_PORT`                    | SSH port; defaults to `22`                                                                                            |
+| `VPS_USER`                    | Dedicated deploy account                                                                                              |
+| `VPS_SSH_KEY`                 | Complete OpenSSH private key, dedicated to this deployment; use a non-interactive key                                 |
+| `VPS_KNOWN_HOSTS`             | Optional trusted OpenSSH known_hosts entry; omitted means automatic per-run discovery; custom ports use `[host]:port` |
+| `POSTGRES_PASSWORD`           | Stable independent random URL-safe password, at least 32 characters                                                   |
+| `BETTER_AUTH_SECRET`          | Stable independent random authentication secret, at least 32 characters                                               |
+| `RESEND_API_KEY`              | Real Resend API key                                                                                                   |
+| `BARK_ENCRYPTION_KEY`         | Optional stable 64-character lowercase hex key; required before users add Bark devices                                |
+| `NOTIFICATION_ENCRYPTION_KEY` | Optional stable 64-character hex key; required before adding Slack/Telegram recipients                                |
+
+Generate `NOTIFICATION_ENCRYPTION_KEY` independently with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` and save it as an Environment Secret. Keep it stable across releases and back it up separately; losing it makes saved chat credentials unreadable. Do not replace the existing Bark key. The deployment transfers this secret privately with the other validated settings. Apply migration `0010_flawless_morg` through the normal encrypted-backup deployment flow before enabling chat recipients.
 
 Add these **Environment variables** in the same environment:
 

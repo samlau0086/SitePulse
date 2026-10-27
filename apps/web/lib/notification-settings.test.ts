@@ -15,6 +15,43 @@ it('provides direct active notification navigation', () => {
     'href="/app/notifications" aria-current="page"',
   );
 });
+it('renders multiple Slack and Telegram recipients by label with credentials hidden', () => {
+  const html = renderToStaticMarkup(
+    createElement(NotificationSettings, {
+      organizationId: 'workspace',
+      initial: {
+        canManage: false,
+        includeMembers: false,
+        memberEmails: [],
+        endpoints: (['slack', 'telegram'] as const).flatMap((type) =>
+          [1, 2].map((index) => ({
+            id: `${type}-${index}`,
+            type,
+            label: `${type} recipient ${index}`,
+            destination: 'secret-server-fingerprint-must-not-render',
+            enabled: true,
+            verifiedAt: index === 1 ? '2026-10-28' : null,
+            lastMailAt: null,
+          })),
+        ),
+      },
+    }),
+  );
+  for (const text of [
+    'slack recipient 1',
+    'slack recipient 2',
+    'telegram recipient 1',
+    'telegram recipient 2',
+    'Slack · credentials hidden',
+    'Telegram · credentials hidden',
+    'Send test message',
+    'Resend verification',
+  ])
+    expect(html).toContain(text);
+  expect(html).not.toContain('secret-server-fingerprint');
+  expect(html).toContain('Only verified workspace owners');
+  expect(html).toContain('disabled=""');
+});
 it('renders recipient state, permissions and pending/test restrictions without exposing tokens', () => {
   const html = renderToStaticMarkup(
     createElement(NotificationSettings, {

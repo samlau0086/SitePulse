@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 2026-10-28
+
+- Added multiple Slack Incoming Webhook and Telegram Bot recipients per workspace, encrypted credentials, explicit destination opt-in, tests and enable/disable/delete controls. Both channels share existing tenant authorization, recipient limits, cooldowns and incident/recovery outbox policy.
+- Added migration 0010, optional stable `NOTIFICATION_ENCRYPTION_KEY` in validated API/worker/GitHub deployment configuration, fixed official provider destinations, redirect rejection, bounded responses and sanitized retries. Each channel claims up to five deliveries per sweep. Provider timeout/crash retries may duplicate a chat message; provider acceptance is not recipient delivery confirmation.
+- Added contracts, provider, encryption, UI and PostgreSQL integration coverage for both channels. Real Slack/Telegram delivery still requires staging acceptance with operator-owned destinations.
+
 ## Unreleased — 2026-10-27
 
 - Added multiple verified Bark devices per workspace, encrypted device-key storage, test pushes, enable/disable/delete controls, and Bark delivery for incident and Connector opening/recovery events. The official Bark service is the only supported endpoint in this milestone.

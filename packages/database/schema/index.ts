@@ -424,7 +424,7 @@ export const notificationEndpoints = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     destination: text('destination').notNull(),
-    type: text('type', { enum: ['email', 'bark'] })
+    type: text('type', { enum: ['email', 'bark', 'slack', 'telegram'] })
       .notNull()
       .default('email'),
     label: text('label'),
@@ -443,11 +443,15 @@ export const notificationEndpoints = pgTable(
       .where(sql`${table.deletedAt} is null`),
     check(
       'notification_endpoints_type_valid',
-      sql`${table.type} in ('email', 'bark')`,
+      sql`${table.type} in ('email', 'bark', 'slack', 'telegram')`,
     ),
     check(
       'notification_endpoints_bark_key_required',
       sql`${table.type} <> 'bark' or ${table.deletedAt} is not null or (${table.encryptedKey} is not null and ${table.label} is not null)`,
+    ),
+    check(
+      'notification_endpoints_chat_key_required',
+      sql`${table.type} not in ('slack', 'telegram') or ${table.deletedAt} is not null or (${table.encryptedKey} is not null and ${table.label} is not null)`,
     ),
   ],
 );
@@ -466,7 +470,7 @@ export const notificationDeliveries = pgTable(
     eventKey: text('event_key').notNull().unique(),
     eventType: text('event_type', { enum: ['opened', 'recovered'] }).notNull(),
     recipient: text('recipient').notNull(),
-    channel: text('channel', { enum: ['email', 'bark'] })
+    channel: text('channel', { enum: ['email', 'bark', 'slack', 'telegram'] })
       .notNull()
       .default('email'),
     siteName: text('site_name').notNull(),
@@ -496,7 +500,7 @@ export const notificationDeliveries = pgTable(
     ),
     check(
       'notification_deliveries_channel_valid',
-      sql`${table.channel} in ('email', 'bark')`,
+      sql`${table.channel} in ('email', 'bark', 'slack', 'telegram')`,
     ),
     check(
       'notification_deliveries_event_valid',

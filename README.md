@@ -1,11 +1,26 @@
 # SitePulse
 
+通知现支持 Email、Bark、Slack 和 Telegram，每个通道可添加多个接收者，四种通道合计最多 20 个有效配置，共享验证/测试限额。所有通道接收相同的已确认故障、恢复和 Connector 失联事件；新增通道不会改变监控确认间隔。
+
+启用 Slack / Telegram：在 GitHub 部署 Environment 中添加 Secret `NOTIFICATION_ENCRYPTION_KEY`，本地开发则写入未提交的 `.env`。用以下命令生成独立密钥：
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+此值须稳定保存和独立备份，API 与 worker 使用相同值。不要每次部署重新生成，也不要替换已有 `BARK_ENCRYPTION_KEY`。丢失该值后，已有 Slack / Telegram 配置需要删除并重新添加。不配置时，已有 Email / Bark 仍可使用。部署会按现有流程备份数据库并应用新增迁移 `0010_flawless_morg`。
+
+- **Slack**：创建 Slack App，启用 Incoming Webhooks，为目标频道添加 Webhook，在 Notifications 页选择 Slack，填写名称和完整的 `https://hooks.slack.com/services/...` URL。每个 Webhook 单独添加；当前不支持 Gov Slack、自建代理或其他主机。
+- **Telegram**：通过 BotFather 创建机器人并获取 Bot Token。私聊先发送 `/start`；群组先加入机器人并允许其发言。在 Notifications 页填写名称、Bot Token 和数字 Chat ID（群组通常为负数）。可在可信本机调用 Telegram Bot API 的 `getUpdates`，从 `message.chat.id` 获取；已设置 Webhook 的机器人请从已有可信更新处理程序读取 Chat ID，不要为此删除 Webhook。频道须授予机器人发帖权限，并从相应更新中读取 ID。不要将 Token 交给第三方查询工具，也不要写入 Git、日志或截图。
+
+每个目的地添加后，会收到验证消息。点击 **Open SitePulse** 并明确确认后才接收常规告警；等待一分钟冷却后可发送测试。可以分别添加多个 Slack 频道和 Telegram 私聊/群组。凭据加密保存，读取时隐藏。群组确认仅证明能读取该消息，不授予工作区权限。验收包括两个接收者各一次故障/恢复、停用待发抑制和跨工作区隔离，详见 [通知说明](docs/NOTIFICATIONS.md)。网络超时后的重试可能重复，真实通道送达仍需部署后验证。
+
 ## 通知设置与收件人管理
 
-侧栏 **Notifications** → 选择工作区，可管理故障和恢复的邮件与 Bark 推送。已验证的工作区 owner/admin 可添加多个邮箱或 Bark 设备、重发验证、启停、删除、发送测试通知，以及关闭/开启成员自动接收邮件；其他成员只读。平台管理员身份不绕过工作区权限。
+侧栏 **Notifications** → 选择工作区，可管理故障和恢复的 Email、Bark、Slack 和 Telegram 通知。已验证的工作区 owner/admin 可添加多个收件人、重发验证、启停、删除、发送测试通知，以及关闭/开启成员自动接收邮件；其他成员只读。平台管理员身份不绕过工作区权限。
 
 - 默认保留已验证成员自动接收。独立邮箱必须点击验证邮件中的链接，并在页面确认后才可接收；不需要注册 SitePulse，也不获得工作区访问权。
-- 每个工作区最多 20 个有效收件人（邮箱和 Bark 设备合计），邮箱不区分大小写，同一事件同一收件人仅投递一次。托管邮箱覆盖同地址的成员自动接收，待验证、停用或删除后不会回退到成员投递；需要恢复时重新添加并验证。
+- 每个工作区最多 20 个有效收件人（四种通道合计），邮箱不区分大小写，同一事件同一收件人只入队一次；推送/聊天通道在超时重试时仍可能重复送达。托管邮箱覆盖同地址的成员自动接收，待验证、停用或删除后不会回退到成员投递；需要恢复时重新添加并验证。
 - 验证链接一小时有效、单次使用，重发使旧链接失效。验证与测试共用每个收件人 60 秒冷却、每工作区每小时 10 次额度。创建时即发送验证；发送失败仍保留收件人，可稍后重发。
 - 测试仅允许已验证且启用的收件人，成功表示服务商接受，不代表邮件到达或手机展示。故障与恢复使用持久化队列；验证和测试同步交给服务商，不自动重试。
 - 停用、删除、关闭成员自动接收和撤销成员资格会抑制对应的待投递告警；已在发送中或服务商已接受的邮件不能撤回。新增收件人不补发历史告警。
@@ -39,7 +54,7 @@ All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Sh
 
 Interactive controls use stronger outlines, bold button labels and 44px minimum heights. Active navigation uses bold blue text/icons on a light blue background, without notification-like dots; inline links remain underlined and card actions have outlined touch targets. Operational badges distinguish healthy, warning and critical states with readable semantic colors, icons and text. Errors and feedback appear in bordered tinted panels; quota and verification warnings are highlighted separately. Connector failures are announced as errors, and destructive actions retain confirmation dialogs.
 
-SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents, and deduplicated email/Bark incident and recovery alerts are implemented. Billing and additional notification channels remain separate milestones.
+SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accounts, password recovery, email verification, organizations, isolated sites, WordPress connector pairing, revocable credentials, heartbeat freshness, minimized inventory, external HTTP/SSL checks, incidents, and deduplicated Email/Bark/Slack/Telegram incident and recovery alerts are implemented. Billing remains a separate milestone.
 
 ## Workspace navigation
 
@@ -61,7 +76,7 @@ Connector freshness is separate: WordPress still sends heartbeats every 15 minut
 
 Migration `0008_flippant_shiver_man` permits Connector incidents. The normal deployment must back up before applying it; no production changes were performed during implementation. Follow [responsiveness acceptance](docs/MONITORING_RESPONSIVENESS.md) after deployment.
 
-Migrations `0003_external_monitoring`, `0004_cold_zemo`, `0005_strange_nocturne`, `0007_neat_morlun` and `0009_melted_jigsaw` add monitoring jobs, checks, incidents, the durable notification outbox with stale-worker fencing, workspace notification settings, verified recipients and channel metadata. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs plus five email and five Bark deliveries per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts use the workspace's verified, enabled recipient policy. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
+Migrations through `0010_flawless_morg` add monitoring jobs, checks, incidents, the durable notification outbox with stale-worker fencing, workspace notification settings, verified recipients and four-channel metadata. Deployment backs up before applying registered migrations. Checks are retained for 30 days and resolved incidents for 90 days, with bounded cleanup. A worker claims at most four probe jobs plus five deliveries per channel (20 across Email/Bark/Slack/Telegram) per poll (default 60 seconds); retry timestamps are due times, not delivery guarantees. Alerts use the workspace's verified, enabled recipient policy. Validate capacity before scaling beyond a small pilot. See [monitoring acceptance](docs/MONITORING_ACCEPTANCE.md) and [notification delivery](docs/NOTIFICATIONS.md).
 
 ## Plans and site allowances
 

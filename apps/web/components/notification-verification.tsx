@@ -52,8 +52,8 @@ export function NotificationVerification() {
           </button>
           {!credentials.token && (
             <p>
-              Open the full link from the verification email or Bark push. If
-              you refreshed this page, reopen the notification link.
+              Open the full link from the verification notification. If you
+              refreshed this page, reopen the notification link.
             </p>
           )}
         </>

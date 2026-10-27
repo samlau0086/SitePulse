@@ -27,6 +27,8 @@ Notification settings use the direct `/app/notifications` sidebar destination an
 
 ## Visibility and feedback
 
+Slack and Telegram share the direct notification settings page and recipient actions. Use password inputs for webhook URLs and bot tokens, clear credential fields on submit, and show only labels and hidden-credential notices afterward. Telegram Chat IDs remain text inputs to preserve signed IDs exactly. Reuse existing form, fieldset, pending, read-only, error and confirmation patterns; channel verification grants no workspace access.
+
 Monitoring distinguishes first failure awaiting confirmation from confirmed down. Connector `stale_data` events use Connector offline/restored wording and the shared connection icon; never render them as SSL errors or HTTP DOWN/UP. Explain independent website availability and valid-heartbeat recovery, including historical outcomes.
 
 - Reuse `IncidentSignal` for incident outcomes: HTTP incidents show a directional icon plus DOWN until confirmed recovery, then UP. Retain lifecycle status separately. SSL uses certificate wording; reset/unknown closures must say recovery unverified. Explain that historical event states do not report current availability. Use semantic icon tiles and visible words together.

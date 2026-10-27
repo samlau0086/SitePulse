@@ -109,6 +109,35 @@ export const createBarkEndpoint = z
       .regex(/^[A-Za-z0-9_-]{8,256}$/),
   })
   .strict();
+// Strict official Slack endpoint: no credentials, ports, query, fragment or custom hosts.
+export const slackWebhook = z
+  .string()
+  .trim()
+  .max(512)
+  .regex(
+    /^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/,
+  );
+export const telegramBotToken = z
+  .string()
+  .trim()
+  .regex(/^[0-9]{5,20}:[A-Za-z0-9_-]{20,100}$/);
+export const telegramChatId = z
+  .string()
+  .trim()
+  .regex(/^-?[1-9][0-9]{0,19}$/);
+export const createSlackEndpoint = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+    webhookUrl: slackWebhook,
+  })
+  .strict();
+export const createTelegramEndpoint = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+    botToken: telegramBotToken,
+    chatId: telegramChatId,
+  })
+  .strict();
 export const updateNotificationEndpoint = z
   .object({ enabled: z.boolean() })
   .strict();
@@ -123,7 +152,7 @@ export const confirmNotificationEndpoint = z
   .strict();
 export type NotificationEndpoint = {
   id: string;
-  type: 'email' | 'bark';
+  type: 'email' | 'bark' | 'slack' | 'telegram';
   label: string | null;
   destination: string;
   enabled: boolean;

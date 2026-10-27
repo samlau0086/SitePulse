@@ -394,10 +394,10 @@ Add a unique constraint or transactional deduplication mechanism for open incide
 |---|---|---|
 | id | UUID | Primary key |
 | organization_id | UUID | Tenant reference |
-| type | TEXT | email or bark |
-| destination | TEXT | Normalized email or non-reversible Bark-key fingerprint |
-| label | TEXT | Nullable display name; required for Bark |
-| encrypted_key | TEXT | Nullable AES-256-GCM Bark device key; server-only |
+| type | TEXT | email, bark, slack or telegram |
+| destination | TEXT | Normalized email or channel-prefixed credential fingerprint |
+| label | TEXT | Nullable display name; required for push/chat channels |
+| encrypted_key | TEXT | Nullable AES-256-GCM device key or chat credentials; server-only |
 | verified_at | TIMESTAMPTZ | Nullable |
 | enabled | BOOLEAN | Default true |
 | created_at | TIMESTAMPTZ | Required |
@@ -409,7 +409,7 @@ Add a unique constraint or transactional deduplication mechanism for open incide
 | id | UUID | Primary key |
 | incident_id | UUID | Nullable for recovery events |
 | endpoint_id | UUID | Nullable |
-| channel | TEXT | email or bark |
+| channel | TEXT | email, bark, slack or telegram |
 | event_key | TEXT | Idempotency key |
 | status | TEXT | queued, sent, failed |
 | attempts | INTEGER | Default 0 |
@@ -498,6 +498,8 @@ Monitoring execution should be handled by background workers rather than user-fa
 - `GET /organizations/:organizationId/notification-endpoints`
 - `POST /organizations/:organizationId/notification-endpoints`
 - `POST /organizations/:organizationId/notification-endpoints/bark`
+- `POST /organizations/:organizationId/notification-endpoints/slack`
+- `POST /organizations/:organizationId/notification-endpoints/telegram`
 - `PATCH /organizations/:organizationId/notification-endpoints/:endpointId`
 - `DELETE /organizations/:organizationId/notification-endpoints/:endpointId`
 - `POST /organizations/:organizationId/notification-endpoints/:endpointId/resend`
@@ -505,6 +507,8 @@ Monitoring execution should be handled by background workers rather than user-fa
 - `POST /notification-endpoints/verify`
 
 Email addresses and Bark devices must complete a hash-only, single-use possession proof before routine alert delivery. Bark supports multiple labeled devices per organization and uses only the fixed official provider endpoint; arbitrary push URLs and self-hosted Bark servers are outside this milestone. Device keys are encrypted at rest, hidden from API reads and cleared on endpoint deletion.
+
+Slack Incoming Webhooks and Telegram bot/chat destinations also support multiple labeled recipients and the same possession proof, shared 20-endpoint limit, authorization, cooldown, audits and delivery fencing. Slack restricts the exact official webhook host/path; Telegram uses a fixed Bot API host with validated tokens and numeric chat IDs. Chat secrets use an independent stable `NOTIFICATION_ENCRYPTION_KEY` with organization/channel-bound encryption and are hidden on reads and cleared on deletion. These channels do not change incident confirmation timing or guarantee exactly-once provider delivery.
 
 ## 5.7 API Error Format
 

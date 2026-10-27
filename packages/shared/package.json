@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./network": "./src/network.ts",
-    "./bark": "./src/bark.ts"
+    "./bark": "./src/bark.ts",
+    "./chat-notifications": "./src/chat-notifications.ts"
   },
   "dependencies": {
     "ipaddr.js": "^2.5.0"

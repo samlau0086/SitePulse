@@ -1,5 +1,14 @@
 # SitePulse API
 
+Slack and Telegram use the same server membership, verified owner/admin, trusted mutation Origin, shared endpoint limit, cooldown, opt-in and audit rules as email/Bark:
+
+| Route (under `/api/v1`)                                               | Body                          |
+| --------------------------------------------------------------------- | ----------------------------- |
+| `POST /organizations/:organizationId/notification-endpoints/slack`    | `{ label, webhookUrl }`       |
+| `POST /organizations/:organizationId/notification-endpoints/telegram` | `{ label, botToken, chatId }` |
+
+Chat credentials are encrypted using the validated `NOTIFICATION_ENCRYPTION_KEY`, never returned by reads, and cleared on deletion. Slack accepts only the exact official Incoming Webhook HTTPS host/path; Telegram requires a validated token and numeric chat ID and uses a fixed Bot API host. Generic resend/test/enable/delete routes apply. Missing encryption configuration returns 503. Provider failure returns sanitized 502 `CHANNEL_DELIVERY_FAILED`; the endpoint remains saved for retry. A public single-use verification proves destination access only, never account membership.
+
 ## Platform administration
 
 Requires a live verified Better Auth session whose UUID is in the API's `PLATFORM_ADMIN_USER_IDS` allowlist. Missing session returns 401; ordinary organization owner/admin or unverified users receive 403. Mutations require trusted Origin. Tenant APIs still require membership.

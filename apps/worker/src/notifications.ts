@@ -7,8 +7,14 @@ import {
   sendBark,
   type SendBark,
 } from '@sitepulse/shared/bark';
+import {
+  decryptChatSecret,
+  sendChat,
+  type SendChat,
+} from '@sitepulse/shared/chat-notifications';
 
 type MailOptions = {
+  NOTIFICATION_ENCRYPTION_KEY?: string | undefined;
   BARK_ENCRYPTION_KEY?: string | undefined;
   AUTH_MAIL_TRANSPORT: 'file' | 'resend';
   AUTH_MAIL_FROM: string;
@@ -82,7 +88,7 @@ export async function recipientStillEnabled(db: Database, delivery: Delivery) {
 
 export async function claimNotificationDeliveries(
   db: Database,
-  channel?: 'email' | 'bark',
+  channel?: Delivery['channel'],
 ) {
   return db.transaction(async (tx) => {
     await tx
@@ -259,12 +265,15 @@ export async function deliverNotificationBatch(
   db: Database,
   options: MailOptions,
   barkSender: SendBark = sendBark,
+  chatSender: SendChat = sendChat,
 ) {
   // Separate bounded batches prevent an email backlog from starving push alerts.
   const deliveries = (
     await Promise.all([
       claimNotificationDeliveries(db, 'email'),
       claimNotificationDeliveries(db, 'bark'),
+      claimNotificationDeliveries(db, 'slack'),
+      claimNotificationDeliveries(db, 'telegram'),
     ])
   ).flat();
   await Promise.all(
@@ -333,6 +342,54 @@ export async function deliverNotificationBatch(
             url: `${options.APP_ORIGIN}/app/incidents`,
           });
           providerMessageId = `bark:${delivery.id}`;
+        } else if (
+          delivery.channel === 'slack' ||
+          delivery.channel === 'telegram'
+        ) {
+          if (!options.NOTIFICATION_ENCRYPTION_KEY)
+            throw new Error('CHANNEL_NOT_CONFIGURED');
+          const [endpoint] = await db
+            .select()
+            .from(schema.notificationEndpoints)
+            .where(
+              and(
+                eq(schema.notificationEndpoints.id, delivery.endpointId!),
+                eq(
+                  schema.notificationEndpoints.organizationId,
+                  delivery.organizationId!,
+                ),
+                eq(schema.notificationEndpoints.type, delivery.channel),
+                eq(
+                  schema.notificationEndpoints.destination,
+                  delivery.recipient,
+                ),
+                eq(schema.notificationEndpoints.enabled, true),
+                sql`${schema.notificationEndpoints.verifiedAt} is not null`,
+                sql`${schema.notificationEndpoints.deletedAt} is null`,
+              ),
+            );
+          if (!endpoint?.encryptedKey)
+            throw new Error('CHANNEL_KEY_UNAVAILABLE');
+          let secret: string;
+          try {
+            secret = decryptChatSecret(
+              endpoint.encryptedKey,
+              options.NOTIFICATION_ENCRYPTION_KEY,
+              delivery.organizationId!,
+              delivery.channel,
+            );
+          } catch {
+            throw new Error('CHANNEL_KEY_UNAVAILABLE');
+          }
+          const { subject, text } = incidentMail(delivery, options.APP_ORIGIN);
+          await chatSender({
+            channel: delivery.channel,
+            secret,
+            title: subject,
+            body: text,
+            url: `${options.APP_ORIGIN}/app/incidents`,
+          });
+          providerMessageId = `${delivery.channel}:${delivery.id}`;
         } else providerMessageId = await sendMail(delivery, options);
         await finishDelivery(db, delivery, { providerMessageId });
       } catch (error) {
@@ -343,6 +400,9 @@ export async function deliverNotificationBatch(
             'PROVIDER_INVALID_RESPONSE',
             'BARK_NOT_CONFIGURED',
             'BARK_KEY_UNAVAILABLE',
+            'CHANNEL_NOT_CONFIGURED',
+            'CHANNEL_KEY_UNAVAILABLE',
+            'PROVIDER_INVALID_CREDENTIAL',
           ].includes(error.message)
             ? error.message
             : 'PROVIDER_UNAVAILABLE';

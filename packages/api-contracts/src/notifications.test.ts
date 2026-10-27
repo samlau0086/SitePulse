@@ -3,10 +3,58 @@ import { randomUUID } from 'node:crypto';
 import {
   confirmNotificationEndpoint,
   createBarkEndpoint,
+  createSlackEndpoint,
+  createTelegramEndpoint,
   createNotificationEndpoint,
   updateNotificationEndpoint,
   updateNotificationSettings,
 } from './index';
+
+it('accepts only official Slack webhook URLs and rejects forged verification state', () => {
+  const input = {
+    label: 'Ops',
+    webhookUrl: 'https://hooks.slack.com/services/T123/B123/fixture',
+  };
+  expect(createSlackEndpoint.safeParse(input).success).toBe(true);
+  for (const webhookUrl of [
+    'http://127.0.0.1/',
+    `${input.webhookUrl}?x=1`,
+    `${input.webhookUrl}#fragment`,
+    'https://hooks.slack.com.evil.test/services/T/B/x',
+    'https://hooks.slack.com:443/services/T/B/x',
+  ])
+    expect(
+      createSlackEndpoint.safeParse({ ...input, webhookUrl }).success,
+    ).toBe(false);
+  expect(
+    createSlackEndpoint.safeParse({ ...input, verifiedAt: 'now' }).success,
+  ).toBe(false);
+});
+it('validates bounded Telegram credentials and numeric private/group IDs', () => {
+  const input = {
+    label: 'On-call',
+    botToken: `123456:${'x'.repeat(30)}`,
+    chatId: '-10012345',
+  };
+  expect(createTelegramEndpoint.safeParse(input).success).toBe(true);
+  expect(
+    createTelegramEndpoint.safeParse({ ...input, chatId: '123456' }).success,
+  ).toBe(true);
+  for (const chatId of ['@username', '0', '123/456', '1'.repeat(21)])
+    expect(createTelegramEndpoint.safeParse({ ...input, chatId }).success).toBe(
+      false,
+    );
+  expect(
+    createTelegramEndpoint.safeParse({
+      ...input,
+      botToken: 'https://api.telegram.org/token',
+    }).success,
+  ).toBe(false);
+  expect(
+    createTelegramEndpoint.safeParse({ ...input, organizationId: randomUUID() })
+      .success,
+  ).toBe(false);
+});
 
 it('accepts only bounded Bark device keys and labels, never URLs or client verification state', () => {
   expect(

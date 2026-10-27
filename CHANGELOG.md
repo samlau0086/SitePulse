@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-27
 
+- Replaced the blank workspace loading message with route-specific skeleton screens for overview metrics/panels, directories, workspace cards, details and forms. Preserved app navigation, added an accessible loading announcement and respected reduced-motion preferences.
+
 - Reworked the product visual direction from terminal-style typography and ASCII markers to system sans-serif, shared SVG icons, blue primary controls, rounded cards and clearer navigation. Added a real-data connector distribution chart with full count legend and actionable attention items; overview sites now use cards with direct section links. Preserved full-directory filters, authentication, membership checks and mutation behavior. Updated the design source of truth and palette/summary coverage.
 
 - Improved shared UI visibility with stronger input/action borders, bold 44px controls, visible product links, persistent navigation selection, high-contrast focus outlines and distinct semantic status badges. Added tinted error/information/warning panels, separated connector errors from feedback, and visually distinguished destructive connector controls without changing authorization or confirmations. Added palette contrast regression tests.

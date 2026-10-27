@@ -25,6 +25,8 @@ Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effec
 
 ## Visibility and feedback
 
+- Use the shared `PageSkeleton` in route `loading.tsx` boundaries, choosing overview, directory, workspaces, detail or form geometry. Keep the app shell visible and placeholders non-interactive and `aria-hidden`, with one screen-reader loading status and `aria-busy` on the content. Reuse `--skeleton-fill` and product panel tokens; disable the pulse under `prefers-reduced-motion`.
+
 - Keep primary product buttons blue-filled with bold labels and secondary actions visibly outlined. Public primary controls remain ink-filled. Controls have a 44px minimum height; use `--border-control` rather than decorative `--hairline` for input and action boundaries. Disabled buttons retain readable labels and dashed borders, including inside disabled fieldsets, without enabled hover/pressed styling.
 - Keep product action links underlined; directory row actions also have outlined touch targets. Active sidebar items use a solid leading rule on a neutral fill, and selected site tabs use an ink underline and neutral fill. Keyboard focus uses the shared high-contrast outline.
 - Use the shared `--success-*`, `--warning-*`, `--danger-*` and `--info-*` ink/surface pairs for operational signals. Status badges retain words and ASCII markers as well as color. Do not use the bright illustrative terminal colors for small text on light surfaces.

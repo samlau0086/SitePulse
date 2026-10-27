@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
 import { IncidentAction } from './incident-action';
+import { IncidentSignal } from './incident-signal';
 import { api } from '../lib/api';
 import { PlanUsage } from './plan-usage';
 import { Icon } from './icon';
@@ -319,9 +320,14 @@ export function IncidentDirectory({
       ) : (
         <div className="table-scroll">
           <table>
+            <caption className="incident-caption">
+              Event states describe each incident, not current site
+              availability.
+            </caption>
             <thead>
               <tr>
                 <th scope="col">Site / monitor</th>
+                <th scope="col">Event state</th>
                 <th scope="col">Status</th>
                 <th scope="col">Severity</th>
                 <th scope="col">Started</th>
@@ -351,6 +357,9 @@ export function IncidentDirectory({
                           : 'SSL certificate'}{' '}
                         · {organization?.name}
                       </span>
+                    </td>
+                    <td data-label="Event state">
+                      <IncidentSignal incident={incident} />
                     </td>
                     <td data-label="Status">
                       <StatusBadge status={incident.status} />

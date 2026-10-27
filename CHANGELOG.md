@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-27
 
+- Added graphical UP / DOWN incident signals with visible text, preserved lifecycle statuses, and reused the signals in site history. Distinguished SSL certificate issues and unverified connection-reset closures from HTTP recovery; historical outcomes do not assert current availability.
+
 - Removed the active sidebar item's trailing dot to avoid confusion with unread/pending notifications. Selection retains blue text/icons, a light blue background and `aria-current`.
 
 - Replaced the blank workspace loading message with route-specific skeleton screens for overview metrics/panels, directories, workspace cards, details and forms. Preserved app navigation, added an accessible loading announcement and respected reduced-motion preferences.

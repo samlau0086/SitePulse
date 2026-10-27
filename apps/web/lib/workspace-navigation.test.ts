@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
 import { AppNavigation, PublicHeader } from '../components/app-navigation';
+import { IncidentSignal } from '../components/incident-signal';
+import { MonitoringPanel } from '../components/monitoring-panel';
 import {
   filterSites,
   SiteDirectory,
@@ -159,6 +161,82 @@ it('requires verification before rendering the site creation form', async () => 
   expect(html).not.toContain('<form');
   expect(usage).not.toHaveBeenCalled();
 });
+it.each(['open', 'acknowledged'] as const)(
+  'keeps %s HTTP incidents DOWN until confirmed recovery',
+  (status) => {
+    const html = render(
+      createElement(IncidentSignal, { incident: { ...incident, status } }),
+    );
+    expect(html).toContain('>DOWN</strong>');
+    expect(html).toContain('tone-danger');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('Awaiting confirmed recovery');
+  },
+);
+it('shows historical UP only for confirmed HTTP recovery', () => {
+  const recovered: Incident = {
+    ...incident,
+    status: 'resolved',
+    resolutionReason: 'recovered',
+    resolvedAt: '2026-10-24T01:00:00.000Z',
+  };
+  const html = render(
+    createElement(IncidentDirectory, {
+      sites: [site],
+      organizations: [org],
+      incidents: [recovered],
+      canManage: true,
+    }),
+  );
+  expect(html).toContain('>UP</strong>');
+  expect(html).toContain('Recovered in this incident');
+  expect(html).toContain('not current site availability');
+  expect(html).toContain('resolved</span>');
+  expect(html).not.toContain('>Acknowledge</button>');
+  const history = render(
+    createElement(MonitoringPanel, {
+      monitoring: [],
+      checks: [],
+      incidents: [recovered],
+      https: true,
+      canManage: true,
+    }),
+  );
+  expect(history).toContain('>UP</strong>');
+  expect(history).toContain(recovered.resolvedAt);
+});
+it.each(['connection_reset', null] as const)(
+  'does not claim recovery for a closure with reason %s',
+  (resolutionReason) => {
+    const html = render(
+      createElement(IncidentSignal, {
+        incident: {
+          ...incident,
+          status: 'resolved',
+          resolutionReason,
+          resolvedAt: '2026-10-24T01:00:00.000Z',
+        },
+      }),
+    );
+    expect(html).toContain('>Closed</strong>');
+    expect(html.toLowerCase()).toContain('recovery unverified');
+    expect(html).not.toContain('>UP</strong>');
+  },
+);
+it.each(['warning', 'critical'] as const)(
+  'keeps SSL %s incidents separate from HTTP DOWN',
+  (severity) => {
+    const html = render(
+      createElement(IncidentSignal, {
+        incident: { ...incident, monitorType: 'ssl', severity },
+      }),
+    );
+    expect(html).toContain(
+      severity === 'warning' ? 'Certificate warning' : 'Certificate issue',
+    );
+    expect(html).not.toContain('>DOWN</strong>');
+  },
+);
 it('offers only owner/admin workspaces for site creation', async () => {
   organizations.mockResolvedValue({
     organizations: [

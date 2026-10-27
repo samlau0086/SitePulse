@@ -9,6 +9,8 @@ const paths = {
   plus: 'M12 5v14 M5 12h14',
   refresh: 'M20 7v5h-5 M4 17v-5h5 M6 6a8 8 0 0 1 13 2 M18 18A8 8 0 0 1 5 16',
   arrow: 'M5 12h14 M13 6l6 6-6 6',
+  up: 'M12 20V4 M5 11l7-7 7 7',
+  down: 'M12 4v16 M5 13l7 7 7-7',
   check: 'M5 12l4 4L19 6',
   clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2',
   inventory: 'M4 3h16v18H4z M8 7h8 M8 12h8 M8 17h5',

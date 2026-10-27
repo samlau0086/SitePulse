@@ -17,6 +17,8 @@
 
 ## UI design
 
+Incident directories and site incident history pair graphical signals with visible UP / DOWN labels for HTTP incidents, plus the existing lifecycle status. UP means confirmed recovery in that historical incident, not current site availability. SSL incidents use certificate labels; connection resets show Closed with recovery unverified.
+
 Authenticated page transitions use shared, route-specific skeleton screens for the overview, directories, workspace cards, details and forms. The sidebar and top bar stay in place. Placeholders are non-interactive, announce loading to screen readers and stop pulsing when reduced motion is preferred.
 
 All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Shared design tokens live in `apps/web/app/globals.css`; follow [UI implementation guidelines](docs/UI_GUIDELINES.md) for future UI changes. The product uses readable system sans-serif typography, SVG navigation/status icons, blue primary actions and rounded white cards on a light background. The overview includes a connector distribution donut with textual counts, actionable attention items and site cards with direct Monitoring / Inventory / Connection links. Charts use authorized site data, not illustrative trends; connector activity does not imply HTTP availability. Public marketing retains the original cream/monospace reference. No commercial font is bundled or downloaded.

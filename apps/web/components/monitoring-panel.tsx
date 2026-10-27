@@ -4,6 +4,7 @@ import type {
   MonitorState,
 } from '@sitepulse/api-contracts';
 import { IncidentAction } from './incident-action';
+import { IncidentSignal } from './incident-signal';
 
 const labels: Record<MonitorState['state'], string> = {
   pending: 'Awaiting first check',
@@ -98,7 +99,8 @@ export function MonitoringPanel({
         <p>
           Two consecutive failures confirm an incident; two consecutive
           successes confirm recovery. Acknowledging an incident does not stop
-          checks or mark it recovered.
+          checks or mark it recovered. Event states describe each incident, not
+          the site’s current availability.
         </p>
         {!incidents.length ? (
           <p>No incidents recorded.</p>
@@ -106,6 +108,7 @@ export function MonitoringPanel({
           <ul>
             {incidents.map((incident) => (
               <li key={incident.id}>
+                <IncidentSignal incident={incident} />
                 <p>
                   {incident.monitorType} · {incident.severity} ·{' '}
                   {incident.status} · Started{' '}

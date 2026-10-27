@@ -25,6 +25,8 @@ Reuse `PlanUsage` for workspace plan and site allowance displays. Show the effec
 
 ## Visibility and feedback
 
+- Reuse `IncidentSignal` for incident outcomes: HTTP incidents show a directional icon plus DOWN until confirmed recovery, then UP. Retain lifecycle status separately. SSL uses certificate wording; reset/unknown closures must say recovery unverified. Explain that historical event states do not report current availability. Use semantic icon tiles and visible words together.
+
 - Use the shared `PageSkeleton` in route `loading.tsx` boundaries, choosing overview, directory, workspaces, detail or form geometry. Keep the app shell visible and placeholders non-interactive and `aria-hidden`, with one screen-reader loading status and `aria-busy` on the content. Reuse `--skeleton-fill` and product panel tokens; disable the pulse under `prefers-reduced-motion`.
 
 - Keep primary product buttons blue-filled with bold labels and secondary actions visibly outlined. Public primary controls remain ink-filled. Controls have a 44px minimum height; use `--border-control` rather than decorative `--hairline` for input and action boundaries. Disabled buttons retain readable labels and dashed borders, including inside disabled fieldsets, without enabled hover/pressed styling.

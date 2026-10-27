@@ -1781,6 +1781,31 @@ h3 {
   width: 14px;
   height: 14px;
 }
+.incident-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+}
+.incident-caption {
+  padding: 12px 16px;
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+}
+.incident-signal-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-product-control);
+}
+.incident-signal strong {
+  display: block;
+  font-size: 14px;
+}
 .app-shell th {
   background: var(--product-background);
   font-size: 12px;

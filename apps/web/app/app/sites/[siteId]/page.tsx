@@ -16,6 +16,7 @@ import { SiteControls } from '../../../../components/sites-panel';
 import { MonitoringPanel } from '../../../../components/monitoring-panel';
 import { SecurityPanel } from '../../../../components/security-panel';
 import { SiteTabs } from '../../../../components/site-tabs';
+import { Timestamp } from '../../../../components/user-preferences';
 
 export default async function SitePage({
   params,
@@ -80,10 +81,7 @@ export default async function SitePage({
             {site.status === 'degraded' ? 'Stale heartbeat' : site.status}
           </p>
           <p>
-            Last heartbeat:{' '}
-            {site.lastSeenAt
-              ? new Date(site.lastSeenAt).toISOString()
-              : 'Not received'}
+            Last heartbeat: <Timestamp value={site.lastSeenAt} />
           </p>
           <p>Connector version: {site.connectorVersion ?? 'Not received'}</p>
         </section>
@@ -116,7 +114,9 @@ export default async function SitePage({
                 {inventory.updateCounts.plugins} plugins,{' '}
                 {inventory.updateCounts.themes} themes.
               </p>
-              <p>Received: {new Date(inventory.receivedAt).toISOString()}</p>
+              <p>
+                Received: <Timestamp value={inventory.receivedAt} />
+              </p>
               <h3>Installed plugins</h3>
               {inventory.installedPlugins !== null ? (
                 <ul>

@@ -1,10 +1,12 @@
 # Database and migrations
 
+Migration `0015_high_living_mummy.sql` adds `users.time_zone`, non-null text defaulting to `UTC`, including existing users. The API validates named IANA zones before updates scoped to the authenticated user's ID. This is a personal display preference; timestamps remain `timestamptz` and ISO/UTC on the API. Back up production and obtain explicit authorization before applying migrations.
+
 Migration `0006_tearful_morlocks.sql` adds nullable `organizations.site_limit_override` (0–1000) and `agency_plus`. Existing sites, credentials and jobs are unchanged. Quota decisions and manual entitlement updates serialize on the organization row; see [ENTITLEMENTS.md](ENTITLEMENTS.md). Existing migrations remain immutable.
 
 Migration `0007_neat_morlun.sql` adds `notification_settings`, `notification_endpoints`, and tenant/endpoint references on `notification_deliveries`. It backfills the organization of existing incident deliveries through the incident's site before adding foreign keys. Old orphan history remains nullable and fails closed in the worker. Active managed addresses are unique per workspace; deleted rows remain as tombstones so an address cannot silently fall back to automatic member delivery. Existing migrations remain immutable.
 
-All IDs are UUIDs. Timestamps are `timestamptz`; PostgreSQL stores instants, and API serialization uses ISO timestamps. Production clients should use UTC. Email is normalized to lowercase and trimmed by the API and constrained in SQL; uniqueness is enforced by the database.
+All IDs are UUIDs. Timestamps are `timestamptz`; PostgreSQL stores instants, and API serialization uses ISO timestamps. Database connections and API transport use UTC; the UI formats instants in the user's saved time zone. Email is normalized to lowercase and trimmed by the API and constrained in SQL; uniqueness is enforced by the database.
 
 | Table                     | Purpose and constraints                                                                                             |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |

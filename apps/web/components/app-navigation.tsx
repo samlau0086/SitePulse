@@ -11,6 +11,7 @@ export const navigation = [
   { href: '/app/incidents', label: 'Incidents', icon: 'alert' },
   { href: '/app/notifications', label: 'Notifications', icon: 'mail' },
   { href: '/app/organizations', label: 'Workspaces', icon: 'workspace' },
+  { href: '/app/settings', label: 'Preferences', icon: 'clock' },
 ];
 export function PublicHeader() {
   const pathname = usePathname();

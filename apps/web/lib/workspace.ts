@@ -14,6 +14,7 @@ export const workspaceSession = cache(() =>
       email: string;
       emailVerified: boolean;
       isPlatformAdmin: boolean;
+      timeZone: string;
     };
   }>('/auth/session'),
 );

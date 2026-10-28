@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Site } from '@sitepulse/api-contracts';
 import { api } from '../lib/api';
+import { Timestamp } from './user-preferences';
 
 export function SitesPanel({
   organizationId,
@@ -75,6 +76,7 @@ export function SitesPanel({
 export function SiteControls({ siteId }: { siteId: string }) {
   const router = useRouter();
   const [code, setCode] = useState('');
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -90,6 +92,7 @@ export function SiteControls({ siteId }: { siteId: string }) {
       return;
     setPending(true);
     setCode('');
+    setExpiresAt(null);
     setMessage('');
     setError('');
     try {
@@ -99,8 +102,9 @@ export function SiteControls({ siteId }: { siteId: string }) {
       );
       if (result.challenge) {
         setCode(result.challenge);
+        setExpiresAt(result.expiresAt ?? null);
         setMessage(
-          `Expires ${new Date(result.expiresAt!).toLocaleString()}. Paste into WordPress Settings → SitePulse. Treat this code as a secret.`,
+          'Paste into WordPress Settings → SitePulse. Treat this code as a secret.',
         );
       } else
         setMessage('Site disconnected. The previous credential is revoked.');
@@ -137,6 +141,11 @@ export function SiteControls({ siteId }: { siteId: string }) {
         Disconnect
       </button>
       {message && <p role="status">{message}</p>}
+      {expiresAt && (
+        <p>
+          Expires: <Timestamp value={expiresAt} />
+        </p>
+      )}
       {error && <p role="alert">{error}</p>}
       {code && (
         <>

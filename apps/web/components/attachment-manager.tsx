@@ -1,4 +1,5 @@
 'use client';
+import { Timestamp } from './user-preferences';
 import Link from 'next/link';
 import { useState } from 'react';
 import type { AttachmentDirectory } from '@sitepulse/api-contracts';
@@ -145,7 +146,7 @@ export function AttachmentManager({
               <p className="muted">
                 {item.scan.scannedFiles} code files ·{' '}
                 {Math.ceil(item.byteSize / 1024)} KiB ·{' '}
-                {new Date(item.createdAt).toLocaleString()}
+                <Timestamp value={item.createdAt} />
               </p>
               <details>
                 <summary>Scan details and fingerprint</summary>

@@ -1,6 +1,26 @@
 import { z } from 'zod';
 export * from './software';
 
+export const userPreferences = z
+  .object({
+    timeZone: z
+      .string()
+      .min(1)
+      .max(100)
+      .refine((value) => {
+        // Named zones carry daylight-saving rules; fixed numeric offsets do not.
+        if (!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$/.test(value)) return false;
+        try {
+          new Intl.DateTimeFormat('en-GB', { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'Choose a valid IANA time zone.'),
+  })
+  .strict();
+export type UserPreferences = z.infer<typeof userPreferences>;
+
 export const planCode = z.enum(['free', 'pro', 'agency', 'agency_plus']);
 // Operator-only input; never accepted by organization mutation routes.
 export const entitlementChange = z

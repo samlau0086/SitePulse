@@ -27,6 +27,7 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull().unique(),
     name: text('name').notNull(),
+    timeZone: text('time_zone').notNull().default('UTC'),
     emailVerified: boolean('email_verified').notNull().default(false),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     image: text('image'),

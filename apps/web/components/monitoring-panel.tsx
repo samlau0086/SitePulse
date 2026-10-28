@@ -9,6 +9,7 @@ import type {
 } from '@sitepulse/api-contracts';
 import { IncidentAction } from './incident-action';
 import { IncidentSignal } from './incident-signal';
+import { Timestamp } from './user-preferences';
 
 const labels: Record<MonitorState['state'], string> = {
   pending: 'Awaiting first check',
@@ -18,20 +19,6 @@ const labels: Record<MonitorState['state'], string> = {
   recovering: 'Recovering — awaiting confirmation',
   warning: 'Certificate warning',
 };
-function Timestamp({ value }: { value: string }) {
-  return (
-    <time dateTime={value} title={value}>
-      {new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'UTC',
-        month: 'short',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(new Date(value))}{' '}
-      UTC
-    </time>
-  );
-}
 function Pagination({
   page,
   total,

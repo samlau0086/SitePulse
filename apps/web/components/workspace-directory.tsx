@@ -13,6 +13,8 @@ import { IncidentSignal } from './incident-signal';
 import { api } from '../lib/api';
 import { PlanUsage } from './plan-usage';
 import { Icon } from './icon';
+import { Timestamp } from './user-preferences';
+export { Timestamp } from './user-preferences';
 
 type DirectoryProps = {
   sites: DirectorySite[];
@@ -30,15 +32,6 @@ export function filterSites(
     (site) =>
       (!organizationId || site.organizationId === organizationId) &&
       `${site.name} ${site.hostname}`.toLowerCase().includes(needle),
-  );
-}
-export function Timestamp({ value }: { value: string | null }) {
-  return value ? (
-    <time dateTime={value}>
-      {new Date(value).toISOString().replace('T', ' ').slice(0, 16)} UTC
-    </time>
-  ) : (
-    <>Not received</>
   );
 }
 export function StatusBadge({ status }: { status: string }) {

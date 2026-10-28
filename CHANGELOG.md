@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — User time zones
+
+- Add account-level IANA time zone preferences with a UTC default and explicit browser-zone selection. Persist through a session-protected self-service endpoint; reject invalid zones and client-supplied user IDs.
+- Render operational timestamps consistently in the saved zone with full date, seconds, UTC offset and zone name, including daylight-saving changes. Keep ISO/UTC values in time elements and tooltips; storage, monitoring schedules and notification delivery are unchanged.
+- Add immutable migration `0015_high_living_mummy.sql` for `users.time_zone`; back up before authorized production migration.
+
 ## Unreleased — Compact site operations
 
 - Replace long monitoring lists with HTTP/SSL status cards, check/incident switching, five-record pagination, incident status filters and readable UTC times. Preserve confirmation semantics and acknowledgement permissions.

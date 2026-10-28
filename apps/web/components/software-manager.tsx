@@ -8,6 +8,7 @@ import type {
 import { api } from '../lib/api';
 import { Icon } from './icon';
 import { SoftwareOperationDialog } from './software-operation-dialog';
+import { Timestamp } from './user-preferences';
 import {
   actionable,
   executeSoftwarePlans,
@@ -23,11 +24,6 @@ const actions: SoftwareCommand['action'][] = [
   'update',
   'uninstall',
 ];
-function formatTimestamp(value: string | null) {
-  if (!value) return 'Not received';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not received' : date.toLocaleString();
-}
 export function SoftwareArtwork({
   slug,
   official,
@@ -344,13 +340,16 @@ export function SoftwareManager({
                     <small>{new URL(site.canonicalUrl).hostname}</small>
                     <small>
                       Last inventory received:{' '}
-                      {formatTimestamp(site.inventoryAt)}
+                      <Timestamp value={site.inventoryAt} />
                     </small>
                     <small>
                       Management poll:{' '}
-                      {site.polledAt && new Date(site.polledAt).getTime() > 0
-                        ? formatTimestamp(site.polledAt)
-                        : 'Not received'}
+                      {site.polledAt &&
+                      new Date(site.polledAt).getTime() > 0 ? (
+                        <Timestamp value={site.polledAt} />
+                      ) : (
+                        'Not received'
+                      )}
                     </small>
                     <span
                       className={`status-badge ${site.enabled ? 'status-healthy' : 'status-warning'}`}
@@ -397,13 +396,13 @@ export function SoftwareManager({
                   {site.inventorySync.requestedAt && (
                     <small>
                       Requested:{' '}
-                      {formatTimestamp(site.inventorySync.requestedAt)}
+                      <Timestamp value={site.inventorySync.requestedAt} />
                     </small>
                   )}
                   {site.inventorySync.attemptedAt && (
                     <small>
                       Last attempt:{' '}
-                      {formatTimestamp(site.inventorySync.attemptedAt)}
+                      <Timestamp value={site.inventorySync.attemptedAt} />
                     </small>
                   )}
                   <button
@@ -818,7 +817,7 @@ export function SoftwareManager({
                   {op.action} {op.kind} · {op.slug}
                 </p>
                 <small>
-                  {op.reason} · {new Date(op.createdAt).toISOString()}
+                  {op.reason} · <Timestamp value={op.createdAt} />
                 </small>
               </div>
               <div>

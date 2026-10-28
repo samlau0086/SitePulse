@@ -17,6 +17,7 @@ import {
   resetPassword,
   verifyEmail,
   updateOrganization,
+  userPreferences,
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
 import { createAuth } from './auth';
@@ -393,6 +394,10 @@ export async function buildApp({
     { schema: { summary: 'Current user', security } },
     async (request) => {
       const user = await requireUser(request);
+      const [preferences] = await db
+        .select({ timeZone: schema.users.timeZone })
+        .from(schema.users)
+        .where(eq(schema.users.id, user.id));
       return {
         user: {
           id: user.id,
@@ -400,8 +405,29 @@ export async function buildApp({
           name: user.name,
           emailVerified: user.emailVerified,
           isPlatformAdmin: isPlatformAdmin(user, env),
+          timeZone: preferences?.timeZone ?? 'UTC',
         },
       };
+    },
+  );
+  app.patch(
+    '/api/v1/users/me/preferences',
+    {
+      schema: {
+        summary: 'Update your time zone',
+        security,
+        body: jsonSchema(userPreferences),
+      },
+    },
+    async (request) => {
+      const user = await requireUser(request);
+      const input = userPreferences.parse(request.body);
+      const [preferences] = await db
+        .update(schema.users)
+        .set(input)
+        .where(eq(schema.users.id, user.id))
+        .returning({ timeZone: schema.users.timeZone });
+      return { preferences };
     },
   );
   app.get(

@@ -9,6 +9,7 @@ import {
   type SiteSecurityReport,
 } from '@sitepulse/api-contracts';
 import { Icon } from './icon';
+import { Timestamp } from './user-preferences';
 
 const severityOrder = ['critical', 'high', 'medium', 'low', 'unknown'] as const;
 type Severity = PublicVulnerability['severity'];
@@ -405,10 +406,23 @@ export function SecurityPanel({
         </p>
         <p>
           Local scan time:{' '}
-          {inventory?.localSecurityScan?.scannedAt ?? 'Not completed'}
+          {inventory?.localSecurityScan?.scannedAt ? (
+            <Timestamp value={inventory.localSecurityScan.scannedAt} />
+          ) : (
+            'Not completed'
+          )}
         </p>
-        <p>Inventory received: {inventory?.receivedAt ?? 'Not received'}</p>
-        <p>Last advisory check: {security.checkedAt ?? 'Not completed'}</p>
+        <p>
+          Inventory received: <Timestamp value={inventory?.receivedAt} />
+        </p>
+        <p>
+          Last advisory check:{' '}
+          {security.checkedAt ? (
+            <Timestamp value={security.checkedAt} />
+          ) : (
+            'Not completed'
+          )}
+        </p>
         {canManage && (
           <Link className="button secondary" href={softwareHref}>
             <Icon name="refresh" /> Sync inventory and refresh code scan

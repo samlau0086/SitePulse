@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { formatTimestamp } from './time';
 import { Timestamp, TimeZoneProvider } from '../components/user-preferences';
 
@@ -14,6 +14,36 @@ it('converts instants across date boundaries and supports fractional offsets', (
   );
   expect(formatTimestamp(instant)).toBe('28 Oct 2026, 23:30:45 GMT (UTC)');
 });
+
+it.each(['GMT', 'GMT+0', 'GMT-0', 'GMT+0:00', 'GMT-0:00'])(
+  'normalizes the runtime zero-offset label %s',
+  (label) => {
+    const instant = '2026-10-28T23:30:45Z';
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+      timeZoneName: 'shortOffset',
+    }).formatToParts(new Date(instant));
+    const spy = vi
+      .spyOn(Intl.DateTimeFormat.prototype, 'formatToParts')
+      .mockReturnValue(
+        parts.map((part) =>
+          part.type === 'timeZoneName' ? { ...part, value: label } : part,
+        ),
+      );
+    try {
+      expect(formatTimestamp(instant)).toBe('28 Oct 2026, 23:30:45 GMT (UTC)');
+    } finally {
+      spy.mockRestore();
+    }
+  },
+);
 
 it('uses the instant-specific daylight-saving offset, including repeated local hours', () => {
   expect(formatTimestamp('2026-11-01T05:30:00Z', 'America/New_York')).toBe(

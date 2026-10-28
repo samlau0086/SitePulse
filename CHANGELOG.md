@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Consistent UTC labels
+
+- Normalize zero-offset timestamp labels to `GMT` across ICU/runtime versions, fixing the Linux CI time-format assertion while preserving fractional offsets and daylight-saving behavior. Add regression coverage for alternative zero-offset labels.
+
 ## Unreleased — Branded HTML email
 
 - Add shared responsive HTML templates with a brand header, explicit event state, action button and fallback link, retaining plain text for authentication, recipient verification/tests and incident/recovery emails.

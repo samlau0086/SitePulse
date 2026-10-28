@@ -16,6 +16,8 @@ LOGO 使用公开 HTTPS 图片地址（推荐 PNG/JPEG、360 × 128），由邮�
 
 侧栏 **Preferences**（`/app/settings`）可选择 IANA 地区时区（如 `Asia/Shanghai`、`America/New_York`），也可点击 **Use browser time zone** 后保存。设置保存在当前用户账户，跨工作区、设备生效，其他用户不受影响；新旧账户默认 UTC。运维页面的监控、事件、心跳、安全扫描、库存、软件操作、附件和配对有效期统一按所选时区显示，包含 UTC 偏移并自动处理夏令时；悬停时间可查看原始 UTC。
 
+零偏移统一显示为 `GMT`，避免不同运行环境显示为 `GMT+0` 等形式。
+
 部署前需按备份优先流程应用新增迁移 `0015_high_living_mummy.sql`。数据库、API ISO 时间、监控调度和通知投递保持 UTC；此设置只改变界面显示，无需更新 Connector。
 
 ## 插件与主题远程管理

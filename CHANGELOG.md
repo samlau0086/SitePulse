@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Incident filter display
+
+- Replace the single-site incident status dropdown with visible All statuses / Active / Resolved filter buttons to avoid clipped native popup text. Reuse the shared selected/focus styles and 44px targets, wrap on narrow screens and reset pagination when changing filters.
+
 ## Unreleased — Consistent UTC labels
 
 - Normalize zero-offset timestamp labels to `GMT` across ICU/runtime versions, fixing the Linux CI time-format assertion while preserving fractional offsets and daylight-saving behavior. Add regression coverage for alternative zero-offset labels.

@@ -1014,3 +1014,20 @@ The initial library accepts at most 8 MiB per ZIP, 100 packages and 64 MiB of ra
 Package bytes are never exposed through a public URL. A short-lived, site-bound running-operation lease permits only the intended Connector credential to fetch the already-approved package; the API rechecks tenant actor authority, local opt-in, operation generation, scan result, size and hash. The Connector downloads through its paired HTTPS origin with TLS verification and no redirects, rechecks consent and SHA-256, uses WordPress native upgraders and deletes the temporary file. Updates remain restricted to the normal official WordPress.org flow in this milestone.
 
 Connected-site code visibility remains bounded and read-only. The Connector scans selected PHP-like and JavaScript files locally and uploads only rule identifiers and paths relative to `wp-content`, never source contents. Uploaded library packages are scanned server-side because their bytes were explicitly provided for storage. Both mechanisms are heuristic, limited and require human review; neither provides malware certification, full vulnerability discovery, integrity verification, quarantine or remediation.
+
+# 18. Malware Detection milestone
+
+Following explicit product-owner authorization and completion of the preceding security visibility and package-library work, SitePulse may add a dedicated Malware Detection capability. This is a later implementation milestone and does not change the current MVP exclusion of malware scanning.
+
+The milestone may combine two bounded detection paths:
+
+- A versioned, reviewable feature and signature ruleset for Connector-side scanning of selected PHP, JavaScript, HTML and related WordPress files. Rules may identify webshell-like execution, obfuscation, encoded payloads, suspicious remote fetch-and-execute behavior, persistence indicators and other high-confidence code-risk patterns.
+- Server-side scanning of administrator-provided ZIP files, backups or other explicitly uploaded artifacts using approved engines such as YARA-compatible rules and a malware scanner. Uploaded bytes must remain tenant-scoped and must never be fetched from arbitrary URLs or executed.
+
+Malware data sources must be documented per rule or engine, including provider or project name, version, update cadence, license, attribution, confidence and known limitations. External reputation or hash lookups may be added only through fixed HTTPS providers with bounded requests, privacy review, timeout/size limits and an operator-controlled disable switch. Public vulnerability feeds such as WPVulnerability remain advisory sources and must not be presented as malware signatures.
+
+The Connector path must continue to upload only rule IDs, rule-set version, severity, confidence, normalized relative paths and scan metadata. It must not upload source contents, credentials, absolute paths or customer database data. A compromised WordPress installation may falsify its own local result, so the product must show the trust boundary and distinguish `clean`, `matched`, `partial`, `stale`, `unavailable` and `unknown`; `clean` must never mean safe or certified.
+
+The milestone must define hard resource limits for file count, file size, archive expansion, recursion depth, CPU time, memory, findings and concurrent scans. Findings require human review and must not automatically delete, modify, quarantine or remediate customer code. Any quarantine workflow requires a separate authorization, reversible storage, restore controls, audit records and an explicit recovery procedure.
+
+Before release, acceptance must cover benign fixtures, representative obfuscated-risk fixtures, false-positive review, truncated and partial scans, stale rule-set handling, provider failure, disable-switch behavior, tenant isolation, sanitized logging, retention/deletion, backup growth and deployment rollback. Never use real malware, production customer code or credentials in tests or acceptance evidence. Documentation must state that the feature is a risk-detection aid rather than antivirus certification, complete vulnerability discovery or a guarantee that a site is uncompromised.

@@ -1468,10 +1468,23 @@ h3 {
   border-bottom: 1px solid var(--product-border);
 }
 .monitor-incident-filter {
-  display: flex;
-  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.monitor-incident-filter legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.app-shell .monitor-incident-filter .site-tabs {
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 0;
   flex-wrap: wrap;
-  gap: 12px;
+  overflow: visible;
 }
 .monitor-explanation {
   margin: 16px 0;

@@ -43,6 +43,8 @@ Slack and Telegram share the direct notification settings page and recipient act
 
 Monitoring distinguishes first failure awaiting confirmation from confirmed down. Connector `stale_data` events use Connector offline/restored wording and the shared connection icon; never render them as SSL errors or HTTP DOWN/UP. Explain independent website availability and valid-heartbeat recovery, including historical outcomes.
 
+The single-site incident history uses a labeled fieldset of All statuses / Active / Resolved filter buttons instead of a native dropdown. Reuse the shared segmented button styles with `aria-pressed`, visible keyboard focus and 44px targets. Allow wrapping on narrow screens and reset the incident page when changing filters.
+
 - Reuse `IncidentSignal` for incident outcomes: HTTP incidents show a directional icon plus DOWN until confirmed recovery, then UP. Retain lifecycle status separately. SSL uses certificate wording; reset/unknown closures must say recovery unverified. Explain that historical event states do not report current availability. Use semantic icon tiles and visible words together.
 
 - Use the shared `PageSkeleton` in route `loading.tsx` boundaries, choosing overview, directory, workspaces, detail or form geometry. Keep the app shell visible and placeholders non-interactive and `aria-hidden`, with one screen-reader loading status and `aria-busy` on the content. Reuse `--skeleton-fill` and product panel tokens; disable the pulse under `prefers-reduced-motion`.

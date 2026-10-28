@@ -238,20 +238,31 @@ export function MonitoringPanel({
         ) : (
           <>
             <h2>Incident history</h2>
-            <label className="monitor-incident-filter">
-              Show incidents{' '}
-              <select
-                value={incidentFilter}
-                onChange={(event) => {
-                  setIncidentFilter(event.target.value);
-                  setIncidentPage(0);
-                }}
-              >
-                <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="resolved">Resolved</option>
-              </select>
-            </label>
+            <fieldset className="monitor-incident-filter">
+              <legend>Show incidents</legend>
+              <div className="site-tabs">
+                {(
+                  [
+                    ['all', 'All statuses'],
+                    ['active', 'Active'],
+                    ['resolved', 'Resolved'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className="secondary"
+                    aria-pressed={incidentFilter === value}
+                    onClick={() => {
+                      setIncidentFilter(value);
+                      setIncidentPage(0);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
             <details className="monitor-explanation">
               <summary>How incidents and recovery work</summary>
               <p>

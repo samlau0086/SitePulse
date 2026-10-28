@@ -31,18 +31,16 @@ it('bounds check history and supports incident navigation and filtering', async 
             sslExpiresAt: null,
             errorCode: null,
           })),
-          incidents: [
-            {
-              id: 'incident',
-              siteId: 'a',
-              monitorType: 'uptime',
-              status: 'open',
-              severity: 'critical',
-              startedAt: '2026-10-28T00:00:00Z',
-              resolvedAt: null,
-              resolutionReason: null,
-            },
-          ],
+          incidents: Array.from({ length: 7 }, (_, index) => ({
+            id: `incident-${index}`,
+            siteId: 'a',
+            monitorType: 'uptime' as const,
+            status: 'open' as const,
+            severity: 'critical' as const,
+            startedAt: '2026-10-28T00:00:00Z',
+            resolvedAt: null,
+            resolutionReason: null,
+          })),
         }),
       ),
     );
@@ -60,12 +58,33 @@ it('bounds check history and supports incident navigation and filtering', async 
         .click(),
     );
     expect(host.textContent).toContain('Awaiting confirmed recovery');
-    const filter = host.querySelector('select')!;
-    await act(async () => {
-      filter.value = 'resolved';
-      filter.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await act(async () =>
+      Array.from(host.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Next')!
+        .click(),
+    );
+    expect(host.textContent).toContain('6–7 of 7 loaded records');
+    const filter = host.querySelector('.monitor-incident-filter')!;
+    expect(filter.querySelector('legend')?.textContent).toBe('Show incidents');
+    expect(filter.querySelector('select')).toBeNull();
+    const buttons = Array.from(filter.querySelectorAll('button'));
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'All statuses',
+      'Active',
+      'Resolved',
+    ]);
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => buttons[2]!.click());
+    expect(buttons[2]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('false');
     expect(host.textContent).toContain('No incidents match this filter');
+    await act(async () => buttons[1]!.click());
+    expect(host.textContent).toContain('Awaiting confirmed recovery');
+    expect(host.textContent).toContain('1–5 of 7 loaded records');
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[2]?.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => buttons[0]!.click());
+    expect(host.textContent).toContain('1–5 of 7 loaded records');
   } finally {
     await act(async () => root.unmount());
     host.remove();

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
   InstalledComponent,
+  SoftwareAttachment,
   SoftwareDirectory,
 } from '@sitepulse/api-contracts';
 import { SoftwareManager } from '../components/software-manager';
@@ -90,13 +91,19 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-async function mount(initial = fixture()) {
+async function mount(
+  initial = fixture(),
+  attachments: SoftwareAttachment[] = [],
+  initialAttachment?: string,
+) {
   await act(async () =>
     root.render(
       createElement(SoftwareManager, {
         organizationId: 'workspace',
         initial,
         initialSite: 'site-a',
+        attachments,
+        initialAttachment,
       }),
     ),
   );
@@ -267,4 +274,45 @@ it('keeps member management and protected or invalid actions disabled', async ()
   ).toBe(true);
   await click(labeled('activate alpha'));
   expect(request).not.toHaveBeenCalled();
+});
+it('previews a selected scanned attachment with its immutable reference and digest', async () => {
+  const attachment: SoftwareAttachment = {
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: 'plugin',
+    slug: 'uploaded-plugin',
+    name: 'Uploaded Plugin',
+    version: '1.2.3',
+    sha256: 'a'.repeat(64),
+    byteSize: 2048,
+    scan: {
+      version: 'sitepulse-static-1',
+      status: 'complete',
+      scannedFiles: 2,
+      findings: [],
+    },
+    createdAt: '2026-10-28T00:00:00Z',
+  };
+  await mount(fixture(), [attachment], attachment.id);
+  expect(host.querySelector<HTMLSelectElement>('#software-source')!.value).toBe(
+    attachment.id,
+  );
+  expect(host.textContent).toContain('Uploaded Uploaded Plugin v1.2.3');
+  await click(button('Review installation'));
+  await preview();
+  expect(request).toHaveBeenCalledWith(
+    '/organizations/workspace/software/preview',
+    {
+      siteIds: ['site-a'],
+      command: {
+        kind: 'plugin',
+        action: 'install',
+        slug: 'uploaded-plugin',
+        attachmentId: attachment.id,
+      },
+      reason: 'install uploaded-plugin from software manager',
+    },
+  );
+  expect(host.querySelector('dialog')?.textContent).toContain(
+    `SHA-256: ${attachment.sha256}`,
+  );
 });

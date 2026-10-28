@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Scanned attachment library
+
+- Add a tenant-scoped reusable plugin/theme ZIP library with verified owner/admin uploads, member metadata reads, SHA-256 deduplication, audited deletion and migration 0014. Enforce 8 MiB per package, 100 packages and 64 MiB raw data per workspace; store immutable package bytes in PostgreSQL for the initial small-library deployment and document base64/backup growth.
+- Add bounded ZIP structure validation and static PHP/JavaScript/HTML/SVG risk indicators. Block malformed archives, protected Connector packages, nested archives/executables, stale scanner results and packages with findings from installation. A clean result is explicitly not an antivirus, vulnerability or compatibility guarantee.
+- Add Attachment library UI, quota/fingerprint/scan visibility and a scanned-upload source in the existing preview/confirmation/bulk workflow. Package reads never expose bytes or arbitrary uploaded artwork; tenant members remain read-only.
+- Add Connector 0.4.0 independent uploaded-package consent, capability reporting, site-bound short-lived package delivery and WordPress-native installation. Recheck actor authority, local consent, operation generation, size and SHA-256; use paired HTTPS with no redirects and always remove temporary files. Updates remain WordPress.org-only.
+- Refresh the bounded connected-site code scan on explicit inventory synchronization and include selected JavaScript indicators while continuing to upload only rule IDs and relative paths. Preserve tenant isolation, sanitized logs, SSRF protections and existing notification/monitoring behavior.
+- Raise the example reverse-proxy request cap to 9 MB so the API's exact 8 MiB ZIP bound can pass, and add API/database/security/UI/deployment documentation plus scanner, authorization, package-lease and Connector regression coverage. Live staging WordPress upgrader acceptance remains required.
+
 ## Unreleased — Software action interactions
 
 - Fix confirmation dialogs appearing in the viewport's top-left after the CSS reset; explicitly center them while retaining small-screen margins and internal scrolling.

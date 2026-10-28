@@ -4,7 +4,7 @@ $root = sys_get_temp_dir() . '/sitepulse-management-' . bin2hex(random_bytes(6))
 mkdir($root . 'wp-admin/includes', 0700, true);
 foreach (array('plugin.php','theme.php','file.php','update.php','class-wp-upgrader.php','plugin-install.php','theme-install.php') as $name) { file_put_contents($root . 'wp-admin/includes/' . $name, '<?php'); }
 define('ABSPATH', $root);
-$options = array(); $tests = 0; $allowed = true; $user = 7; $multi = false; $active = array(); $installed = array('hello/hello.php' => array('Name' => 'Hello', 'Version' => '1.0', 'UpdateURI' => '')); $theme = 'theme-a'; $deleted = array(); $executions = 0; $fail_ack = false; $response_command = null; $dependent = false; $filesystem = 'direct'; $events = array(); $upgrader = array(); $transients = array(); $api_info = null;
+$options = array(); $tests = 0; $allowed = true; $user = 7; $multi = false; $active = array(); $installed = array('hello/hello.php' => array('Name' => 'Hello', 'Version' => '1.0', 'UpdateURI' => '')); $theme = 'theme-a'; $deleted = array(); $executions = 0; $fail_ack = false; $response_command = null; $dependent = false; $filesystem = 'direct'; $events = array(); $upgrader = array(); $transients = array(); $api_info = null; $poll_body = null; $package_bytes = 'attachment-zip-fixture'; $package_status = 200; $package_transport_error = false; $package_mutation = null; $package_request = null; $deleted_temp_files = array();
 function check($condition, $message) { $GLOBALS['tests']++; if (!$condition) { throw new RuntimeException($message); } }
 function get_option($name, $default = false) { return $GLOBALS['options'][$name] ?? $default; }
 function update_option($name, $value, ...$args) { $GLOBALS['options'][$name] = $value; return true; }
@@ -24,6 +24,18 @@ function wp_set_current_user($id) { $GLOBALS['user'] = $id; }
 function wp_next_scheduled($hook) { return $GLOBALS['events'][$hook] ?? false; }
 function wp_clear_scheduled_hook($hook) { unset($GLOBALS['events'][$hook]); }
 function wp_schedule_single_event($time, $hook) { $GLOBALS['events'][$hook] = $time; }
+function wp_parse_url($value) { return parse_url($value); }
+function wp_json_encode($value) { return json_encode($value); }
+function wp_tempnam($name) { return tempnam(sys_get_temp_dir(), 'sitepulse-'); }
+function wp_safe_remote_post($url, $args) {
+    $GLOBALS['package_request'] = array($url, $args);
+    if ($GLOBALS['package_transport_error']) { return new WP_Error(); }
+    file_put_contents($args['filename'], $GLOBALS['package_bytes']);
+    if (is_callable($GLOBALS['package_mutation'])) { ($GLOBALS['package_mutation'])(); }
+    return array('status' => $GLOBALS['package_status']);
+}
+function wp_remote_retrieve_response_code($response) { return $response['status'] ?? 0; }
+function wp_delete_file($path) { $GLOBALS['deleted_temp_files'][] = $path; if (is_file($path)) { unlink($path); } }
 class WP_Error { public function get_error_data() { return array('status' => 503); } }
 function is_wp_error($value) { return $value instanceof WP_Error; }
 function get_plugins() { return $GLOBALS['installed']; }
@@ -63,12 +75,12 @@ function set_site_transient($name, $value) { $GLOBALS['transients'][$name] = $va
 class Automatic_Upgrader_Skin {}
 class Plugin_Upgrader {
     public function __construct(...$args) {}
-    public function install($package) { $GLOBALS['upgrader'][] = array('plugin-install', $package); return true; }
+    public function install($package) { $GLOBALS['upgrader'][] = array('plugin-install', $package, is_file($package) ? file_get_contents($package) : null); return true; }
     public function upgrade($key) { $GLOBALS['upgrader'][] = array('plugin-update', $key); return true; }
 }
 class Theme_Upgrader {
     public function __construct(...$args) {}
-    public function install($package) { $GLOBALS['upgrader'][] = array('theme-install', $package); return true; }
+    public function install($package) { $GLOBALS['upgrader'][] = array('theme-install', $package, is_file($package) ? file_get_contents($package) : null); return true; }
     public function upgrade($key) { $GLOBALS['upgrader'][] = array('theme-update', $key); return true; }
 }
 class SitePulse_Connector {
@@ -77,6 +89,7 @@ class SitePulse_Connector {
     public static function queue_inventory() { $GLOBALS['queued_syncs'] = ($GLOBALS['queued_syncs'] ?? 0) + 1; }
     public static function request($origin, $path, $body, $credential) {
         if ($path === 'software-result') { $GLOBALS['reported'] = $body; return $GLOBALS['fail_ack'] ? new WP_Error() : array('success' => true); }
+        $GLOBALS['poll_body'] = $body;
         return array('command' => $GLOBALS['response_command'], 'inventoryRequestId' => $GLOBALS['inventory_request'] ?? null);
     }
 }
@@ -90,6 +103,10 @@ try {
     $multi = true; check(!SitePulse_Management::enabled(), 'No multisite'); $multi = false;
     foreach (array('../hello','hello/main.php','https://evil.example/a.zip','a%2fb','A_B') as $slug) { check(!SitePulse_Management::valid(array_merge($command,array('slug'=>$slug))), 'Reject path/URL'); }
     check(!SitePulse_Management::valid(array_merge($command,array('action'=>'shell'))), 'Reject arbitrary command');
+    $attachment = array_merge($command, array('action'=>'install','slug'=>'uploaded','attachmentId'=>'22222222-2222-4222-8222-222222222222','packageSha256'=>hash('sha256',$package_bytes)));
+    check(SitePulse_Management::valid($attachment), 'Accept bounded attachment command');
+    check(!SitePulse_Management::valid(array_merge($attachment,array('packageSha256'=>'bad'))), 'Reject invalid attachment digest');
+    check(!SitePulse_Management::valid(array_merge($command,array('attachmentId'=>$attachment['attachmentId']))), 'Require complete attachment reference');
     check(!SitePulse_Management::valid(array_merge($command,array('kind'=>'theme','action'=>'deactivate'))), 'Theme deactivation requires replacement');
     check(!SitePulse_Management::valid(array_merge($command,array('replacement'=>'theme-a'))), 'Other commands reject replacement');
     check(SitePulse_Management::package_allowed('https://downloads.wordpress.org/plugin/hello.1.0.zip','plugin','hello'), 'Official package');
@@ -118,6 +135,34 @@ try {
     $api_info = (object) array('slug'=>'wrong','version'=>'3.0','download_link'=>'https://downloads.wordpress.org/plugin/wrong.3.0.zip');
     check(SitePulse_Management::execute(array_merge($command,array('slug'=>'hello','action'=>'update'))) === 'package', 'Reject mismatched API package');
     update_option(SitePulse_Connector::OPTION, array('site_id'=>'11111111-1111-4111-8111-111111111111','origin'=>'https://pulse.example.com','credential'=>'secret'));
+    update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>true,'user_id'=>7));
+    $attachment_result = SitePulse_Management::execute($attachment); $uploaded_install = end($upgrader);
+    check($attachment_result === 'ok' && $uploaded_install[0] === 'plugin-install' && $uploaded_install[2] === $package_bytes, 'Install authenticated attachment through native upgrader');
+    check($package_request[0] === 'https://pulse.example.com/api/v1/connector/software-package' && $package_request[1]['redirection'] === 0 && $package_request[1]['sslverify'] === true && $package_request[1]['stream'] === true && $package_request[1]['limit_response_size'] === 8388609 && $package_request[1]['headers']['Authorization'] === 'Bearer secret', 'Use bounded authenticated TLS package request without redirects');
+    check(!is_file(end($deleted_temp_files)), 'Always remove downloaded attachment temp file');
+    $theme_attachment = array_merge($attachment,array('kind'=>'theme','slug'=>'uploaded-theme'));
+    check(SitePulse_Management::execute($theme_attachment) === 'ok' && end($upgrader)[0] === 'theme-install', 'Install authenticated theme attachment through native upgrader');
+    $bad_hash = array_merge($attachment,array('packageSha256'=>str_repeat('0',64)));
+    check(SitePulse_Management::execute($bad_hash) === 'package', 'Reject attachment digest mismatch');
+    $package_status = 503;
+    check(SitePulse_Management::execute($attachment) === 'package' && !is_file(end($deleted_temp_files)), 'Reject non-success package response and clean temporary file');
+    $package_status = 200; $package_transport_error = true;
+    check(SitePulse_Management::execute($attachment) === 'package' && !is_file(end($deleted_temp_files)), 'Reject package transport failure and clean temporary file');
+    $package_transport_error = false; $package_bytes = str_repeat('x', 8388609);
+    $oversized = array_merge($attachment,array('packageSha256'=>hash('sha256',$package_bytes)));
+    check(SitePulse_Management::execute($oversized) === 'package' && !is_file(end($deleted_temp_files)), 'Reject oversized package response and clean temporary file');
+    $package_bytes = 'attachment-zip-fixture';
+    $before_upgrades = count($upgrader);
+    $package_mutation = static function () { update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>false,'user_id'=>7)); };
+    check(SitePulse_Management::execute($attachment) === 'disabled' && count($upgrader) === $before_upgrades, 'Recheck package consent after download');
+    $package_mutation = null;
+    update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>true,'user_id'=>7));
+    $response_command = null; SitePulse_Management::poll();
+    check(($poll_body['packageSupport'] ?? null) === 1, 'Advertise package support only with separate consent');
+    update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>false,'user_id'=>7));
+    SitePulse_Management::poll();
+    check(!isset($poll_body['packageSupport']), 'Do not advertise package support without separate consent');
+    update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>true,'user_id'=>7));
     $response_command = $command; $fail_ack = true;
     $before = $executions; SitePulse_Management::poll();
     check($executions === $before + 1, 'One execution');
@@ -137,8 +182,11 @@ try {
     check(end($inventory_syncs) === $inventory_request && $executions === $before, 'Read-only inventory dispatch works without management opt-in');
     $_POST = array('enabled' => '1');
     try { SitePulse_Management::settings(); } catch (RuntimeException $error) { check($error->getMessage() === 'Redirect', 'Settings redirect'); }
+    check(empty(get_option(SitePulse_Management::OPTION)['packages']), 'Remote management does not imply uploaded-package consent');
     check($queued_syncs === 1, 'Enabling management immediately queues inventory');
+    $_POST = array('enabled' => '1', 'packages' => '1');
     try { SitePulse_Management::settings(); } catch (RuntimeException $error) {}
+    check(!empty(get_option(SitePulse_Management::OPTION)['packages']), 'Uploaded-package consent can be enabled separately');
     check($queued_syncs === 1, 'Saving unchanged consent does not duplicate inventory');
     echo $tests . " management checks passed (isolated WordPress doubles).\n";
 } finally {

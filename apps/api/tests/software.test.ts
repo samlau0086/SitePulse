@@ -5,6 +5,7 @@ import { migrateDatabase } from '@sitepulse/database/migrate';
 import { parseEnvironment } from '@sitepulse/config';
 import { buildApp } from '../src/app';
 import { hashCredential } from '../src/sites';
+import { pluginFixture, packageFixture } from '../src/package-fixture';
 
 const origin = 'http://localhost:3000';
 let app: Awaited<ReturnType<typeof buildApp>>;
@@ -17,6 +18,38 @@ let foreignOrg: string;
 let sites: string[];
 const credential = randomBytes(32).toString('base64url');
 const command = { kind: 'plugin', action: 'activate', slug: 'hello-dolly' };
+const libraryBase = () => `/api/v1/organizations/${organizationId}/attachments`;
+const upload = (
+  bytes = pluginFixture(),
+  cookie = owner.cookie,
+  org = organizationId,
+) =>
+  app.inject({
+    method: 'POST',
+    url: `/api/v1/organizations/${org}/attachments/plugin/sample`,
+    headers: { origin, cookie, 'content-type': 'application/zip' },
+    payload: bytes,
+  });
+const removeAttachment = (id: string, cookie = owner.cookie) =>
+  app.inject({
+    method: 'DELETE',
+    url: `${libraryBase()}/${id}`,
+    headers: { origin, cookie },
+  });
+const uploadedCommand = (id: string) => ({
+  kind: 'plugin',
+  action: 'install',
+  slug: 'sample',
+  attachmentId: id,
+});
+const packagePoll = () =>
+  call(
+    'POST',
+    '/connector/software-poll',
+    { siteId: sites[0], enabled: true, packageSupport: 1 },
+    '',
+    credential,
+  );
 function call(
   method: 'POST' | 'GET',
   path: string,
@@ -114,6 +147,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await database.db.delete(schema.sites);
+  await database.db.delete(schema.softwareAttachments);
   await database.db
     .update(schema.organizationMembers)
     .set({ role: 'owner' })
@@ -177,6 +211,268 @@ beforeEach(async () => {
       updateCounts: { plugins: 0, themes: 0, core: 0 },
     });
   }
+});
+
+it('stores scoped attachments, deduplicates and exposes metadata without source', async () => {
+  const response = await upload();
+  expect(response.statusCode, response.body).toBe(200);
+  const id = response.json().id;
+  expect((await upload()).json()).toEqual({ id, reused: true });
+  const list = await call(
+    'GET',
+    `/organizations/${organizationId}/attachments`,
+  );
+  expect(list.json().attachments).toHaveLength(1);
+  expect(list.json().attachments[0]).toMatchObject({
+    id,
+    name: 'Sample',
+    scan: { status: 'complete' },
+  });
+  expect(list.body).not.toContain('zipBase64');
+  expect(
+    (
+      await call(
+        'GET',
+        `/organizations/${organizationId}/attachments`,
+        undefined,
+        outsider.cookie,
+      )
+    ).statusCode,
+  ).toBe(404);
+  expect((await upload(pluginFixture(), reader.cookie)).statusCode).toBe(403);
+  expect(
+    (await upload(pluginFixture(), owner.cookie, foreignOrg)).statusCode,
+  ).toBe(404);
+  expect((await removeAttachment(id, outsider.cookie)).statusCode).toBe(404);
+  expect((await removeAttachment(id, reader.cookie)).statusCode).toBe(403);
+  expect((await removeAttachment(id)).statusCode).toBe(200);
+});
+it('rejects invalid archives and blocks risky attachments from installation', async () => {
+  expect((await upload(Buffer.from('invalid zip'))).statusCode).toBe(400);
+  const response = await upload(
+    pluginFixture('eval(base64_decode("fixture"));'),
+  );
+  expect(response.statusCode, response.body).toBe(200);
+  await packagePoll();
+  expect(
+    (await preview([sites[0]!], uploadedCommand(response.json().id)))
+      .statusCode,
+  ).toBe(409);
+  const list = (
+    await call('GET', `/organizations/${organizationId}/attachments`)
+  ).json();
+  expect(list.attachments[0].scan.status).toBe('blocked');
+  expect(JSON.stringify(list)).not.toContain('fixture');
+});
+it('requires current package capability and prevents foreign attachment references', async () => {
+  const id = (await upload()).json().id;
+  expect((await preview([sites[0]!], uploadedCommand(id))).statusCode).toBe(
+    409,
+  );
+  await packagePoll();
+  expect((await preview([sites[0]!], uploadedCommand(id))).statusCode).toBe(
+    200,
+  );
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({ organizationId: foreignOrg });
+  expect((await preview([sites[0]!], uploadedCommand(id))).statusCode).toBe(
+    404,
+  );
+});
+it('delivers exact bytes only to a live site-scoped lease and locks pending attachments', async () => {
+  const bytes = pluginFixture();
+  const id = (await upload(bytes)).json().id;
+  await packagePoll();
+  const response = await preview([sites[0]!], uploadedCommand(id));
+  expect(response.statusCode, response.body).toBe(200);
+  const batch = response.json().batchId;
+  expect((await removeAttachment(id)).statusCode).toBe(409);
+  expect((await confirm(batch)).statusCode).toBe(200);
+  const cmd = (await packagePoll()).json().command;
+  expect(cmd.packageSha256).toMatch(/^[a-f0-9]{64}$/);
+  const payload = { siteId: sites[0], operationId: cmd.id, token: cmd.token };
+  const result = await call(
+    'POST',
+    '/connector/software-package',
+    payload,
+    '',
+    credential,
+  );
+  expect(result.statusCode, result.body).toBe(200);
+  expect(result.rawPayload.equals(bytes)).toBe(true);
+  expect(result.headers['cache-control']).toBe('no-store');
+  expect(
+    (
+      await call(
+        'POST',
+        '/connector/software-package',
+        { ...payload, token: randomBytes(32).toString('base64url') },
+        '',
+        credential,
+      )
+    ).statusCode,
+  ).toBe(404);
+  expect(
+    (
+      await call(
+        'POST',
+        '/connector/software-package',
+        { ...payload, siteId: sites[1] },
+        '',
+        credential,
+      )
+    ).statusCode,
+  ).toBe(401);
+  await database.db
+    .update(schema.siteManagement)
+    .set({ packageSupport: false })
+    .where(eq(schema.siteManagement.siteId, sites[0]!));
+  expect(
+    (await call('POST', '/connector/software-package', payload, '', credential))
+      .statusCode,
+  ).toBe(409);
+  await database.db
+    .update(schema.siteManagement)
+    .set({ packageSupport: true })
+    .where(eq(schema.siteManagement.siteId, sites[0]!));
+  await database.db
+    .update(schema.organizationMembers)
+    .set({ role: 'member' })
+    .where(eq(schema.organizationMembers.userId, owner.id));
+  expect(
+    (await call('POST', '/connector/software-package', payload, '', credential))
+      .statusCode,
+  ).toBe(403);
+});
+it('rejects tampered bytes, old scans and expired package downloads', async () => {
+  const id = (await upload()).json().id;
+  await packagePoll();
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({
+      scan: {
+        version: 'sitepulse-static-0',
+        status: 'complete',
+        scannedFiles: 1,
+        findings: [],
+      },
+    })
+    .where(eq(schema.softwareAttachments.id, id));
+  expect((await preview([sites[0]!], uploadedCommand(id))).statusCode).toBe(
+    409,
+  );
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({
+      scan: {
+        version: 'sitepulse-static-1',
+        status: 'complete',
+        scannedFiles: 1,
+        findings: [],
+      },
+    })
+    .where(eq(schema.softwareAttachments.id, id));
+  const batch = (await preview([sites[0]!], uploadedCommand(id))).json()
+    .batchId;
+  await confirm(batch);
+  const cmd = (await packagePoll()).json().command;
+  const payload = { siteId: sites[0], operationId: cmd.id, token: cmd.token };
+  const [stored] = await database.db
+    .select()
+    .from(schema.softwareAttachments)
+    .where(eq(schema.softwareAttachments.id, id));
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({ byteSize: stored!.byteSize - 1 })
+    .where(eq(schema.softwareAttachments.id, id));
+  expect(
+    (await call('POST', '/connector/software-package', payload, '', credential))
+      .statusCode,
+  ).toBe(409);
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({ byteSize: stored!.byteSize })
+    .where(eq(schema.softwareAttachments.id, id));
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({ zipBase64: Buffer.from('tampered').toString('base64') });
+  expect(
+    (await call('POST', '/connector/software-package', payload, '', credential))
+      .statusCode,
+  ).toBe(409);
+  await database.db
+    .update(schema.softwareOperations)
+    .set({ startedAt: new Date(Date.now() - 3 * 60000) });
+  expect(
+    (await call('POST', '/connector/software-package', payload, '', credential))
+      .statusCode,
+  ).toBe(404);
+});
+it('enforces upload size, storage quota, verified identity and trusted Origin', async () => {
+  expect((await upload(Buffer.alloc(8388609))).statusCode).toBe(413);
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: `${libraryBase()}/plugin/sample`,
+        headers: {
+          cookie: owner.cookie,
+          origin: 'https://evil.example',
+          'content-type': 'application/zip',
+        },
+        payload: pluginFixture(),
+      })
+    ).statusCode,
+  ).toBe(403);
+  await database.db
+    .update(schema.users)
+    .set({ emailVerified: false })
+    .where(eq(schema.users.id, owner.id));
+  expect((await upload()).statusCode).toBe(403);
+  await database.db
+    .update(schema.users)
+    .set({ emailVerified: true })
+    .where(eq(schema.users.id, owner.id));
+  const scan = {
+    version: 'sitepulse-static-1',
+    status: 'complete' as const,
+    scannedFiles: 1,
+    findings: [],
+  };
+  await database.db.insert(schema.softwareAttachments).values(
+    Array.from({ length: 8 }, (_, index) => ({
+      organizationId,
+      actorUserId: owner.id,
+      kind: 'plugin' as const,
+      slug: 'quota',
+      name: 'Quota',
+      version: '1',
+      sha256: String(index),
+      byteSize: 8388608,
+      zipBase64: '',
+      scan,
+    })),
+  );
+  expect((await upload()).statusCode).toBe(409);
+});
+it('accepts theme packages with matching headers', async () => {
+  const result = await app.inject({
+    method: 'POST',
+    url: `${libraryBase()}/theme/sample`,
+    headers: {
+      origin,
+      cookie: owner.cookie,
+      'content-type': 'application/zip',
+    },
+    payload: packageFixture([
+      {
+        path: 'sample/style.css',
+        content: '/*\nTheme Name: Sample theme\nVersion: 1.0\n*/',
+      },
+    ]),
+  });
+  expect(result.statusCode, result.body).toBe(200);
 });
 afterAll(async () => {
   await app?.close();

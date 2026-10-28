@@ -22,7 +22,7 @@ final class SitePulse_Management {
         check_admin_referer('sitepulse_management');
         $enabled = isset($_POST['enabled']) && wp_unslash($_POST['enabled']) === '1';
         $previous = self::enabled();
-        update_option(self::OPTION, array('enabled' => $enabled, 'user_id' => get_current_user_id()), false);
+        update_option(self::OPTION, array('enabled' => $enabled, 'packages' => $enabled && isset($_POST['packages']) && wp_unslash($_POST['packages']) === '1', 'user_id' => get_current_user_id()), false);
         if ($enabled && !$previous) { SitePulse_Connector::queue_inventory(); }
         self::schedule();
         wp_safe_redirect(admin_url('options-general.php?page=sitepulse'));
@@ -62,7 +62,9 @@ final class SitePulse_Management {
                 SitePulse_Connector::sync_inventory();
                 return;
             }
-            $response = SitePulse_Connector::request($state['origin'], 'software-poll', array('siteId' => $state['site_id'], 'enabled' => (bool) self::enabled()), $state['credential']);
+            $poll = array('siteId' => $state['site_id'], 'enabled' => (bool) self::enabled());
+            if (self::packages_enabled()) { $poll['packageSupport'] = 1; }
+            $response = SitePulse_Connector::request($state['origin'], 'software-poll', $poll, $state['credential']);
             if (is_wp_error($response)) { return; }
             if (!empty($response['inventoryRequestId'])) { SitePulse_Connector::sync_inventory($response['inventoryRequestId']); return; }
             if (empty($response['command'])) { return; }
@@ -95,6 +97,9 @@ final class SitePulse_Management {
     }
     public static function valid($command) {
         if (!is_array($command)) { return false; }
+        if (isset($command['attachmentId']) || isset($command['packageSha256'])) {
+            if (($command['action'] ?? '') !== 'install' || !is_string($command['attachmentId'] ?? null) || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/Di', $command['attachmentId']) || !is_string($command['packageSha256'] ?? null) || !preg_match('/^[a-f0-9]{64}$/D', $command['packageSha256'])) { return false; }
+        }
         foreach (array('slug', 'replacement') as $key) {
             if (isset($command[$key]) && (!is_string($command[$key]) || strlen($command[$key]) > 100 || !preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $command[$key]))) { return false; }
         }
@@ -106,6 +111,31 @@ final class SitePulse_Management {
     }
     public static function package_allowed($url, $kind, $slug) {
         return is_string($url) && preg_match('~^https://downloads\.wordpress\.org/' . ($kind === 'plugin' ? 'plugin' : 'theme') . '/' . preg_quote($slug, '~') . '\.[0-9A-Za-z._-]+\.zip$~D', $url) === 1;
+    }
+    public static function packages_enabled() {
+        $setting = get_option(self::OPTION, array());
+        return self::enabled() && !empty($setting['packages']);
+    }
+    public static function install_attachment($command) {
+        if (!self::packages_enabled()) { return 'disabled'; }
+        $state = get_option(SitePulse_Connector::OPTION, array());
+        $origin = $state['origin'] ?? '';
+        $parts = wp_parse_url($origin);
+        if (!$parts || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['port']) || !empty($parts['path']) || isset($parts['query']) || isset($parts['fragment'])) { return 'package'; }
+        $temp = wp_tempnam('sitepulse-attachment.zip');
+        if (!$temp) { return 'filesystem'; }
+        try {
+            $response = wp_safe_remote_post($origin . '/api/v1/connector/software-package', array(
+                'headers' => array('Content-Type' => 'application/json', 'Origin' => $origin, 'Authorization' => 'Bearer ' . $state['credential']),
+                'body' => wp_json_encode(array('siteId' => $state['site_id'], 'operationId' => $command['id'], 'token' => $command['token'])),
+                'timeout' => 30, 'redirection' => 0, 'sslverify' => true, 'stream' => true, 'filename' => $temp, 'limit_response_size' => 8388609,
+            ));
+            if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200 || filesize($temp) > 8388608 || !hash_equals($command['packageSha256'], hash_file('sha256', $temp))) { return 'package'; }
+            $current = get_option(SitePulse_Connector::OPTION, array());
+            if (!self::packages_enabled() || ($current['credential'] ?? '') !== $state['credential'] || strtotime($command['executeBefore']) < time()) { return 'disabled'; }
+            $upgrader = $command['kind'] === 'plugin' ? new Plugin_Upgrader(new Automatic_Upgrader_Skin()) : new Theme_Upgrader(new Automatic_Upgrader_Skin());
+            return $upgrader->install($temp) === true ? 'ok' : 'wordpress_error';
+        } finally { wp_delete_file($temp); }
     }
     public static function execute($command) {
         if (!self::valid($command) || !self::enabled() || !current_user_can('manage_options') || is_multisite()) { return 'disabled'; }
@@ -162,6 +192,7 @@ final class SitePulse_Management {
             }
             $data = array('UpdateURI' => $theme->get('UpdateURI'));
         }
+        if (isset($command['attachmentId'])) { return self::install_attachment($command); }
         if ($action === 'update' && !empty($data['UpdateURI'])) { return 'unsupported'; }
         // Resolve only official API metadata; packages must match this exact slug and fixed host.
         if ($kind === 'plugin') {
@@ -207,10 +238,11 @@ final class SitePulse_Management {
     }
     public static function page() {
         $enabled = self::enabled();
-        echo '<h2>Remote plugin and theme management</h2><p>Optional: allow verified SitePulse workspace administrators to install, update, activate, deactivate and delete plugins/themes. Installation and updates use WordPress.org only. Back up this site before changes; no automatic rollback. WordPress Cron should run every minute for timely operations.</p>';
+        echo '<h2>Remote plugin and theme management</h2><p>Optional: allow verified SitePulse workspace administrators to manage plugins/themes. Updates use WordPress.org. Uploaded package installation requires separate permission below. Static scans cannot prove code is safe. Back up this site before changes; no automatic rollback. WordPress Cron should run every minute for timely operations.</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="sitepulse_management">';
         wp_nonce_field('sitepulse_management');
         echo '<label><input type="checkbox" name="enabled" value="1" ' . ($enabled ? 'checked' : '') . '> Enable remote management for this paired site</label>';
+        echo '<p><label><input type="checkbox" name="packages" value="1" ' . (self::packages_enabled() ? 'checked' : '') . '> Also allow installation of workspace ZIP attachments that passed the current static scan</label></p>';
         submit_button('Save remote management permission');
         echo '</form>';
     }

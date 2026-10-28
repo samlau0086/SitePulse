@@ -23,17 +23,18 @@ final class SitePulse_Security_Scanner {
                 $path = str_replace('\\', '/', $file->getRealPath() ?: '');
                 if (!$path || !str_starts_with($path . '/', $root . '/') || !$file->isReadable()) { $skipped++; $partial = true; continue; }
                 $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-                if (!in_array($extension, array('php', 'phtml', 'php5', 'php7', 'inc'), true)) { continue; }
+                if (!in_array($extension, array('php', 'phtml', 'php5', 'php7', 'php8', 'inc', 'js', 'mjs'), true)) { continue; }
                 $scanned++;
                 $relative = ltrim(substr($path, strlen($root)), '/');
-                if ($uploads && str_starts_with($path . '/', $uploads . '/')) { self::add($findings, 'php_in_uploads', $relative); }
+                if ($uploads && str_starts_with($path . '/', $uploads . '/') && !in_array($extension, array('js','mjs'), true)) { self::add($findings, 'php_in_uploads', $relative); }
                 if ($file->getSize() > self::MAX_BYTES) { $skipped++; $partial = true; continue; }
                 $contents = @file_get_contents($path, false, null, 0, self::MAX_BYTES);
                 if (!is_string($contents)) { $skipped++; $partial = true; continue; }
                 $flat = preg_replace('/\s+/', '', strtolower($contents));
                 if (preg_match('/eval\((base64_decode|gzinflate|gzuncompress|str_rot13)\(/', $flat)) { self::add($findings, 'encoded_eval', $relative); }
                 if (preg_match('/(gzinflate|gzuncompress)\(base64_decode\(/', $flat)) { self::add($findings, 'encoded_inflate', $relative); }
-                if (preg_match('/(shell_exec|passthru|proc_open|popen)\([^;]{0,250}(base64_decode|\$_(get|post|request|cookie))/', $flat)) { self::add($findings, 'command_execution', $relative); }
+                if (preg_match('/(shell_exec|system|exec|passthru|proc_open|popen)\([^;]{0,250}(base64_decode|\$_(get|post|request|cookie))/', $flat) || preg_match('/eval\([^;]{0,250}\$_(get|post|request|cookie)/', $flat)) { self::add($findings, 'command_execution', $relative); }
+                if (in_array($extension, array('js','mjs'), true) && preg_match('/eval\((atob|unescape)\(/', $flat)) { self::add($findings, 'encoded_eval', $relative); }
             }
         } catch (UnexpectedValueException $error) { $partial = true; }
         return array('status' => $partial ? 'partial' : 'complete', 'scannedFiles' => $scanned, 'skippedFiles' => $skipped, 'findings' => $findings);

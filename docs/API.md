@@ -54,7 +54,7 @@ Managed addresses override automatic member delivery for the same normalized ema
 
 Base path: `/api/v1`. Requests and responses use JSON. OpenAPI is generated from Fastify route metadata and request schemas at `/api/v1/docs/json`; a documentation entry page is at `/api/v1/docs/`.
 
-Every state-changing request requires `Origin` exactly equal to `APP_ORIGIN`, including command-line clients. Browser sessions use HttpOnly, SameSite=Lax cookies and Secure cookies in production. Cookies are host-only. Use browser credentials or a cookie jar; never copy session tokens into local storage. Request bodies are capped at 16 KiB. Unknown properties are rejected rather than silently stripped.
+Every state-changing request requires `Origin` exactly equal to `APP_ORIGIN`, including command-line clients. Browser sessions use HttpOnly, SameSite=Lax cookies and Secure cookies in production. Cookies are host-only. Use browser credentials or a cookie jar; never copy session tokens into local storage. JSON request bodies are capped at 16 KiB unless an endpoint documents a narrower or larger bound. Connector inventory is capped at 512 KiB and attachment ZIP uploads at 8 MiB. Unknown properties are rejected rather than silently stripped.
 
 | Method / path                                   | Body                                                                                    | Access                                              |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -110,7 +110,18 @@ Member administration, arbitrary alert-policy/channel management and billing end
 
 ## External monitoring and incidents
 
-`GET /sites/:siteId` also returns tenant-scoped `security` findings and independent inventory/local-file/public-advisory coverage. Connector 0.2.0 inventory includes installed active/inactive components, available update versions, selected environment flags, and bounded local scan metadata. The inventory endpoint has a 512 KiB body limit. No API uploads source contents or triggers WordPress commands. See [security inventory](SECURITY_INVENTORY.md).
+`GET /sites/:siteId` also returns tenant-scoped `security` findings and independent inventory/local-file/public-advisory coverage. Connector inventory includes installed active/inactive components, available update versions, selected environment flags, and bounded local scan metadata. The inventory endpoint has a 512 KiB body limit. Connected-site scanning remains local and uploads no source contents; only rule IDs and paths relative to `wp-content` are reported. Separately, a verified administrator may explicitly upload a plugin/theme ZIP to the tenant attachment library for storage, static inspection and approved installation. See [security inventory](SECURITY_INVENTORY.md) and [software management](SOFTWARE_MANAGEMENT.md).
+
+## Software attachments and package delivery
+
+| Method / path                                                     | Body/result                                                                                      | Access                                                                                      |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `GET /organizations/:organizationId/attachments`                  | Sanitized metadata, scan findings, SHA-256 and workspace quota; never ZIP bytes                  | Organization member                                                                         |
+| `POST /organizations/:organizationId/attachments/:kind/:slug`     | Raw `application/zip`, maximum 8 MiB; scan/store or return the existing same-hash package        | Verified owner/admin, trusted Origin                                                        |
+| `DELETE /organizations/:organizationId/attachments/:attachmentId` | No body; refuses a package referenced by a nonterminal software operation                        | Verified owner/admin, trusted Origin                                                        |
+| `POST /connector/software-package`                                | `{ siteId, operationId, token }`; returns the approved ZIP with `application/zip` and `no-store` | Exact current site bearer and fresh running-operation lease; local package opt-in rechecked |
+
+The upload path requires one matching WordPress root slug/header and rejects unsafe or unsupported ZIP structures before storage. Findings and stale scanner versions block installation. Package delivery is not a general download endpoint and has no browser/public URL. Preview, confirmation and dispatch recheck tenant authority, attachment kind/slug, scan result and Connector capability. The delivery endpoint additionally rechecks operation generation, actor authority, package size and SHA-256. See [software management](SOFTWARE_MANAGEMENT.md) for quotas, static-scan limits and Connector behavior.
 
 | Method / path                                           | Body           | Access/result                                                                          |
 | ------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |

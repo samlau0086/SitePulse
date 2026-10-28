@@ -31,6 +31,7 @@
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.19.0",
     "@types/pg": "^8.15.6",
+    "@types/yauzl": "^3.4.0",
     "drizzle-kit": "^0.31.8",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",

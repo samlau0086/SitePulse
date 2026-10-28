@@ -7,6 +7,7 @@ export const navigation = [
   { href: '/app', label: 'Overview', icon: 'overview' },
   { href: '/app/sites', label: 'Sites', icon: 'globe' },
   { href: '/app/software', label: 'Plugins & themes', icon: 'connection' },
+  { href: '/app/attachments', label: 'Attachments', icon: 'overview' },
   { href: '/app/incidents', label: 'Incidents', icon: 'alert' },
   { href: '/app/notifications', label: 'Notifications', icon: 'mail' },
   { href: '/app/organizations', label: 'Workspaces', icon: 'workspace' },

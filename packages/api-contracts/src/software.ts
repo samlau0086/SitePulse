@@ -16,9 +16,16 @@ export const softwareCommand = z
     ]),
     slug: softwareSlug,
     replacement: softwareSlug.optional(),
+    attachmentId: z.uuid().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.attachmentId && value.action !== 'install') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Attachments support installation only.',
+      });
+    }
     if (
       value.kind === 'theme' &&
       value.action === 'deactivate' &&
@@ -50,7 +57,11 @@ export const softwareBatchParams = z
   .object({ organizationId: z.uuid(), batchId: z.uuid() })
   .strict();
 export const softwarePoll = z
-  .object({ siteId: z.uuid(), enabled: z.boolean() })
+  .object({
+    siteId: z.uuid(),
+    enabled: z.boolean(),
+    packageSupport: z.literal(1).optional(),
+  })
   .strict();
 export const inventorySync = z.object({ siteId: z.uuid() }).strict();
 export const inventoryFailure = z
@@ -82,6 +93,46 @@ export const softwareResult = z
   })
   .strict();
 export type SoftwareCommand = z.infer<typeof softwareCommand>;
+export const attachmentUploadParams = z
+  .object({
+    organizationId: z.uuid(),
+    kind: z.enum(['plugin', 'theme']),
+    slug: softwareSlug,
+  })
+  .strict();
+export const attachmentParams = z
+  .object({ organizationId: z.uuid(), attachmentId: z.uuid() })
+  .strict();
+export const softwarePackage = z
+  .object({
+    siteId: z.uuid(),
+    operationId: z.uuid(),
+    token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  })
+  .strict();
+export type AttachmentScan = {
+  version: string;
+  status: 'complete' | 'blocked';
+  scannedFiles: number;
+  findings: Array<{ rule: string; path: string }>;
+};
+export type SoftwareAttachment = {
+  id: string;
+  kind: 'plugin' | 'theme';
+  slug: string;
+  name: string;
+  version: string;
+  sha256: string;
+  byteSize: number;
+  scan: AttachmentScan;
+  createdAt: string;
+};
+export type AttachmentDirectory = {
+  canManage: boolean;
+  attachments: SoftwareAttachment[];
+  usedBytes: number;
+  limitBytes: number;
+};
 export type SoftwareOperation = SoftwareCommand & {
   id: string;
   batchId: string;
@@ -107,6 +158,7 @@ export type SoftwareDirectory = {
     name: string;
     canonicalUrl: string;
     enabled: boolean;
+    packageSupport?: boolean;
     polledAt: string | null;
     inventoryAt: string | null;
     canSync: boolean;

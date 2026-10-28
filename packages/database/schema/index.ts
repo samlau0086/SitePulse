@@ -266,6 +266,7 @@ export const siteManagement = pgTable('site_management', {
     .references(() => sites.id, { onDelete: 'cascade' }),
   enabled: boolean('enabled').notNull().default(false),
   secretVersion: integer('secret_version').notNull(),
+  packageSupport: boolean('package_support').notNull().default(false),
   inventoryRequestId: uuid('inventory_request_id'),
   inventoryRequestedAt: timestamp('inventory_requested_at', {
     withTimezone: true,
@@ -294,6 +295,7 @@ export const softwareOperations = pgTable(
         action: 'install' | 'uninstall' | 'activate' | 'deactivate' | 'update';
         slug: string;
         replacement?: string;
+        attachmentId?: string;
       }>()
       .notNull(),
     reason: text('reason').notNull(),
@@ -329,6 +331,49 @@ export const softwareOperations = pgTable(
     check(
       'software_operations_status_valid',
       sql`${table.status} in ('preview', 'queued', 'running', 'succeeded', 'failed', 'unknown', 'cancelled', 'expired')`,
+    ),
+  ],
+);
+
+export const softwareAttachments = pgTable(
+  'software_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    actorUserId: uuid('actor_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    kind: text('kind', { enum: ['plugin', 'theme'] }).notNull(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    version: text('version').notNull(),
+    sha256: text('sha256').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    zipBase64: text('zip_base64').notNull(),
+    scan: jsonb('scan')
+      .$type<{
+        version: string;
+        status: 'complete' | 'blocked';
+        scannedFiles: number;
+        findings: Array<{ rule: string; path: string }>;
+      }>()
+      .notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('software_attachments_org_hash_unique').on(
+      table.organizationId,
+      table.sha256,
+    ),
+    check(
+      'software_attachments_kind_valid',
+      sql`${table.kind} in ('plugin','theme')`,
+    ),
+    check(
+      'software_attachments_size_valid',
+      sql`${table.byteSize} > 0 and ${table.byteSize} <= 8388608`,
     ),
   ],
 );

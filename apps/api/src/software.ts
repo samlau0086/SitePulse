@@ -12,10 +12,14 @@ import {
   softwareResult,
   inventorySync,
   inventoryFailure,
+  attachmentUploadParams,
+  attachmentParams,
+  softwarePackage,
   type SoftwareCommand,
 } from '@sitepulse/api-contracts';
 import { HttpError } from './http-error';
 import { hashCredential } from './sites';
+import { scanPackage, PACKAGE_LIMIT, SCANNER_VERSION } from './package-scanner';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 type User = { id: string; emailVerified: boolean };
@@ -105,6 +109,10 @@ export async function registerSoftwareRoutes(
     command: SoftwareCommand,
   ) {
     const { site, credential, capability, inventory } = value;
+    if (command.attachmentId && !capability?.packageSupport)
+      throw conflict(
+        'Update the Connector and allow uploaded packages locally in WordPress.',
+      );
     if (
       site.status !== 'active' ||
       !credential ||
@@ -181,6 +189,210 @@ export async function registerSoftwareRoutes(
       ),
       requestId,
     });
+  async function attachment(
+    tx: Tx,
+    organizationId: string,
+    command: SoftwareCommand,
+  ) {
+    if (!command.attachmentId) return null;
+    const [row] = await tx
+      .select()
+      .from(schema.softwareAttachments)
+      .where(
+        and(
+          eq(schema.softwareAttachments.id, command.attachmentId),
+          eq(schema.softwareAttachments.organizationId, organizationId),
+        ),
+      )
+      .for('share');
+    if (!row) throw unavailable();
+    if (
+      command.action !== 'install' ||
+      row.kind !== command.kind ||
+      row.slug !== command.slug ||
+      row.scan.status !== 'complete' ||
+      row.scan.findings.length ||
+      row.scan.version !== SCANNER_VERSION
+    )
+      throw conflict(
+        'This attachment cannot be installed. Upload a package with a current completed scan and no findings.',
+      );
+    return row;
+  }
+  app.addContentTypeParser(
+    'application/zip',
+    { parseAs: 'buffer', bodyLimit: PACKAGE_LIMIT },
+    (_request, body, done) => done(null, body),
+  );
+  app.get(
+    '/api/v1/organizations/:organizationId/attachments',
+    options(organizationParams),
+    async (request) => {
+      const user = await requireUser(request);
+      const { organizationId } = organizationParams.parse(request.params);
+      return db.transaction(async (tx) => {
+        const membership = await member(tx, organizationId, user);
+        const attachments = await tx
+          .select({
+            id: schema.softwareAttachments.id,
+            kind: schema.softwareAttachments.kind,
+            slug: schema.softwareAttachments.slug,
+            name: schema.softwareAttachments.name,
+            version: schema.softwareAttachments.version,
+            sha256: schema.softwareAttachments.sha256,
+            byteSize: schema.softwareAttachments.byteSize,
+            scan: schema.softwareAttachments.scan,
+            createdAt: schema.softwareAttachments.createdAt,
+          })
+          .from(schema.softwareAttachments)
+          .where(eq(schema.softwareAttachments.organizationId, organizationId))
+          .orderBy(desc(schema.softwareAttachments.createdAt));
+        return {
+          canManage:
+            user.emailVerified && canManageOrganization(membership.role),
+          attachments,
+          usedBytes: attachments.reduce((sum, row) => sum + row.byteSize, 0),
+          limitBytes: 64 * 1024 * 1024,
+        };
+      });
+    },
+  );
+  app.post(
+    '/api/v1/organizations/:organizationId/attachments/:kind/:slug',
+    {
+      ...options(attachmentUploadParams),
+      bodyLimit: PACKAGE_LIMIT,
+      onRequest: async (request) => {
+        const user = await requireUser(request);
+        const input = attachmentUploadParams.parse(request.params);
+        await db.transaction((tx) =>
+          member(tx, input.organizationId, user, true),
+        );
+      },
+    },
+    async (request) => {
+      const user = await requireUser(request);
+      const input = attachmentUploadParams.parse(request.params);
+      if (
+        request.headers['content-type'] !== 'application/zip' ||
+        !Buffer.isBuffer(request.body)
+      )
+        throw new HttpError(415, 'INVALID_PACKAGE', 'Upload a ZIP package.');
+      const bytes = request.body;
+      let inspected: Awaited<ReturnType<typeof scanPackage>>;
+      try {
+        inspected = await scanPackage(bytes, input.kind, input.slug);
+      } catch {
+        throw new HttpError(
+          400,
+          'INVALID_PACKAGE',
+          'Package rejected: check archive paths, limits and WordPress headers.',
+        );
+      }
+      return db.transaction(async (tx) => {
+        await member(tx, input.organizationId, user, true);
+        await tx
+          .select({ id: schema.organizations.id })
+          .from(schema.organizations)
+          .where(eq(schema.organizations.id, input.organizationId))
+          .for('update');
+        const existing = await tx
+          .select({
+            id: schema.softwareAttachments.id,
+            sha256: schema.softwareAttachments.sha256,
+            byteSize: schema.softwareAttachments.byteSize,
+          })
+          .from(schema.softwareAttachments)
+          .where(
+            eq(schema.softwareAttachments.organizationId, input.organizationId),
+          );
+        const duplicate = existing.find(
+          (row) => row.sha256 === inspected.sha256,
+        );
+        if (duplicate) return { id: duplicate.id, reused: true };
+        if (
+          existing.length >= 100 ||
+          existing.reduce((sum, row) => sum + row.byteSize, 0) + bytes.length >
+            64 * 1024 * 1024
+        )
+          throw conflict(
+            'Attachment storage limit reached (64 MiB / 100 packages). Delete unused packages first.',
+          );
+        const [row] = await tx
+          .insert(schema.softwareAttachments)
+          .values({
+            organizationId: input.organizationId,
+            actorUserId: user.id,
+            kind: input.kind,
+            slug: input.slug,
+            ...inspected,
+            byteSize: bytes.length,
+            zipBase64: bytes.toString('base64'),
+          })
+          .returning({ id: schema.softwareAttachments.id });
+        await audit(
+          tx,
+          input.organizationId,
+          user.id,
+          'attachment.uploaded',
+          {
+            attachmentId: row!.id,
+            sha256: inspected.sha256,
+            scanStatus: inspected.scan.status,
+          },
+          request.id,
+        );
+        return { id: row!.id, reused: false };
+      });
+    },
+  );
+  app.delete(
+    '/api/v1/organizations/:organizationId/attachments/:attachmentId',
+    options(attachmentParams),
+    async (request) => {
+      const user = await requireUser(request);
+      const { organizationId, attachmentId } = attachmentParams.parse(
+        request.params,
+      );
+      return db.transaction(async (tx) => {
+        await member(tx, organizationId, user, true);
+        const [row] = await tx
+          .select({ id: schema.softwareAttachments.id })
+          .from(schema.softwareAttachments)
+          .where(
+            and(
+              eq(schema.softwareAttachments.id, attachmentId),
+              eq(schema.softwareAttachments.organizationId, organizationId),
+            ),
+          )
+          .for('update');
+        if (!row) throw unavailable();
+        const [busy] = await tx
+          .select({ id: schema.softwareOperations.id })
+          .from(schema.softwareOperations)
+          .where(
+            sql`${schema.softwareOperations.command}->>'attachmentId' = ${attachmentId} and (${schema.softwareOperations.status} in ('running','unknown') or (${schema.softwareOperations.status} in ('preview','queued') and ${schema.softwareOperations.expiresAt} > now()))`,
+          )
+          .limit(1);
+        if (busy)
+          throw conflict(
+            'Cancel or resolve pending operations before deleting this attachment.',
+          );
+        await tx
+          .delete(schema.softwareAttachments)
+          .where(eq(schema.softwareAttachments.id, attachmentId));
+        await audit(
+          tx,
+          organizationId,
+          user.id,
+          'attachment.deleted',
+          { attachmentId },
+          request.id,
+        );
+        return { success: true };
+      });
+    },
+  );
   async function expire(tx: Tx, siteId: string) {
     await tx
       .update(schema.softwareOperations)
@@ -258,6 +470,7 @@ export async function registerSoftwareRoutes(
             id: site.id,
             name: site.name,
             canonicalUrl: site.canonicalUrl,
+            packageSupport: !!management?.packageSupport,
             enabled:
               site.status === 'active' &&
               !!management?.enabled &&
@@ -404,6 +617,7 @@ export async function registerSoftwareRoutes(
       return db.transaction(async (tx) => {
         await member(tx, organizationId, user, true);
         const impact = [];
+        await attachment(tx, organizationId, input.command);
         for (const siteId of [...input.siteIds].sort()) {
           const value = await context(tx, organizationId, siteId);
           const fingerprint = ready(value, input.command);
@@ -479,6 +693,7 @@ export async function registerSoftwareRoutes(
               .for('update');
             if (!op) throw unavailable();
             if (action === 'confirm') {
+              await attachment(tx, organizationId, op.command);
               if (op.actorUserId !== user.id)
                 throw new HttpError(
                   403,
@@ -584,12 +799,14 @@ export async function registerSoftwareRoutes(
           .values({
             siteId: site.id,
             enabled: input.enabled,
+            packageSupport: input.packageSupport === 1,
             secretVersion: credential.secretVersion,
           })
           .onConflictDoUpdate({
             target: schema.siteManagement.siteId,
             set: {
               enabled: input.enabled,
+              packageSupport: input.packageSupport === 1,
               secretVersion: credential.secretVersion,
               polledAt: new Date(),
               ...(generationChanged
@@ -669,6 +886,7 @@ export async function registerSoftwareRoutes(
         const value = await context(tx, site.organizationId, site.id);
         let valid = false;
         try {
+          await attachment(tx, site.organizationId, op.command);
           valid = ready(value, op.command) === op.fingerprint;
         } catch (error) {
           if (!(error instanceof HttpError)) throw error;
@@ -696,12 +914,76 @@ export async function registerSoftwareRoutes(
         return {
           command: {
             ...op.command,
+            ...(op.command.attachmentId
+              ? {
+                  packageSha256: (await attachment(
+                    tx,
+                    site.organizationId,
+                    op.command,
+                  ))!.sha256,
+                }
+              : {}),
             id: op.id,
             token,
             executeBefore: minutes(1).toISOString(),
           },
         };
       });
+    },
+  );
+  app.post(
+    '/api/v1/connector/software-package',
+    { schema: { body: json(softwarePackage), tags: ['Connector'] } },
+    async (request, reply) => {
+      const input = softwarePackage.parse(request.body);
+      const bytes = await db.transaction(async (tx) => {
+        const { site, credential } = await connector(tx, request, input.siteId);
+        const [op] = await tx
+          .select()
+          .from(schema.softwareOperations)
+          .where(
+            and(
+              eq(schema.softwareOperations.id, input.operationId),
+              eq(schema.softwareOperations.siteId, site.id),
+            ),
+          )
+          .for('share');
+        if (
+          !op ||
+          op.status !== 'running' ||
+          op.token !== input.token ||
+          op.secretVersion !== credential.secretVersion ||
+          !op.startedAt ||
+          op.startedAt < minutes(-2) ||
+          !op.command.attachmentId
+        )
+          throw unavailable();
+        const [actor] = await tx
+          .select({
+            id: schema.users.id,
+            emailVerified: schema.users.emailVerified,
+          })
+          .from(schema.users)
+          .where(eq(schema.users.id, op.actorUserId))
+          .for('share');
+        if (!actor) throw unavailable();
+        await member(tx, site.organizationId, actor, true);
+        const value = await context(tx, site.organizationId, site.id);
+        ready(value, op.command);
+        const row = (await attachment(tx, site.organizationId, op.command))!;
+        const data = Buffer.from(row.zipBase64, 'base64');
+        if (
+          data.length !== row.byteSize ||
+          data.length > PACKAGE_LIMIT ||
+          createHash('sha256').update(data).digest('hex') !== row.sha256
+        )
+          throw conflict('Package integrity check failed.');
+        return data;
+      });
+      return reply
+        .type('application/zip')
+        .header('content-disposition', 'attachment; filename="package.zip"')
+        .send(bytes);
     },
   );
   app.post(

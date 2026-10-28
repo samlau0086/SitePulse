@@ -4,8 +4,8 @@
 
 侧栏 **Plugins & themes**（`/app/software`）提供插件图标卡片、安装版本/启用/更新状态、站点选择与操作记录；站点详情也有直接入口。已验证的工作区 owner/admin 可以安装、启用、停用、卸载和更新插件/主题，并将同一个操作批量应用到最多 20 个站点。
 
-1. 通过现有备份优先的部署流程应用迁移（包含 `0012_tidy_sir_ram` 和 `0013_nappy_shinko_yamashiro`），在 WordPress 后台升级 Connector 到 **0.3.1**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
-2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。每站独立授权，不需要提供 WordPress 管理员密码。
+1. 通过现有备份优先的部署流程应用迁移（包含 `0012_tidy_sir_ram`、`0013_nappy_shinko_yamashiro` 和 `0014_dear_wrecker`），在 WordPress 后台升级 Connector 到 **0.4.0**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
+2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。若要安装附件库中的上传包，还需单独勾选 **Allow uploaded package installation**；普通远程管理不会隐式开启此权限。每站独立授权，不需要提供 WordPress 管理员密码。
 3. 为 WordPress 配置每分钟执行到期事件的系统 Cron。Connector 每分钟拉取一次指令，受实际 Cron 执行频率影响；原来每 15 分钟的 Cron 会导致最长约 15 分钟等待。等待首次管理轮询及完整 inventory，界面显示 **Management ready**。
 4. 选择站点，点击已安装卡片的 **activate / deactivate / update / uninstall**，会直接弹出该组件的确认框，不改变批量表单。检查受影响站点及警告、填写变更原因，服务端预览通过后点击 **Confirm and queue**；取消不会提交执行。安装时在批量面板输入 WordPress.org slug（例如 `wordpress-seo`）。每站结果独立显示；提交前自行完成 WordPress 文件与数据库备份。
 
@@ -15,7 +15,15 @@
 
 多组件按顺序提交：上一组件所有目标成功且收到新库存后，才重新校验并提交下一组件。**请保持当前页面打开**；关闭/离开页面或 **Stop remaining items** 仅停止尚未提交的项，不撤销已排队的任务。失败、结果不明、过期、库存变化或权限变化会停止后续提交，不会自动重试，也不是跨组件原子事务。确认后的“Queued”不是已完成，实际执行仍依赖 Connector 轮询及 WordPress Cron。本次交互优化不增加数据库迁移或 Connector 升级要求。
 
-安装和更新仅支持 WordPress.org 官方包，不支持上传 ZIP、付费源、任意 URL 或 shell。卸载前必须先停用；主题停用需要指定已安装的替代主题，活动主题及父主题受保护。Connector 自身在 WordPress 后台维护。更新可能破坏兼容性，卸载可能删除业务数据；此功能不提供 WordPress 自动备份或回滚。
+安装来源支持 WordPress.org 官方包，以及工作区 **Attachment library** 中由管理员明确上传、完成静态扫描且未命中阻止规则的 ZIP；不支持任意 URL、付费源或 shell。更新仍只使用 WordPress.org 官方更新路径，不会用上传包覆盖更新。卸载前必须先停用；主题停用需要指定已安装的替代主题，活动主题及父主题受保护。Connector 自身在 WordPress 后台维护。安装/更新可能破坏兼容性，卸载可能删除业务数据；此功能不提供 WordPress 自动备份或回滚。
+
+### 附件库与上传包扫描
+
+侧栏 **Attachment library**（`/app/attachments`）允许已验证的工作区 owner/admin 上传并复用本地插件/主题 ZIP。上传时选择类型、填写与 ZIP 顶层目录一致的 slug；每个 ZIP 最大 8 MiB，每个工作区最多 100 个包、原始 ZIP 合计 64 MiB。成员可查看元数据和扫描结果，但不能上传、删除或安装。相同工作区内相同 SHA-256 的包会复用已有记录。
+
+服务端不会解压执行上传代码，而是以受限流式方式检查 ZIP 目录、路径、文件类型、大小、CRC、WordPress header 和部分高风险执行模式；嵌套归档/可执行文件、无效结构或命中规则的包会被阻止安装。**“未命中所选模式”不代表安全、无漏洞或兼容**。包以 base64 形式存入 PostgreSQL，约增加 33% 数据体积并进入数据库备份；当前设计仅适合小规模附件库。安装时没有公开下载 URL，只有对应站点凭据和短期运行任务令牌可以领取包，Connector 会再次校验独立授权、大小和 SHA-256，并始终清理临时文件。
+
+生产反向代理必须允许略高于 8 MiB 的请求：示例 Caddy 已设为 9 MB；1Panel/Nginx 的 SitePulse server/location 设置 `client_max_body_size 9m`。API 仍执行精确的 8 MiB 限制，不要改成无限制。详见 [安全边界、API 与验收步骤](docs/SOFTWARE_MANAGEMENT.md)。
 
 预览 10 分钟有效，待执行任务一小时过期，每站同时只允许一个未完成操作。执行中断/超时显示 **unknown**，不会自动重试；必须检查 WordPress 实际状态后点击 **Reviewed in WordPress**，再决定是否发起新操作。停用管理权限、撤销成员或轮换凭据可阻止未开始任务，无法撤回已经领取执行的变更。详见 [安全边界、API 与验收步骤](docs/SOFTWARE_MANAGEMENT.md)。
 
@@ -23,17 +31,17 @@
 
 ### 库存同步与状态
 
-Connector **0.3.1** 在升级后的首次 WordPress 请求、重新启用，以及首次开启远程管理时，立即排入只读库存同步事件，不再等下一次 15 分钟心跳。实际采集仍依赖 WordPress Cron 执行；建议每分钟运行到期事件。“立即排队”不代表绕过 Cron 或即时完成。
+Connector **0.4.0** 在升级后的首次 WordPress 请求、重新启用，以及首次开启远程管理时，立即排入只读库存同步事件，不再等下一次 15 分钟心跳。实际采集仍依赖 WordPress Cron 执行；建议每分钟运行到期事件。“立即排队”不代表绕过 Cron 或即时完成。
 
 在 **Plugins & themes** 每个站点卡片点击 **Sync inventory（同步库存）** 可主动请求重新采集；**Reload results** 只重新读取 SitePulse 已保存结果。手动同步无需开启远程修改权限，但需要已验证的工作区 owner/admin；请求在 Connector 下次每分钟轮询时领取，15 分钟无结果显示超时。重复待处理请求合并，完成后每站一分钟内不可再次请求。
 
-界面独立显示尚未同步、排队等待、库存已收到、采集失败、等待超时，以及上次成功和尝试时间。失败保留旧库存，不影响独立的心跳状态；**Management ready** 不等于库存已收到。网络完全中断时，失败报告也可能无法送达：SitePulse 显示等待/超时，WordPress → Settings → SitePulse 可查看本地失败状态。修复 Cron/网络或 Connector 元数据后再次同步；本功能不放宽库存校验，也不重新强制执行六小时缓存的安全扫描。
+界面独立显示尚未同步、排队等待、库存已收到、采集失败、等待超时，以及上次成功和尝试时间。失败保留旧库存，不影响独立的心跳状态；**Management ready** 不等于库存已收到。网络完全中断时，失败报告也可能无法送达：SitePulse 显示等待/超时，WordPress → Settings → SitePulse 可查看本地失败状态。修复 Cron/网络或 Connector 元数据后再次同步；Connector 0.4.0 的明确同步请求会使六小时本地安全扫描缓存失效，从而在下一次采集中重新扫描。
 
 Deployment SSH verification: run `node scripts/test-deploy-ssh.mjs`. It uses local transport doubles; Linux also verifies deployment directory permissions. Windows requires Git Bash at `C:/Program Files/Git/bin/bash.exe`.
 
 ## WordPress security and inventory
 
-Connector 0.2.0 adds a tenant-scoped **Security** view and full installed plugin/theme inventory. It reports versions, active/update state, selected deployment flags, bounded local file-risk indicators, and matched public WordPress/PHP/plugin/theme advisories. Security scanning remains read-only: no source contents, absolute paths, credentials or plugin settings are uploaded. Connector 0.3.0 separately adds optional, explicitly authorized plugin/theme management described above; it does not add quarantine or arbitrary command execution.
+Connector 0.2.0 adds a tenant-scoped **Security** view and full installed plugin/theme inventory. Connector 0.4.0 extends the bounded local scan to selected JavaScript indicators and refreshes it on explicit inventory sync. Connected-site scanning remains read-only: no source contents, absolute paths, credentials or plugin settings are uploaded. The attachment library separately scans ZIP bytes that an administrator explicitly uploads for storage and approved installation; neither mechanism provides quarantine, full vulnerability discovery or arbitrary command execution.
 
 The local scan is deliberately bounded and cached for six hours; a match requires human review, and no match is not proof of safety. Public advisory coverage can be partial for custom/premium components, unusual version strings, provider failures or inventories reaching the collection limit. The worker uses fixed WPVulnerability HTTPS endpoints and sends component identifiers/versions from the VPS IP, never the site URL. Set validated `SECURITY_ADVISORIES_ENABLED=false` locally or as a GitHub Environment variable to pause those lookups. See [security and inventory behavior, privacy, limitations and staging acceptance](docs/SECURITY_INVENTORY.md).
 

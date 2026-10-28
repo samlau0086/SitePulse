@@ -5,6 +5,7 @@ import type {
 } from '@sitepulse/api-contracts';
 
 export type OperationPlan = {
+  attachment?: import('@sitepulse/api-contracts').SoftwareAttachment;
   command: SoftwareCommand;
   targets: {
     siteId: string;

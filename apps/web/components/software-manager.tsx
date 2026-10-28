@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   SoftwareCommand,
   SoftwareDirectory,
+  SoftwareAttachment,
 } from '@sitepulse/api-contracts';
 import { api } from '../lib/api';
 import { Icon } from './icon';
@@ -63,16 +64,24 @@ export function SoftwareManager({
   organizationId,
   initial,
   initialSite,
+  attachments = [],
+  initialAttachment,
 }: {
   organizationId: string;
   initial: SoftwareDirectory;
   initialSite?: string;
+  attachments?: SoftwareAttachment[];
+  initialAttachment?: string;
 }) {
   const [data, setData] = useState(initial);
   const [siteIds, setSiteIds] = useState<string[]>(
     initial.sites.some((site) => site.id === initialSite) ? [initialSite!] : [],
   );
-  const [kind, setKind] = useState<SoftwareCommand['kind']>('plugin');
+  const [attachmentId, setAttachmentId] = useState(initialAttachment ?? '');
+  const chosenAttachment = attachments.find((item) => item.id === attachmentId);
+  const [kind, setKind] = useState<SoftwareCommand['kind']>(
+    chosenAttachment?.kind ?? 'plugin',
+  );
   const [action, setAction] = useState<SoftwareCommand['action']>('install');
   const [slug, setSlug] = useState('');
   const [search, setSearch] = useState('');
@@ -290,7 +299,7 @@ export function SoftwareManager({
           </button>
         </div>
         <p className="muted">
-          Install Connector 0.3.1, then enable remote management in WordPress →
+          Install Connector 0.4.0, then enable remote management in WordPress →
           Settings → SitePulse. Commands are pulled every minute; your server
           Cron interval affects delivery. Sync inventory requests a fresh
           read-only collection, even with remote management disabled. Reload
@@ -398,7 +407,7 @@ export function SoftwareManager({
                     void run(async () => {
                       await api(`${base}/inventory-sync`, { siteId: site.id });
                       setMessage(
-                        `Inventory sync requested for ${site.name}. Connector 0.3.1+ will collect it on its next poll. Allow up to 15 minutes; check WordPress Cron if it times out.`,
+                        `Inventory sync requested for ${site.name}. Connector 0.4.0+ also refreshes the bounded local code scan. Collection runs on its next poll; allow up to 15 minutes and check WordPress Cron if it times out.`,
                       );
                       await refresh();
                     })
@@ -423,6 +432,7 @@ export function SoftwareManager({
                 disabled={pending}
                 onClick={() => {
                   setKind(value);
+                  setAttachmentId('');
                   setSlug('');
                   setCheckedSlugs([]);
                   setSearch('');
@@ -656,12 +666,26 @@ export function SoftwareManager({
           <form
             onSubmit={(event) => {
               event.preventDefault();
+              const plans = planOperations(
+                selected,
+                kind,
+                bulkAction,
+                checkedSlugs.length
+                  ? checkedSlugs
+                  : [chosenAttachment?.slug ?? slug.trim()],
+              );
               openPlans(
-                planOperations(
-                  selected,
-                  kind,
-                  bulkAction,
-                  checkedSlugs.length ? checkedSlugs : [slug.trim()],
+                plans.map((plan) =>
+                  chosenAttachment && !checkedSlugs.length
+                    ? {
+                        ...plan,
+                        command: {
+                          ...plan.command,
+                          attachmentId: chosenAttachment.id,
+                        },
+                        attachment: chosenAttachment,
+                      }
+                    : plan,
                 ),
               );
             }}
@@ -669,26 +693,62 @@ export function SoftwareManager({
             <fieldset disabled={pending || !data.canManage}>
               {!checkedSlugs.length && (
                 <>
-                  <label htmlFor="software-slug">
-                    {kind === 'plugin' ? 'Plugin' : 'Theme'} slug
-                    (WordPress.org)
-                  </label>
-                  <input
-                    id="software-slug"
-                    required
-                    maxLength={100}
-                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                    placeholder={
-                      kind === 'plugin'
-                        ? 'e.g. wordpress-seo'
-                        : 'e.g. twentytwentyfive'
-                    }
-                    value={slug}
+                  <label htmlFor="software-source">Installation source</label>
+                  <select
+                    id="software-source"
+                    value={attachmentId}
                     onChange={(event) => {
-                      setSlug(event.target.value);
+                      setAttachmentId(event.target.value);
                       changed();
                     }}
-                  />
+                  >
+                    <option value="">WordPress.org</option>
+                    {attachments
+                      .filter(
+                        (item) =>
+                          item.kind === kind && item.scan.status === 'complete',
+                      )
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} v{item.version} · uploaded package
+                        </option>
+                      ))}
+                  </select>
+                  <a href={`/app/attachments?workspace=${organizationId}`}>
+                    Upload or inspect packages →
+                  </a>
+                  {chosenAttachment && (
+                    <p className="notice-warning">
+                      Uploaded {chosenAttachment.name} v
+                      {chosenAttachment.version}. Each target needs Connector
+                      0.4.0+ and separate uploaded-package permission. Static
+                      scanning is not a safety guarantee.
+                    </p>
+                  )}
+                  {!chosenAttachment && (
+                    <>
+                      <label htmlFor="software-slug">
+                        {kind === 'plugin' ? 'Plugin' : 'Theme'} slug
+                        (WordPress.org)
+                      </label>
+                      <input
+                        id="software-slug"
+                        required
+                        maxLength={100}
+                        pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                        placeholder={
+                          kind === 'plugin'
+                            ? 'e.g. wordpress-seo'
+                            : 'e.g. twentytwentyfive'
+                        }
+                        value={slug}
+                        onChange={(event) => {
+                          setSlug(event.target.value);
+                          changed();
+                        }}
+                      />
+                    </>
+                  )}
                 </>
               )}
               <label htmlFor="software-action">Action</label>

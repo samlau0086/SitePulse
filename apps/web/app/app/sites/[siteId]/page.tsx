@@ -285,6 +285,14 @@ export default async function SitePage({
               : 'Not completed'}
             .
           </p>
+          {organization.role !== 'member' && (
+            <Link
+              className="button secondary"
+              href={`/app/software?workspace=${site.organizationId}&site=${siteId}`}
+            >
+              Sync inventory and refresh code scan
+            </Link>
+          )}
         </section>
       )}
       {view === 'connection' &&

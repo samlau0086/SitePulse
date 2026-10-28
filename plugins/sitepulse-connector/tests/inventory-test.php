@@ -64,8 +64,10 @@ $options[SitePulse_Connector::INVENTORY_VERSION] = '0.3.0';
 SitePulse_Connector::ensure_inventory_upgrade();
 if (!isset($events[SitePulse_Connector::INVENTORY_HOOK])) { throw new RuntimeException('Version change must queue inventory'); }
 $request_id = '00000000-0000-4000-8000-000000000002';
+$options[SitePulse_Connector::SECURITY_SCAN] = array('scannedAt' => time(), 'result' => array('status'=>'complete','scannedFiles'=>999,'skippedFiles'=>0,'findings'=>array()));
 SitePulse_Connector::sync_inventory($request_id);
 if ($sent['inventoryRequestId'] !== $request_id || $options[SitePulse_Connector::INVENTORY_STATUS]['error'] !== null) { throw new RuntimeException('Requested upload must correlate success'); }
+if ($sent['localSecurityScan']['scannedFiles'] === 999) { throw new RuntimeException('Explicit inventory sync must refresh the local security scan'); }
 $success = $options[SitePulse_Connector::INVENTORY_STATUS]['last_success'];
 $failure = array('status' => 400);
 SitePulse_Connector::sync_inventory($request_id);

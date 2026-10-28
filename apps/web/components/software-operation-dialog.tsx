@@ -105,6 +105,16 @@ export function SoftwareOperationDialog({
       <h2 id="software-dialog-title">
         <Icon name="shield" /> Confirm {plans[0]!.command.action}
       </h2>
+      {plans.map(
+        (plan) =>
+          plan.attachment && (
+            <p className="attachment-digest" key={plan.attachment.id}>
+              Uploaded package: {plan.attachment.name} v
+              {plan.attachment.version}. SHA-256: {plan.attachment.sha256}. Scan
+              complete; no patterns detected. This does not prove safety.
+            </p>
+          ),
+      )}
       <p>
         This affects only the components and sites listed below, not every
         selected site.

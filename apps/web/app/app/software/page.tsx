@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import type { SoftwareDirectory } from '@sitepulse/api-contracts';
+import type {
+  SoftwareDirectory,
+  AttachmentDirectory,
+} from '@sitepulse/api-contracts';
 import { workspaceOrganizations } from '../../../lib/workspace';
 import { serverApi } from '../../../lib/server-api';
 import { SoftwareManager } from '../../../components/software-manager';
@@ -7,7 +10,11 @@ import { SoftwareManager } from '../../../components/software-manager';
 export default async function SoftwarePage({
   searchParams,
 }: {
-  searchParams: Promise<{ workspace?: string; site?: string }>;
+  searchParams: Promise<{
+    workspace?: string;
+    site?: string;
+    attachment?: string;
+  }>;
 }) {
   const { organizations } = await workspaceOrganizations();
   const query = await searchParams;
@@ -16,6 +23,11 @@ export default async function SoftwarePage({
   const initial = selected
     ? await serverApi<SoftwareDirectory>(
         `/organizations/${selected.id}/software`,
+      )
+    : null;
+  const library = selected
+    ? await serverApi<AttachmentDirectory>(
+        `/organizations/${selected.id}/attachments`,
       )
     : null;
   return (
@@ -52,6 +64,8 @@ export default async function SoftwarePage({
             organizationId={selected.id}
             initial={initial}
             initialSite={query.site}
+            attachments={library?.attachments ?? []}
+            initialAttachment={query.attachment}
           />
         </>
       ) : (

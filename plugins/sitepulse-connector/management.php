@@ -21,7 +21,9 @@ final class SitePulse_Management {
         if (!current_user_can('manage_options') || !current_user_can('install_plugins') || !current_user_can('switch_themes')) { wp_die('Administrator access is required.', '', array('response' => 403)); }
         check_admin_referer('sitepulse_management');
         $enabled = isset($_POST['enabled']) && wp_unslash($_POST['enabled']) === '1';
+        $previous = self::enabled();
         update_option(self::OPTION, array('enabled' => $enabled, 'user_id' => get_current_user_id()), false);
+        if ($enabled && !$previous) { SitePulse_Connector::queue_inventory(); }
         self::schedule();
         wp_safe_redirect(admin_url('options-general.php?page=sitepulse'));
         exit;
@@ -57,11 +59,13 @@ final class SitePulse_Management {
                     return;
                 }
                 delete_option(self::RECEIPT);
-                SitePulse_Connector::inventory($state);
+                SitePulse_Connector::sync_inventory();
                 return;
             }
             $response = SitePulse_Connector::request($state['origin'], 'software-poll', array('siteId' => $state['site_id'], 'enabled' => (bool) self::enabled()), $state['credential']);
-            if (is_wp_error($response) || empty($response['command'])) { return; }
+            if (is_wp_error($response)) { return; }
+            if (!empty($response['inventoryRequestId'])) { SitePulse_Connector::sync_inventory($response['inventoryRequestId']); return; }
+            if (empty($response['command'])) { return; }
             $command = $response['command'];
             if (!self::valid($command)) { return; }
             $current = get_option(SitePulse_Connector::OPTION, array());
@@ -86,7 +90,7 @@ final class SitePulse_Management {
             update_option(self::RECEIPT, $receipt, false);
             $result = SitePulse_Connector::request($state['origin'], 'software-result', array('siteId' => $state['site_id'], 'operationId' => $receipt['id'], 'token' => $receipt['token'], 'code' => $code), $state['credential']);
             if (!is_wp_error($result)) { delete_option(self::RECEIPT); }
-            SitePulse_Connector::inventory($state);
+            SitePulse_Connector::sync_inventory();
         } finally { delete_option(self::LOCK); }
     }
     public static function valid($command) {

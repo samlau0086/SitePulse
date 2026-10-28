@@ -715,6 +715,20 @@ export async function registerSiteRoutes(
           .for('update');
         if (!site || site.deletedAt || !credential || credential.revokedAt)
           throw invalidCredential();
+        const [sync] = await tx
+          .select()
+          .from(schema.siteManagement)
+          .where(eq(schema.siteManagement.siteId, site.id));
+        if (
+          input.inventoryRequestId &&
+          (sync?.secretVersion !== credential.secretVersion ||
+            sync.inventoryRequestId !== input.inventoryRequestId)
+        )
+          throw new HttpError(
+            409,
+            'INVENTORY_SYNC_EXPIRED',
+            'This inventory request is no longer current.',
+          );
         const [previousInventory] = await tx
           .select()
           .from(schema.siteInventorySnapshots)
@@ -767,6 +781,36 @@ export async function registerSiteRoutes(
             },
           })
           .returning();
+        // Only the accepted inventory upload establishes success, never a heartbeat or poll.
+        const syncFields = {
+          inventoryAttemptAt: new Date(),
+          inventoryError: null,
+        };
+        await tx
+          .insert(schema.siteManagement)
+          .values({
+            siteId: site.id,
+            secretVersion: credential.secretVersion,
+            polledAt: new Date(0),
+            ...syncFields,
+          })
+          .onConflictDoUpdate({
+            target: schema.siteManagement.siteId,
+            set: {
+              ...syncFields,
+              ...(sync?.secretVersion !== credential.secretVersion
+                ? {
+                    secretVersion: credential.secretVersion,
+                    enabled: false,
+                    polledAt: new Date(0),
+                    inventoryRequestId: null,
+                    inventoryRequestedAt: null,
+                  }
+                : input.inventoryRequestId
+                  ? { inventoryRequestId: null }
+                  : {}),
+            },
+          });
         await tx
           .insert(schema.siteSecurityAssessments)
           .values({ siteId: site.id, nextCheckAt: sql`now()` })

@@ -10,6 +10,8 @@ import {
   softwarePreview,
   softwarePoll,
   softwareResult,
+  inventorySync,
+  inventoryFailure,
   type SoftwareCommand,
 } from '@sitepulse/api-contracts';
 import { HttpError } from './http-error';
@@ -265,6 +267,30 @@ export async function registerSoftwareRoutes(
               management.polledAt >= minutes(-5),
             polledAt: management?.polledAt ?? null,
             inventoryAt: inventory?.receivedAt ?? null,
+            canSync:
+              site.status === 'active' && !!credential && !credential.revokedAt,
+            inventorySync: (() => {
+              const current =
+                credential &&
+                !credential.revokedAt &&
+                management?.secretVersion === credential.secretVersion
+                  ? management
+                  : null;
+              return {
+                status: current?.inventoryRequestId
+                  ? current.inventoryRequestedAt! < minutes(-15)
+                    ? 'timed_out'
+                    : 'pending'
+                  : current?.inventoryError
+                    ? 'failed'
+                    : inventory
+                      ? 'succeeded'
+                      : 'not_received',
+                requestedAt: current?.inventoryRequestedAt ?? null,
+                attemptedAt: current?.inventoryAttemptAt ?? null,
+                error: current?.inventoryError ?? null,
+              };
+            })(),
             plugins: inventory?.installedPlugins ?? [],
             themes: inventory?.installedThemes ?? [],
           })),
@@ -288,6 +314,82 @@ export async function registerSoftwareRoutes(
             createdAt: op.createdAt,
           })),
         };
+      });
+    },
+  );
+  app.post(
+    '/api/v1/organizations/:organizationId/software/inventory-sync',
+    options(organizationParams, inventorySync),
+    async (request) => {
+      const user = await requireUser(request);
+      const { organizationId } = organizationParams.parse(request.params);
+      const input = inventorySync.parse(request.body);
+      return db.transaction(async (tx) => {
+        await member(tx, organizationId, user, true);
+        const { site, credential, capability } = await context(
+          tx,
+          organizationId,
+          input.siteId,
+        );
+        if (site.status !== 'active' || !credential || credential.revokedAt)
+          throw conflict(
+            'Pair an active Connector before requesting inventory.',
+          );
+        const current =
+          capability?.secretVersion === credential.secretVersion
+            ? capability
+            : null;
+        if (
+          current?.inventoryRequestId &&
+          current.inventoryRequestedAt! >= minutes(-15)
+        )
+          return { requestId: current.inventoryRequestId };
+        if (
+          current?.inventoryRequestedAt &&
+          current.inventoryRequestedAt >= minutes(-1)
+        )
+          throw new HttpError(
+            429,
+            'SYNC_RATE_LIMIT',
+            'Wait one minute before requesting inventory again.',
+          );
+        const requestId = randomUUID();
+        const fields = {
+          inventoryRequestId: requestId,
+          inventoryRequestedAt: new Date(),
+          inventoryError: null,
+        };
+        await tx
+          .insert(schema.siteManagement)
+          .values({
+            siteId: site.id,
+            secretVersion: credential.secretVersion,
+            polledAt: new Date(0),
+            ...fields,
+          })
+          .onConflictDoUpdate({
+            target: schema.siteManagement.siteId,
+            set: {
+              ...fields,
+              ...(current
+                ? {}
+                : {
+                    secretVersion: credential.secretVersion,
+                    enabled: false,
+                    polledAt: new Date(0),
+                    inventoryAttemptAt: null,
+                  }),
+            },
+          });
+        await audit(
+          tx,
+          organizationId,
+          user.id,
+          'inventory.sync_requested',
+          { siteId: site.id, requestId },
+          request.id,
+        );
+        return { requestId };
       });
     },
   );
@@ -471,6 +573,12 @@ export async function registerSoftwareRoutes(
       const input = softwarePoll.parse(request.body);
       return db.transaction(async (tx) => {
         const { site, credential } = await connector(tx, request, input.siteId);
+        const [previous] = await tx
+          .select()
+          .from(schema.siteManagement)
+          .where(eq(schema.siteManagement.siteId, site.id));
+        const generationChanged =
+          previous && previous.secretVersion !== credential.secretVersion;
         await tx
           .insert(schema.siteManagement)
           .values({
@@ -484,8 +592,27 @@ export async function registerSoftwareRoutes(
               enabled: input.enabled,
               secretVersion: credential.secretVersion,
               polledAt: new Date(),
+              ...(generationChanged
+                ? {
+                    inventoryRequestId: null,
+                    inventoryRequestedAt: null,
+                    inventoryAttemptAt: null,
+                    inventoryError: null,
+                  }
+                : {}),
             },
           });
+        if (
+          !generationChanged &&
+          previous?.inventoryRequestId &&
+          previous.inventoryRequestedAt! >= minutes(-15)
+        ) {
+          // Never lease a mutating command while a potentially slow read-only sync is requested.
+          return {
+            command: null,
+            inventoryRequestId: previous.inventoryRequestId,
+          };
+        }
         await expire(tx, site.id);
         const [op] = await tx
           .select()
@@ -574,6 +701,56 @@ export async function registerSoftwareRoutes(
             executeBefore: minutes(1).toISOString(),
           },
         };
+      });
+    },
+  );
+  app.post(
+    '/api/v1/connector/inventory-failure',
+    { schema: { body: json(inventoryFailure), tags: ['Connector'] } },
+    async (request) => {
+      const input = inventoryFailure.parse(request.body);
+      return db.transaction(async (tx) => {
+        const { site, credential } = await connector(tx, request, input.siteId);
+        const [current] = await tx
+          .select()
+          .from(schema.siteManagement)
+          .where(eq(schema.siteManagement.siteId, site.id));
+        if (
+          input.inventoryRequestId &&
+          (current?.secretVersion !== credential.secretVersion ||
+            current.inventoryRequestId !== input.inventoryRequestId)
+        )
+          throw unavailable();
+        const fields = {
+          inventoryAttemptAt: new Date(),
+          inventoryError: input.code,
+        };
+        await tx
+          .insert(schema.siteManagement)
+          .values({
+            siteId: site.id,
+            secretVersion: credential.secretVersion,
+            polledAt: new Date(0),
+            ...fields,
+          })
+          .onConflictDoUpdate({
+            target: schema.siteManagement.siteId,
+            set: {
+              ...fields,
+              ...(current?.secretVersion !== credential.secretVersion
+                ? {
+                    secretVersion: credential.secretVersion,
+                    enabled: false,
+                    polledAt: new Date(0),
+                    inventoryRequestId: null,
+                    inventoryRequestedAt: null,
+                  }
+                : input.inventoryRequestId
+                  ? { inventoryRequestId: null }
+                  : {}),
+            },
+          });
+        return { success: true };
       });
     },
   );

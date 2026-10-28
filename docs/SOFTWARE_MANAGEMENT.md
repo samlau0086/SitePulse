@@ -27,19 +27,28 @@ Preview expires after ten minutes; queued work expires after one hour. A claim h
 
 Inspect WordPress before clicking **Reviewed in WordPress**; this releases the batch's unknown entries without undoing changes. A later stale result cannot override reviewed/cancelled records. Cancellation affects unstarted work only. Revocation, disconnect and permission changes cannot undo already dispatched/in-flight operations. Clock synchronization is required between VPS and WordPress for the short start deadline. Run PHP jobs with a hosting execution timeout shorter than fifteen minutes; do not release an unknown operation while a PHP process may still be working.
 
-Successful result acknowledgement triggers an inventory refresh. Inventory may remain old if the refresh fails; UI shows receipt timestamps and refreshes on later heartbeat. Missing plugin icons fall back to shared SVG artwork. Official plugin icon requests go directly from the browser to fixed `ps.w.org` HTTPS paths with no referrer; WordPress.org receives the browser IP and slug, never a site credential. No arbitrary image proxy is exposed.
+Inventory collection follows software operations and normal successful heartbeats. Connector 0.3.1 also queues a due-now inventory event on upgrade (first request loading the new version), reactivation and transition to enabled management. A collection lock serializes these sources. Exceptions produce a sanitized `collection` failure and do not prevent future heartbeat scheduling. Inventory status is separate from management polling and heartbeat health; failed attempts retain the previous snapshot.
+
+**Sync inventory** requests read-only collection on the next outbound management poll, including when mutations are disabled. Verified workspace owners/admins only; server checks membership, active paired site and current credential. Pending requests are idempotent, expire for dispatch after fifteen minutes, and new requests are limited to once a minute per site. A sync and a mutation are never leased in the same response. Request IDs and credential generations prevent stale/cross-site results completing a newer request. Only an accepted inventory upload establishes success. Automatic uploads without a request ID may refresh inventory but do not complete an explicit outstanding request.
+
+**Reload results** only reads saved results. Cards show not-yet-synced, waiting, received, failed or timed-out states and last successful receipt/attempt times. No inventory is not a website outage. Generic failure codes are `network`, `rejected`, `collection`; no paths, exception messages or raw payloads are sent. If the failure report itself cannot reach SitePulse, the cloud cannot know the attempt failed: an explicit request remains pending until it succeeds or times out; consult WordPress Settings → SitePulse for local inventory status. Reports are not durably retried; the next collection updates status. Old Connectors cannot consume sync requests and will time out; upgrade to 0.3.1. Due-now scheduling still depends on traffic-driven WP-Cron or a system Cron trigger; no timing guarantee is claimed.
+
+Missing plugin icons fall back to shared SVG artwork. Official plugin icon requests go directly from the browser to fixed `ps.w.org` HTTPS paths with no referrer; WordPress.org receives the browser IP and slug, never a site credential. No arbitrary image proxy is exposed.
 
 ## API
 
-| Endpoint under `/api/v1`                                        | Authorization / purpose                                                                   |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `GET /organizations/:organizationId/software`                   | Membership; current inventory/capability and latest 100 operations; no command tokens     |
-| `POST /organizations/:organizationId/software/preview`          | Verified owner/admin; `{siteIds, command:{kind,action,slug,replacement?}, reason}`        |
-| `POST /organizations/:organizationId/software/:batchId/confirm` | Verified preview author; `{}`                                                             |
-| `POST /organizations/:organizationId/software/:batchId/cancel`  | Verified owner/admin; cancel preview/queued entries                                       |
-| `POST /organizations/:organizationId/software/:batchId/resolve` | Verified owner/admin; confirm manual review of unknown entries                            |
-| `POST /connector/software-poll`                                 | Current site bearer; `{siteId,enabled}`; one command or null                              |
-| `POST /connector/software-result`                               | Same site bearer, credential version and command token; `{siteId,operationId,token,code}` |
+| Endpoint under `/api/v1`                                        | Authorization / purpose                                                                            |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `GET /organizations/:organizationId/software`                   | Membership; current inventory/capability and latest 100 operations; no command tokens              |
+| `POST /organizations/:organizationId/software/preview`          | Verified owner/admin; `{siteIds, command:{kind,action,slug,replacement?}, reason}`                 |
+| `POST /organizations/:organizationId/software/:batchId/confirm` | Verified preview author; `{}`                                                                      |
+| `POST /organizations/:organizationId/software/:batchId/cancel`  | Verified owner/admin; cancel preview/queued entries                                                |
+| `POST /organizations/:organizationId/software/:batchId/resolve` | Verified owner/admin; confirm manual review of unknown entries                                     |
+| `POST /connector/software-poll`                                 | Current site bearer; `{siteId,enabled}`; one command or null                                       |
+| `POST /connector/software-result`                               | Same site bearer, credential version and command token; `{siteId,operationId,token,code}`          |
+| `POST /organizations/:organizationId/software/inventory-sync`   | Verified owner/admin; `{siteId}`; returns deduplicated `requestId`                                 |
+| `POST /connector/inventory`                                     | Current site bearer; inventory plus optional `inventoryRequestId`; accepted upload records success |
+| `POST /connector/inventory-failure`                             | Current site bearer; `{siteId,inventoryRequestId?,code}`; bounded failure code only                |
 
 Result codes: `ok`, `disabled`, `unsupported`, `not_installed`, `already_installed`, `active`, `dependency`, `filesystem`, `package`, `wordpress_error`, `uncertain`. No plugin error messages are returned. Consult the site's protected WordPress logs for diagnostics without sharing secrets.
 
@@ -47,11 +56,12 @@ Result codes: `ok`, `disabled`, `unsupported`, `not_installed`, `already_install
 
 Automated API tests use the dedicated disposable `_test` PostgreSQL database. PHP tests use isolated WordPress doubles and perform no real network/file mutations outside temporary fixtures. They do not replace testing actual WordPress upgraders.
 
-1. Back up two disposable single-site WordPress installations. Upgrade Connector to 0.3.0, pair, opt in, and run system Cron every minute. Wait for a complete inventory. Verify management is disabled before opt-in.
+1. Back up two disposable single-site WordPress installations. Upgrade Connector to 0.3.1, pair, opt in, and run system Cron every minute. Verify upgrade/opt-in queues immediate inventory without waiting for a heartbeat; unchanged consent/page loads must not continually queue collection. Verify management is disabled before opt-in.
 2. In Plugins & themes select both sites, install an official disposable plugin by slug, then activate, update where an update exists, deactivate and uninstall in separate confirmed batches. Check individual results and fresh inventory in WordPress; a repeated confirm must not repeat execution.
 3. On one test site install a second official theme, switch to it, deactivate by switching back, update where available and delete the inactive theme. Verify active and parent themes cannot be deleted; active plugin dependents block deactivation/uninstall. Keep the Connector protected.
 4. Check member read-only, unverified owner denied, cross-workspace IDs hidden, forged Origin denied, each site's bearer rejected for the other site, and queued work suppressed after local opt-out/member demotion/credential rotation.
 5. Interrupt acknowledgement after a harmless operation. Confirm later receipt retries do not repeat the mutation. Simulate an abandoned claim: after fifteen minutes show unknown, block new work, inspect WordPress and explicitly resolve. Never simulate failures on a production/customer site.
 6. Review desktop/mobile, empty states, missing icons, keyboard selection/focus, required reason, preview expiry/conflicts and partial failure results. Validate database migration using the normal backup-first VPS workflow.
+7. With remote mutations disabled, click Sync inventory; observe waiting then receipt. Verify Reload results does not queue collection. On a disposable fixture simulate collection/rejected-upload failures: keep old inventory and show failure while polling remains healthy. Pause Cron: show timeout after fifteen minutes, then resume and request again. Rotate credentials while pending: old IDs/results cannot complete a new request. If networking is fully offline inspect local WordPress inventory status; do not expect the failed report to reach SitePulse.
 
 Live WordPress/hosting acceptance must be completed on staging before enabling this capability for production sites. No production deployment or client-site changes are performed by local automated checks.

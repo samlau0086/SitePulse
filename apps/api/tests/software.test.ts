@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { createDatabase, eq, schema, sql } from '@sitepulse/database';
 import { migrateDatabase } from '@sitepulse/database/migrate';
@@ -181,6 +181,193 @@ beforeEach(async () => {
 afterAll(async () => {
   await app?.close();
   await database?.pool.end();
+});
+
+const syncInventory = (siteId = sites[0]!, cookie = owner.cookie) =>
+  call('POST', `${base()}/inventory-sync`, { siteId }, cookie);
+const failInventory = (
+  requestId?: string,
+  siteId = sites[0]!,
+  bearer = credential,
+) =>
+  call(
+    'POST',
+    '/connector/inventory-failure',
+    {
+      siteId,
+      code: 'collection',
+      ...(requestId ? { inventoryRequestId: requestId } : {}),
+    },
+    '',
+    bearer,
+  );
+async function uploadInventory(requestId?: string) {
+  const [snapshot] = await database.db
+    .select()
+    .from(schema.siteInventorySnapshots)
+    .where(eq(schema.siteInventorySnapshots.siteId, sites[0]!));
+  const {
+    wordpressVersion,
+    phpVersion,
+    activePlugins,
+    activeThemes,
+    installedPlugins,
+    installedThemes,
+    environment,
+    localSecurityScan,
+    updateCounts,
+  } = snapshot!;
+  return call(
+    'POST',
+    '/connector/inventory',
+    {
+      siteId: sites[0],
+      wordpressVersion,
+      phpVersion,
+      activePlugins,
+      activeThemes,
+      installedPlugins,
+      installedThemes,
+      environment,
+      localSecurityScan,
+      updateCounts,
+      ...(requestId ? { inventoryRequestId: requestId } : {}),
+    },
+    '',
+    credential,
+  );
+}
+async function syncState() {
+  const response = await call('GET', base());
+  return response
+    .json()
+    .sites.find((site: { id: string }) => site.id === sites[0]);
+}
+it('authorizes inventory sync independently of software consent and hides foreign sites', async () => {
+  expect((await syncInventory(sites[0], '')).statusCode).toBe(401);
+  expect((await syncInventory(sites[0], reader.cookie)).statusCode).toBe(403);
+  expect((await syncInventory(sites[0], outsider.cookie)).statusCode).toBe(404);
+  await database.db
+    .update(schema.users)
+    .set({ emailVerified: false })
+    .where(eq(schema.users.id, owner.id));
+  expect((await syncInventory()).statusCode).toBe(403);
+  await database.db
+    .update(schema.users)
+    .set({ emailVerified: true })
+    .where(eq(schema.users.id, owner.id));
+  const foreign = await database.db
+    .insert(schema.sites)
+    .values({
+      organizationId: foreignOrg,
+      name: 'Foreign',
+      canonicalUrl: 'https://foreign.example.com',
+      hostname: 'foreign.example.com',
+      status: 'active',
+    })
+    .returning();
+  expect((await syncInventory(foreign[0]!.id)).statusCode).toBe(404);
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: `/api/v1${base()}/inventory-sync`,
+        headers: { cookie: owner.cookie, origin: 'https://evil.example.com' },
+        payload: { siteId: sites[0] },
+      })
+    ).statusCode,
+  ).toBe(403);
+  await database.db.update(schema.siteManagement).set({ enabled: false });
+  const response = await syncInventory();
+  expect(response.statusCode).toBe(200);
+  expect((await poll(sites[0], false)).json()).toEqual({
+    command: null,
+    inventoryRequestId: response.json().requestId,
+  });
+});
+it('queues idempotently and never dispatches software together with inventory', async () => {
+  await queued();
+  const response = await syncInventory();
+  expect((await syncInventory()).json()).toEqual(response.json());
+  expect((await poll()).json()).toEqual({
+    command: null,
+    inventoryRequestId: response.json().requestId,
+  });
+  expect((await syncState()).inventorySync.status).toBe('pending');
+  expect((await uploadInventory(response.json().requestId)).statusCode).toBe(
+    200,
+  );
+  expect((await syncState()).inventorySync.status).toBe('succeeded');
+  expect((await poll()).json().command.slug).toBe('hello-dolly');
+  expect((await syncInventory()).statusCode).toBe(429);
+});
+it('queues before the first Connector poll without falsely reporting management readiness', async () => {
+  await database.db
+    .delete(schema.siteManagement)
+    .where(eq(schema.siteManagement.siteId, sites[0]!));
+  const response = await syncInventory();
+  expect(response.statusCode).toBe(200);
+  const site = await syncState();
+  expect(site.enabled).toBe(false);
+  expect(site.polledAt).toBe('1970-01-01T00:00:00.000Z');
+  expect(site.inventorySync.status).toBe('pending');
+  expect((await poll(sites[0], false)).json()).toEqual({
+    command: null,
+    inventoryRequestId: response.json().requestId,
+  });
+});
+it('records safe inventory failures separately from healthy polling and retains last success', async () => {
+  const before = (await syncState()).inventoryAt;
+  const id = (await syncInventory()).json().requestId;
+  expect((await failInventory(id)).statusCode).toBe(200);
+  await poll();
+  const site = await syncState();
+  expect(site.enabled).toBe(true);
+  expect(site.inventorySync.status).toBe('failed');
+  expect(site.inventorySync.error).toBe('collection');
+  expect(site.inventoryAt).toBe(before);
+  expect(site.plugins).toHaveLength(1);
+  expect((await uploadInventory()).statusCode).toBe(200);
+  expect((await syncState()).inventorySync.status).toBe('succeeded');
+  expect((await failInventory(id)).statusCode).toBe(404);
+});
+it('distinguishes no inventory from a timed out request and permits a new bounded retry', async () => {
+  await database.db
+    .delete(schema.siteInventorySnapshots)
+    .where(eq(schema.siteInventorySnapshots.siteId, sites[0]!));
+  expect((await syncState()).inventorySync.status).toBe('not_received');
+  const first = (await syncInventory()).json().requestId;
+  await database.db
+    .update(schema.siteManagement)
+    .set({ inventoryRequestedAt: new Date(Date.now() - 16 * 60_000) });
+  expect((await syncState()).inventorySync.status).toBe('timed_out');
+  expect((await poll()).json()).toEqual({ command: null });
+  const second = (await syncInventory()).json().requestId;
+  expect(second).not.toBe(first);
+  expect((await failInventory(first)).statusCode).toBe(404);
+  expect((await syncState()).inventorySync.status).toBe('pending');
+});
+it('fences inventory requests and failure reports by site and credential generation', async () => {
+  const id = (await syncInventory()).json().requestId;
+  expect((await failInventory(id, sites[1])).statusCode).toBe(401);
+  expect((await failInventory(randomUUID())).statusCode).toBe(404);
+  expect((await uploadInventory(randomUUID())).statusCode).toBe(409);
+  await database.db
+    .update(schema.siteCredentials)
+    .set({ secretVersion: 2 })
+    .where(eq(schema.siteCredentials.siteId, sites[0]!));
+  expect((await failInventory(id)).statusCode).toBe(404);
+  expect((await uploadInventory(id)).statusCode).toBe(409);
+  expect((await poll()).json()).toEqual({ command: null });
+  expect((await syncState()).inventorySync.requestedAt).toBeNull();
+  const next = await syncInventory();
+  expect(next.statusCode).toBe(200);
+  await database.db
+    .update(schema.siteCredentials)
+    .set({ revokedAt: new Date() })
+    .where(eq(schema.siteCredentials.siteId, sites[0]!));
+  expect((await failInventory(next.json().requestId)).statusCode).toBe(401);
+  expect((await syncInventory()).statusCode).toBe(409);
 });
 
 it('requires a session, verified admin, trusted Origin, and hides other tenants', async () => {

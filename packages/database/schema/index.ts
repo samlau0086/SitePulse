@@ -266,6 +266,12 @@ export const siteManagement = pgTable('site_management', {
     .references(() => sites.id, { onDelete: 'cascade' }),
   enabled: boolean('enabled').notNull().default(false),
   secretVersion: integer('secret_version').notNull(),
+  inventoryRequestId: uuid('inventory_request_id'),
+  inventoryRequestedAt: timestamp('inventory_requested_at', {
+    withTimezone: true,
+  }),
+  inventoryAttemptAt: timestamp('inventory_attempt_at', { withTimezone: true }),
+  inventoryError: text('inventory_error'),
   polledAt: timestamp('polled_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

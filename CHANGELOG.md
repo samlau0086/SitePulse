@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Inventory synchronization
+
+- Connector 0.3.1 queues inventory immediately after upgrade/reactivation and enabling management; inventory exceptions no longer interrupt heartbeat scheduling. Serialize collection and retain sanitized local failures separately from heartbeat health.
+- Add verified tenant-admin read-only inventory sync requests, per-site deduplication/cooldown, credential-generation fencing and fifteen-minute timeout visibility (migration 0013). Connector pulls sync requests even when remote mutations are disabled; inventory work and software execution are never leased together.
+- Add per-site Sync inventory actions, distinguish Reload results from collection, and show never-synced, waiting, accepted, failed and timed-out states with retained last-success data. Only an accepted upload establishes inventory success.
+
 ## Unreleased — WordPress software management
 
 - Add a direct Plugins & themes workspace destination with site selection, official plugin icons with fallback, installed versions, active/update states, preview confirmation and per-site results.

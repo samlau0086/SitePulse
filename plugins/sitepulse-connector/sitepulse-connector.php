@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SitePulse Connector
  * Description: Reports inventory and heartbeats, with optional plugin and theme management.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * License: GPL-2.0-or-later
@@ -16,6 +16,11 @@ final class SitePulse_Connector {
     const HOOK = 'sitepulse_heartbeat';
     const LOCK = 'sitepulse_heartbeat_lock';
     const SECURITY_SCAN = 'sitepulse_security_scan';
+    const VERSION = '0.3.1';
+    const INVENTORY_HOOK = 'sitepulse_inventory_sync';
+    const INVENTORY_STATUS = 'sitepulse_inventory_status';
+    const INVENTORY_LOCK = 'sitepulse_inventory_lock';
+    const INVENTORY_VERSION = 'sitepulse_inventory_version';
 
     public static function boot() {
         if (is_multisite()) { return; }
@@ -23,15 +28,19 @@ final class SitePulse_Connector {
         add_action('admin_init', array(__CLASS__, 'settings'));
         add_action('admin_post_sitepulse_connect', array(__CLASS__, 'admin_action'));
         add_action(self::HOOK, array(__CLASS__, 'heartbeat'));
+        add_action('init', array(__CLASS__, 'ensure_inventory_upgrade'));
+        add_action(self::INVENTORY_HOOK, array(__CLASS__, 'sync_inventory'));
         SitePulse_Management::boot();
     }
     public static function activate() {
         if (is_multisite()) { wp_die('SitePulse currently supports single-site WordPress only.'); }
         if (get_option(self::OPTION) && !wp_next_scheduled(self::HOOK)) { wp_schedule_single_event(time() + 60, self::HOOK); }
+        self::queue_inventory();
     }
     public static function deactivate() {
         wp_clear_scheduled_hook(self::HOOK);
         wp_clear_scheduled_hook(SitePulse_Management::HOOK);
+        wp_clear_scheduled_hook(self::INVENTORY_HOOK);
         // Preserve the credential so an administrator can revoke it after reactivation.
     }
     public static function settings() {
@@ -48,7 +57,7 @@ final class SitePulse_Connector {
         if (!$parts || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || !empty($parts['path']) || isset($parts['port'])) {
             return new WP_Error('sitepulse_url', 'Use an HTTPS SitePulse origin without a path or port.');
         }
-        if (!in_array($path, array('pair', 'heartbeat', 'inventory', 'disconnect', 'software-poll', 'software-result'), true)) { return new WP_Error('sitepulse_path', 'Invalid endpoint.'); }
+        if (!in_array($path, array('pair', 'heartbeat', 'inventory', 'inventory-failure', 'disconnect', 'software-poll', 'software-result'), true)) { return new WP_Error('sitepulse_path', 'Invalid endpoint.'); }
         $headers = array('Content-Type' => 'application/json', 'Origin' => $origin);
         if ($credential) { $headers['Authorization'] = 'Bearer ' . $credential; }
         $response = wp_safe_remote_post($origin . '/api/v1/connector/' . $path, array('headers' => $headers, 'body' => wp_json_encode($body), 'timeout' => 15, 'redirection' => 0, 'sslverify' => true, 'limit_response_size' => 8192));
@@ -98,6 +107,8 @@ final class SitePulse_Connector {
             delete_option(self::OPTION);
             delete_option(SitePulse_Management::OPTION);
             delete_option(SitePulse_Management::RECEIPT);
+            delete_option(self::INVENTORY_STATUS);
+            delete_option(self::INVENTORY_VERSION);
         }
         self::deactivate();
         return true;
@@ -110,8 +121,8 @@ final class SitePulse_Connector {
             if (!$state) { return; }
             $state['sequence']++;
             update_option(self::OPTION, $state, false); // Reserve before sending, including on timeouts.
-            $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => '0.3.0'), $state['credential']);
-            if (!is_wp_error($result) && function_exists('get_bloginfo')) { self::inventory($state); }
+            $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => self::VERSION), $state['credential']);
+            if (!is_wp_error($result) && function_exists('get_bloginfo')) { self::sync_inventory(); }
             // Do not resurrect a connection removed while the request was in flight.
             $current = get_option(self::OPTION, array());
             if (!$current || $current['credential'] !== $state['credential']) { return; }
@@ -123,7 +134,49 @@ final class SitePulse_Connector {
             wp_schedule_single_event(time() + $delay, self::HOOK);
         } finally { delete_option(self::LOCK); }
     }
-    public static function inventory($state) {
+    public static function queue_inventory() {
+        if (!get_option(self::OPTION)) { return false; }
+        if (wp_next_scheduled(self::INVENTORY_HOOK)) { return true; }
+        return wp_schedule_single_event(time(), self::INVENTORY_HOOK) === true;
+    }
+    public static function ensure_inventory_upgrade() {
+        $state = get_option(self::OPTION, array());
+        if (!$state) { return; }
+        $identity = self::VERSION . ':' . hash('sha256', $state['credential']);
+        if (get_option(self::INVENTORY_VERSION) !== $identity && self::queue_inventory()) {
+            update_option(self::INVENTORY_VERSION, $identity, false);
+        }
+        SitePulse_Management::schedule();
+    }
+    public static function sync_inventory($request_id = '') {
+        if ($request_id !== '' && (!is_string($request_id) || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/Di', $request_id))) { return; }
+        $lock = get_option(self::INVENTORY_LOCK);
+        if ($lock && (int) $lock < time() - 900) { delete_option(self::INVENTORY_LOCK); }
+        if (!add_option(self::INVENTORY_LOCK, time(), '', false)) { return; }
+        try {
+            $state = get_option(self::OPTION, array());
+            if (!$state) { return; }
+            $previous = get_option(self::INVENTORY_STATUS, array());
+            $code = null;
+            try {
+                $result = self::inventory($state, $request_id);
+                if (is_wp_error($result)) { $code = $result->get_error_code() === 'sitepulse_network' ? 'network' : 'rejected'; }
+            } catch (Throwable $error) {
+                // Exception messages may contain sensitive plugin paths or data; never send them.
+                $code = 'collection';
+            }
+            $current = get_option(self::OPTION, array());
+            if (!$current || $current['credential'] !== $state['credential']) { return; }
+            update_option(self::INVENTORY_STATUS, array('attempted_at' => time(), 'last_success' => $code ? ($previous['last_success'] ?? 0) : time(), 'error' => $code), false);
+            if ($code) {
+                $body = array('siteId' => $state['site_id'], 'code' => $code);
+                if ($request_id) { $body['inventoryRequestId'] = $request_id; }
+                try { self::request($state['origin'], 'inventory-failure', $body, $state['credential']); }
+                catch (Throwable $error) { /* A reporting failure must not interrupt heartbeat scheduling. */ }
+            }
+        } finally { delete_option(self::INVENTORY_LOCK); }
+    }
+    public static function inventory($state, $request_id = '') {
         if (function_exists('plugin_basename') && defined('ABSPATH')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; }
         if (!function_exists('get_core_updates')) { require_once ABSPATH . 'wp-admin/includes/update.php'; }
         $active_files = array_flip((array) get_option('active_plugins', array()));
@@ -162,7 +215,9 @@ final class SitePulse_Connector {
             $cached_scan = array('scannedAt' => time(), 'result' => $scan);
             update_option(self::SECURITY_SCAN, $cached_scan, false);
         } else { $scan = $cached_scan['result']; }
-        self::request($state['origin'], 'inventory', array('siteId' => $state['site_id'], 'wordpressVersion' => get_bloginfo('version'), 'phpVersion' => PHP_VERSION, 'activePlugins' => $plugins, 'activeThemes' => $themes, 'installedPlugins' => $installed_plugins, 'installedThemes' => $installed_themes, 'environment' => $environment, 'localSecurityScan' => $scan, 'updateCounts' => array('plugins' => is_object($updates) && !empty($updates->response) ? count($updates->response) : 0, 'themes' => is_object($themeUpdates) && !empty($themeUpdates->response) ? count($themeUpdates->response) : 0, 'core' => is_array($coreUpdates) ? count($coreUpdates) : 0)), $state['credential']);
+        $body = array('siteId' => $state['site_id'], 'wordpressVersion' => get_bloginfo('version'), 'phpVersion' => PHP_VERSION, 'activePlugins' => $plugins, 'activeThemes' => $themes, 'installedPlugins' => $installed_plugins, 'installedThemes' => $installed_themes, 'environment' => $environment, 'localSecurityScan' => $scan, 'updateCounts' => array('plugins' => is_object($updates) && !empty($updates->response) ? count($updates->response) : 0, 'themes' => is_object($themeUpdates) && !empty($themeUpdates->response) ? count($themeUpdates->response) : 0, 'core' => is_array($coreUpdates) ? count($coreUpdates) : 0));
+        if ($request_id) { $body['inventoryRequestId'] = $request_id; }
+        return self::request($state['origin'], 'inventory', $body, $state['credential']);
     }
     private static function acquire_lock() {
         $lock = get_option(self::LOCK);
@@ -175,6 +230,9 @@ final class SitePulse_Connector {
         echo '<div class="wrap"><h1>SitePulse</h1><p>Pairs this WordPress installation and sends a heartbeat every 15 minutes. No customer content or administrator passwords are collected.</p>';
         if ($state) {
             echo '<p>Site: ' . esc_html($state['site_id']) . '</p><p>Last successful heartbeat: ' . esc_html($state['last_success'] ? gmdate('Y-m-d H:i:s', $state['last_success']) . ' UTC' : 'Not received') . '</p>';
+            $inventory = get_option(self::INVENTORY_STATUS, array());
+            echo '<p>Last successful inventory: ' . esc_html(!empty($inventory['last_success']) ? gmdate('Y-m-d H:i:s', $inventory['last_success']) . ' UTC' : 'Not yet synced') . '</p>';
+            if (!empty($inventory['error'])) { echo '<p>Inventory sync failed (' . esc_html($inventory['error']) . '). Heartbeat status is independent. Retry using Sync inventory in SitePulse. If offline, this local failure may not reach SitePulse.</p>'; }
         }
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="sitepulse_connect">';
         wp_nonce_field('sitepulse_connect');

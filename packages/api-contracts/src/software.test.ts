@@ -1,6 +1,37 @@
 import { expect, it } from 'vitest';
-import { softwareCommand, softwarePreview, softwareResult } from './software';
+import {
+  softwareCommand,
+  softwarePreview,
+  softwareResult,
+  inventorySync,
+  inventoryFailure,
+} from './software';
 import { randomUUID } from 'node:crypto';
+
+it('bounds inventory sync requests and rejects raw failure diagnostics', () => {
+  const siteId = randomUUID();
+  expect(inventorySync.safeParse({ siteId }).success).toBe(true);
+  expect(
+    inventorySync.safeParse({ siteId, userId: randomUUID() }).success,
+  ).toBe(false);
+  expect(
+    inventoryFailure.safeParse({
+      siteId,
+      code: 'collection',
+      inventoryRequestId: randomUUID(),
+    }).success,
+  ).toBe(true);
+  expect(inventoryFailure.safeParse({ siteId, code: 'ok' }).success).toBe(
+    false,
+  );
+  expect(
+    inventoryFailure.safeParse({
+      siteId,
+      code: 'collection',
+      message: '/secret/path',
+    }).success,
+  ).toBe(false);
+});
 
 it('allows only bounded official slugs and explicit supported commands', () => {
   for (const slug of [

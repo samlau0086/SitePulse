@@ -14,6 +14,11 @@ function is_multisite() { return $GLOBALS['multi']; }
 function get_user_by(...$args) { return (object) array('ID' => 7); }
 function user_can(...$args) { return $GLOBALS['allowed']; }
 function current_user_can(...$args) { return $GLOBALS['allowed']; }
+function check_admin_referer($action) { if ($action !== 'sitepulse_management') { throw new RuntimeException('Bad nonce'); } }
+function wp_unslash($value) { return $value; }
+function wp_die(...$args) { throw new RuntimeException('Denied'); }
+function wp_safe_redirect($url) { throw new RuntimeException('Redirect'); }
+function admin_url($path) { return $path; }
 function get_current_user_id() { return $GLOBALS['user']; }
 function wp_set_current_user($id) { $GLOBALS['user'] = $id; }
 function wp_next_scheduled($hook) { return $GLOBALS['events'][$hook] ?? false; }
@@ -68,10 +73,11 @@ class Theme_Upgrader {
 }
 class SitePulse_Connector {
     const OPTION = 'connection';
-    public static function inventory($state) {}
+    public static function sync_inventory($request_id = '') { $GLOBALS['inventory_syncs'][] = $request_id; }
+    public static function queue_inventory() { $GLOBALS['queued_syncs'] = ($GLOBALS['queued_syncs'] ?? 0) + 1; }
     public static function request($origin, $path, $body, $credential) {
         if ($path === 'software-result') { $GLOBALS['reported'] = $body; return $GLOBALS['fail_ack'] ? new WP_Error() : array('success' => true); }
-        return array('command' => $GLOBALS['response_command']);
+        return array('command' => $GLOBALS['response_command'], 'inventoryRequestId' => $GLOBALS['inventory_request'] ?? null);
     }
 }
 require dirname(__DIR__) . '/management.php';
@@ -124,6 +130,16 @@ try {
     SitePulse_Management::poll();
     check($GLOBALS['reported']['code'] === 'uncertain' && $executions === $before + 1, 'Crashed mutation reports unknown, not retry');
     check(isset($events[SitePulse_Management::HOOK]), 'Reschedule before execution');
+    $inventory_request = '22222222-2222-4222-8222-222222222222';
+    update_option(SitePulse_Management::OPTION, array('enabled' => false, 'user_id' => 7));
+    $before = $executions;
+    SitePulse_Management::poll();
+    check(end($inventory_syncs) === $inventory_request && $executions === $before, 'Read-only inventory dispatch works without management opt-in');
+    $_POST = array('enabled' => '1');
+    try { SitePulse_Management::settings(); } catch (RuntimeException $error) { check($error->getMessage() === 'Redirect', 'Settings redirect'); }
+    check($queued_syncs === 1, 'Enabling management immediately queues inventory');
+    try { SitePulse_Management::settings(); } catch (RuntimeException $error) {}
+    check($queued_syncs === 1, 'Saving unchanged consent does not duplicate inventory');
     echo $tests . " management checks passed (isolated WordPress doubles).\n";
 } finally {
     foreach (glob($root . 'wp-admin/includes/*') as $path) { unlink($path); }

@@ -90,7 +90,9 @@ export function SoftwareManager({
         })
         .catch(() => {
           if (active)
-            setError('Unable to refresh results. Use Refresh to try again.');
+            setError(
+              'Unable to reload results. Use Reload results to try again.',
+            );
         });
     }, 10_000);
     return () => {
@@ -181,51 +183,127 @@ export function SoftwareManager({
             disabled={pending}
             onClick={() => void run(refresh)}
           >
-            <Icon name="refresh" /> Refresh
+            <Icon name="refresh" /> Reload results
           </button>
         </div>
         <p className="muted">
-          Install Connector 0.3.0, then enable remote management in WordPress →
+          Install Connector 0.3.1, then enable remote management in WordPress →
           Settings → SitePulse. Commands are pulled every minute; your server
-          Cron interval affects delivery.
+          Cron interval affects delivery. Sync inventory requests a fresh
+          read-only collection, even with remote management disabled. Reload
+          results only reads saved data. No inventory yet does not mean your
+          site is down.
         </p>
         <div className="software-site-grid">
           {data.sites.map((site) => (
-            <label
-              className={`software-site ${siteIds.includes(site.id) ? 'selected' : ''}`}
-              key={site.id}
-            >
-              <input
-                type="checkbox"
-                checked={siteIds.includes(site.id)}
-                disabled={
-                  pending ||
-                  (!siteIds.includes(site.id) && siteIds.length >= 20)
-                }
-                onChange={(event) => {
-                  setSiteIds(
-                    event.target.checked
-                      ? [...siteIds, site.id]
-                      : siteIds.filter((id) => id !== site.id),
-                  );
-                  changed();
-                }}
-              />
-              <span>
-                <strong>{site.name}</strong>
-                <small>{new URL(site.canonicalUrl).hostname}</small>
-                <small>Inventory: {formatTimestamp(site.inventoryAt)}</small>
-                <small>Management poll: {formatTimestamp(site.polledAt)}</small>
-                <span
-                  className={`status-badge ${site.enabled ? 'success' : 'warning'}`}
-                >
-                  <Icon name={site.enabled ? 'check' : 'clock'} />
-                  {site.enabled
-                    ? 'Management ready'
-                    : 'Enable / refresh Connector'}
+            <article className="software-site-card" key={site.id}>
+              <label
+                className={`software-site ${siteIds.includes(site.id) ? 'selected' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={siteIds.includes(site.id)}
+                  disabled={
+                    pending ||
+                    (!siteIds.includes(site.id) && siteIds.length >= 20)
+                  }
+                  onChange={(event) => {
+                    setSiteIds(
+                      event.target.checked
+                        ? [...siteIds, site.id]
+                        : siteIds.filter((id) => id !== site.id),
+                    );
+                    changed();
+                  }}
+                />
+                <span>
+                  <strong>{site.name}</strong>
+                  <small>{new URL(site.canonicalUrl).hostname}</small>
+                  <small>
+                    Last inventory received: {formatTimestamp(site.inventoryAt)}
+                  </small>
+                  <small>
+                    Management poll:{' '}
+                    {site.polledAt && new Date(site.polledAt).getTime() > 0
+                      ? formatTimestamp(site.polledAt)
+                      : 'Not received'}
+                  </small>
+                  <span
+                    className={`status-badge ${site.enabled ? 'status-healthy' : 'status-warning'}`}
+                  >
+                    <Icon name={site.enabled ? 'check' : 'clock'} />
+                    {site.enabled
+                      ? 'Management ready'
+                      : 'Enable / refresh Connector'}
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              <div className="software-sync">
+                <span
+                  className={`status-badge ${site.inventorySync.status === 'succeeded' ? 'status-healthy' : site.inventorySync.status === 'failed' ? 'status-critical' : 'status-warning'}`}
+                >
+                  <Icon
+                    name={
+                      site.inventorySync.status === 'succeeded'
+                        ? 'check'
+                        : 'clock'
+                    }
+                  />
+                  {site.inventorySync.status === 'not_received' &&
+                    'Not yet synced'}
+                  {site.inventorySync.status === 'pending' &&
+                    'Sync queued · awaiting Connector'}
+                  {site.inventorySync.status === 'timed_out' &&
+                    'Sync timed out · check WordPress Cron'}
+                  {site.inventorySync.status === 'failed' &&
+                    'Inventory sync failed'}
+                  {site.inventorySync.status === 'succeeded' &&
+                    'Inventory received'}
+                </span>
+                {site.inventorySync.status === 'failed' && (
+                  <small role="alert">
+                    {site.inventorySync.error === 'collection'
+                      ? 'WordPress could not collect inventory.'
+                      : site.inventorySync.error === 'network'
+                        ? 'Connector could not reach SitePulse.'
+                        : 'SitePulse rejected the inventory. Check the Connector and its reported component metadata.'}{' '}
+                    Last successful inventory is retained.
+                  </small>
+                )}
+                {site.inventorySync.requestedAt && (
+                  <small>
+                    Requested: {formatTimestamp(site.inventorySync.requestedAt)}
+                  </small>
+                )}
+                {site.inventorySync.attemptedAt && (
+                  <small>
+                    Last attempt:{' '}
+                    {formatTimestamp(site.inventorySync.attemptedAt)}
+                  </small>
+                )}
+                <button
+                  className="secondary"
+                  disabled={
+                    pending ||
+                    !data.canManage ||
+                    !site.canSync ||
+                    site.inventorySync.status === 'pending'
+                  }
+                  aria-label={`Sync inventory for ${site.name}`}
+                  onClick={() =>
+                    void run(async () => {
+                      await api(`${base}/inventory-sync`, { siteId: site.id });
+                      setMessage(
+                        `Inventory sync requested for ${site.name}. Connector 0.3.1+ will collect it on its next poll. Allow up to 15 minutes; check WordPress Cron if it times out.`,
+                      );
+                      await refresh();
+                    })
+                  }
+                >
+                  <Icon name="refresh" /> Sync inventory
+                </button>
+              </div>
+            </article>
           ))}
         </div>
         {data.sites.length === 0 && <p>Add and pair a WordPress site first.</p>}
@@ -262,8 +340,9 @@ export function SoftwareManager({
           )}
           {selected.length > 0 && !components.length && (
             <p>
-              No matching inventory. Use the action panel to install a
-              WordPress.org slug, or wait for the next inventory.
+              {selected.some((site) => !site.inventoryAt)
+                ? 'Some selected sites have not sent inventory yet. Use Sync inventory above; this is separate from heartbeat health.'
+                : 'No matching components in saved inventory. Use the action panel to install a WordPress.org slug, or sync inventory again.'}
             </p>
           )}
           <div className="software-catalog">

@@ -266,6 +266,7 @@ const connectorLocalSecurityScan = z
 export const connectorInventory = z
   .object({
     siteId: z.uuid(),
+    inventoryRequestId: z.uuid().optional(),
     wordpressVersion: z
       .string()
       .regex(/^\d+\.\d+(?:\.\d+)?$/)

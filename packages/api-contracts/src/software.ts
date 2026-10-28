@@ -52,6 +52,14 @@ export const softwareBatchParams = z
 export const softwarePoll = z
   .object({ siteId: z.uuid(), enabled: z.boolean() })
   .strict();
+export const inventorySync = z.object({ siteId: z.uuid() }).strict();
+export const inventoryFailure = z
+  .object({
+    siteId: z.uuid(),
+    inventoryRequestId: z.uuid().optional(),
+    code: z.enum(['network', 'rejected', 'collection']),
+  })
+  .strict();
 export const softwareResultCode = z.enum([
   'ok',
   'disabled',
@@ -101,6 +109,13 @@ export type SoftwareDirectory = {
     enabled: boolean;
     polledAt: string | null;
     inventoryAt: string | null;
+    canSync: boolean;
+    inventorySync: {
+      status: 'not_received' | 'succeeded' | 'pending' | 'failed' | 'timed_out';
+      requestedAt: string | null;
+      attemptedAt: string | null;
+      error: string | null;
+    };
     plugins: import('./index').InstalledComponent[];
     themes: import('./index').InstalledComponent[];
   }>;

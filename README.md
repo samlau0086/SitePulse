@@ -4,7 +4,7 @@
 
 侧栏 **Plugins & themes**（`/app/software`）提供插件图标卡片、安装版本/启用/更新状态、站点选择与操作记录；站点详情也有直接入口。已验证的工作区 owner/admin 可以安装、启用、停用、卸载和更新插件/主题，并将同一个操作批量应用到最多 20 个站点。
 
-1. 通过现有备份优先的部署流程应用新增迁移 `0012_tidy_sir_ram`，在 WordPress 后台升级 Connector 到 **0.3.0**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
+1. 通过现有备份优先的部署流程应用迁移（包含 `0012_tidy_sir_ram` 和 `0013_nappy_shinko_yamashiro`），在 WordPress 后台升级 Connector 到 **0.3.1**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
 2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。每站独立授权，不需要提供 WordPress 管理员密码。
 3. 为 WordPress 配置每分钟执行到期事件的系统 Cron。Connector 每分钟拉取一次指令，受实际 Cron 执行频率影响；原来每 15 分钟的 Cron 会导致最长约 15 分钟等待。等待首次管理轮询及完整 inventory，界面显示 **Management ready**。
 4. 选择站点，在已安装卡片点击操作，或输入 WordPress.org slug（例如 `wordpress-seo`）安装。填写变更原因 → **Preview impact** → 检查站点及警告 → **Confirm and queue**。每站结果独立显示；提交前自行完成 WordPress 文件与数据库备份。
@@ -14,6 +14,14 @@
 预览 10 分钟有效，待执行任务一小时过期，每站同时只允许一个未完成操作。执行中断/超时显示 **unknown**，不会自动重试；必须检查 WordPress 实际状态后点击 **Reviewed in WordPress**，再决定是否发起新操作。停用管理权限、撤销成员或轮换凭据可阻止未开始任务，无法撤回已经领取执行的变更。详见 [安全边界、API 与验收步骤](docs/SOFTWARE_MANAGEMENT.md)。
 
 本地检查：`pnpm check`、`pnpm db:check`、`pnpm test:plugin`（PHP 8.1+）、`pnpm build`、`pnpm compose:check`。集成测试先运行 `pnpm test:db:up`，设置 `TEST_DATABASE_URL=postgresql://sitepulse_test:sitepulse_test@127.0.0.1:5433/sitepulse_test` 后运行 `pnpm test:integration`，最后 `pnpm test:db:down`；不可使用生产数据库。
+
+### 库存同步与状态
+
+Connector **0.3.1** 在升级后的首次 WordPress 请求、重新启用，以及首次开启远程管理时，立即排入只读库存同步事件，不再等下一次 15 分钟心跳。实际采集仍依赖 WordPress Cron 执行；建议每分钟运行到期事件。“立即排队”不代表绕过 Cron 或即时完成。
+
+在 **Plugins & themes** 每个站点卡片点击 **Sync inventory（同步库存）** 可主动请求重新采集；**Reload results** 只重新读取 SitePulse 已保存结果。手动同步无需开启远程修改权限，但需要已验证的工作区 owner/admin；请求在 Connector 下次每分钟轮询时领取，15 分钟无结果显示超时。重复待处理请求合并，完成后每站一分钟内不可再次请求。
+
+界面独立显示尚未同步、排队等待、库存已收到、采集失败、等待超时，以及上次成功和尝试时间。失败保留旧库存，不影响独立的心跳状态；**Management ready** 不等于库存已收到。网络完全中断时，失败报告也可能无法送达：SitePulse 显示等待/超时，WordPress → Settings → SitePulse 可查看本地失败状态。修复 Cron/网络或 Connector 元数据后再次同步；本功能不放宽库存校验，也不重新强制执行六小时缓存的安全扫描。
 
 Deployment SSH verification: run `node scripts/test-deploy-ssh.mjs`. It uses local transport doubles; Linux also verifies deployment directory permissions. Windows requires Git Bash at `C:/Program Files/Git/bin/bash.exe`.
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Site directory health
+
+- Show independent HTTP UP/DOWN, first-failure/recovery confirmation, pending/overdue/disabled monitoring and security summaries in the full directory and overview cards. Retain Connector heartbeat, unresolved counts and direct actions.
+- Aggregate persisted HTTP and security data inside the existing membership-protected organization list, without per-site requests or exposing raw findings. Reuse detail-view security assessment rules, retain stale/incomplete warnings and add state-rendering and tenant-isolation regression tests. No migration or Connector update required.
+
 ## Unreleased — Security assessment clarity
 
 - Replace dense security lists with severity-sorted finding cards, filled/tinted Critical/High/Medium/Low/Unknown badges and explicit environment/advisory counts. Keep local indicators unscored and coverage independent from findings.

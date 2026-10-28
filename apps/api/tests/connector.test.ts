@@ -518,6 +518,32 @@ it('stores and replaces inventory with server receipt time and enforces tenant a
       expect.objectContaining({ code: 'dashboard_file_editor' }),
     ]),
   );
+  const directory = await call('GET', `/organizations/${organizationId}/sites`);
+  expect(directory.statusCode).toBe(200);
+  const summary = directory
+    .json()
+    .sites.find((entry: { id: string }) => entry.id === siteId);
+  expect(summary.health.security).toMatchObject({
+    status: 'pending',
+    highestSeverity: 'high',
+    environmentRisks: response.json().security.environmentRisks.length,
+    vulnerabilities: 0,
+    localIndicators: 1,
+    coverage: response.json().security.coverage,
+  });
+  expect(summary).not.toHaveProperty('inventory');
+  expect(summary).not.toHaveProperty('assessment');
+  expect(directory.body).not.toContain('uploads/image.php');
+  expect(
+    (
+      await call(
+        'GET',
+        `/organizations/${organizationId}/sites`,
+        undefined,
+        outsider.cookie,
+      )
+    ).statusCode,
+  ).toBe(404);
   expect(
     (await call('GET', `/sites/${siteId}`, undefined, outsider.cookie))
       .statusCode,
@@ -788,4 +814,55 @@ it('keeps tenant responses and audit records free of credential and challenge ma
   expect(
     (await call('GET', `/organizations/${organizationId}/sites`)).body,
   ).not.toContain('credential');
+});
+it('summarizes only HTTP jobs, not SSL or Connector status, within the authorized directory', async () => {
+  const [target] = await database.db
+    .insert(schema.sites)
+    .values({
+      organizationId,
+      name: 'Directory health',
+      hostname: 'directory.example.com',
+      canonicalUrl: 'https://directory.example.com',
+      status: 'degraded',
+    })
+    .returning();
+  if (!target) throw new Error('Fixture insert failed');
+  await database.db.insert(schema.monitorJobs).values([
+    {
+      siteId: target.id,
+      monitorType: 'uptime',
+      state: 'healthy',
+      lastCheckedAt: new Date(),
+      nextRunAt: new Date(Date.now() + 60_000),
+    },
+    {
+      siteId: target.id,
+      monitorType: 'ssl',
+      state: 'down',
+      lastCheckedAt: new Date(),
+    },
+  ]);
+  const response = await call('GET', `/organizations/${organizationId}/sites`);
+  expect(response.statusCode, response.body).toBe(200);
+  const matches = response
+    .json()
+    .sites.filter((entry: { id: string }) => entry.id === target.id);
+  expect(matches).toHaveLength(1);
+  expect(matches[0]).toMatchObject({
+    status: 'degraded',
+    health: { availability: { state: 'up' } },
+  });
+  await database.db
+    .update(schema.monitorJobs)
+    .set({ state: 'down' })
+    .where(
+      and(
+        eq(schema.monitorJobs.siteId, target.id),
+        eq(schema.monitorJobs.monitorType, 'uptime'),
+      ),
+    );
+  const down = (await call('GET', `/organizations/${organizationId}/sites`))
+    .json()
+    .sites.find((entry: { id: string }) => entry.id === target.id);
+  expect(down.health.availability.state).toBe('down');
 });

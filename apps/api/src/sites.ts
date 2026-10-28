@@ -16,7 +16,8 @@ import {
   updateSite,
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
-import type { SiteSecurityReport } from '@sitepulse/api-contracts';
+import { buildSecurityReport } from './security-report';
+import { directoryHealth } from './site-health';
 import { HttpError } from './http-error';
 import { organizationUsage, requireSiteSlot } from './entitlements';
 import {
@@ -190,17 +191,50 @@ export async function registerSiteRoutes(
       const { organizationId } = organizationParams.parse(request.params);
       return db.transaction(async (tx) => {
         await membership(tx, user, organizationId, false);
+        const rows = await tx
+          .select({
+            site: schema.sites,
+            inventory: schema.siteInventorySnapshots,
+            assessment: schema.siteSecurityAssessments,
+            uptime: {
+              state: schema.monitorJobs.state,
+              lastCheckedAt: schema.monitorJobs.lastCheckedAt,
+              nextRunAt: schema.monitorJobs.nextRunAt,
+            },
+          })
+          .from(schema.sites)
+          .leftJoin(
+            schema.siteInventorySnapshots,
+            eq(schema.siteInventorySnapshots.siteId, schema.sites.id),
+          )
+          .leftJoin(
+            schema.siteSecurityAssessments,
+            eq(schema.siteSecurityAssessments.siteId, schema.sites.id),
+          )
+          .leftJoin(
+            schema.monitorJobs,
+            and(
+              eq(schema.monitorJobs.siteId, schema.sites.id),
+              eq(schema.monitorJobs.monitorType, 'uptime'),
+            ),
+          )
+          .where(
+            and(
+              eq(schema.sites.organizationId, organizationId),
+              sql`${schema.sites.deletedAt} is null`,
+            ),
+          )
+          .limit(1000);
         return {
-          sites: await tx
-            .select()
-            .from(schema.sites)
-            .where(
-              and(
-                eq(schema.sites.organizationId, organizationId),
-                sql`${schema.sites.deletedAt} is null`,
-              ),
-            )
-            .limit(1000),
+          sites: rows.map(({ site, inventory, assessment, uptime }) => ({
+            ...site,
+            health: directoryHealth(
+              site,
+              inventory,
+              assessment,
+              uptime?.nextRunAt ? uptime : null,
+            ),
+          })),
         };
       });
     },
@@ -304,79 +338,7 @@ export async function registerSiteRoutes(
         })
         .from(schema.monitorJobs)
         .where(eq(schema.monitorJobs.siteId, site.id));
-      const environmentRisks: SiteSecurityReport['environmentRisks'] = [];
-      if (inventory?.environment) {
-        if (
-          inventory.environment.environmentType === 'production' &&
-          inventory.environment.wpDebug
-        )
-          environmentRisks.push({
-            code: 'wp_debug_enabled',
-            severity: 'high',
-            message: 'WP_DEBUG is enabled in production.',
-          });
-        if (inventory.environment.wpDebugDisplay)
-          environmentRisks.push({
-            code: 'debug_display_enabled',
-            severity: 'high',
-            message: 'PHP error details may be displayed to visitors.',
-          });
-        if (!inventory.environment.disallowFileEdit)
-          environmentRisks.push({
-            code: 'dashboard_file_editor',
-            severity: 'medium',
-            message: 'The WordPress dashboard file editor is enabled.',
-          });
-        if (!inventory.environment.forceSslAdmin)
-          environmentRisks.push({
-            code: 'admin_ssl_not_forced',
-            severity: 'medium',
-            message: 'WordPress does not force HTTPS for administration.',
-          });
-        if (inventory.environment.scriptDebug)
-          environmentRisks.push({
-            code: 'script_debug_enabled',
-            severity: 'low',
-            message: 'SCRIPT_DEBUG is enabled.',
-          });
-      }
-      const age = assessment?.checkedAt
-        ? Date.now() - assessment.checkedAt.getTime()
-        : Number.POSITIVE_INFINITY;
-      const security: SiteSecurityReport = {
-        status: !assessment
-          ? 'pending'
-          : assessment.status === 'current' &&
-              (age > 48 * 60 * 60 * 1000 ||
-                site.status !== 'active' ||
-                !inventory ||
-                Date.now() - inventory.receivedAt.getTime() > 60 * 60 * 1000)
-            ? 'stale'
-            : assessment.status,
-        checkedAt: assessment?.checkedAt?.toISOString() ?? null,
-        nextCheckAt: assessment?.nextCheckAt.toISOString() ?? null,
-        coverage: {
-          inventory:
-            inventory?.installedPlugins && inventory.installedThemes
-              ? inventory.environment?.inventoryComplete === false ||
-                inventory.installedPlugins.length >= 200 ||
-                inventory.installedThemes.length >= 20
-                ? 'partial'
-                : 'complete'
-              : 'unknown',
-          localFiles:
-            inventory?.localSecurityScan?.status === 'complete'
-              ? 'complete'
-              : inventory?.localSecurityScan?.status === 'partial'
-                ? 'partial'
-                : 'unknown',
-          publicVulnerabilities: assessment?.coverage ?? 'unknown',
-        },
-        environmentRisks,
-        localFindings: inventory?.localSecurityScan?.findings ?? [],
-        vulnerabilities: assessment?.vulnerabilities ?? [],
-        errorCode: assessment?.errorCode ?? null,
-      };
+      const security = buildSecurityReport(site, inventory, assessment);
       return { site, inventory: inventory ?? null, monitoring, security };
     }),
   );

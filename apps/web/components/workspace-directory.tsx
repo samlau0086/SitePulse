@@ -2,7 +2,12 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
+import type {
+  DirectorySite,
+  Incident,
+  Organization,
+  Site,
+} from '@sitepulse/api-contracts';
 import { IncidentAction } from './incident-action';
 import { IncidentSignal } from './incident-signal';
 import { api } from '../lib/api';
@@ -10,13 +15,13 @@ import { PlanUsage } from './plan-usage';
 import { Icon } from './icon';
 
 type DirectoryProps = {
-  sites: Site[];
+  sites: DirectorySite[];
   organizations: Organization[];
   incidents: Incident[];
   compact?: boolean;
 };
 export function filterSites(
-  sites: Site[],
+  sites: DirectorySite[],
   query: string,
   organizationId: string,
 ) {
@@ -52,6 +57,81 @@ export function StatusBadge({ status }: { status: string }) {
       />
       {status === 'degraded' ? 'Stale heartbeat' : status.replaceAll('_', ' ')}
     </span>
+  );
+}
+export function WebsiteHealth({ site }: { site: DirectorySite }) {
+  const state = site.health?.availability.state ?? 'pending';
+  const labels = {
+    up: 'UP',
+    down: 'DOWN',
+    suspected: 'First failure',
+    recovering: 'Confirming recovery',
+    pending: 'Awaiting probe',
+    stale: 'Probe overdue',
+    disabled: 'Monitoring disabled',
+  };
+  const tone =
+    state === 'up'
+      ? 'healthy'
+      : state === 'down'
+        ? 'critical'
+        : ['suspected', 'recovering', 'stale'].includes(state)
+          ? 'warning'
+          : 'pending';
+  return (
+    <div className="site-health-summary">
+      <span className={`status-badge status-${tone}`}>
+        <Icon
+          name={state === 'up' ? 'up' : state === 'down' ? 'down' : 'clock'}
+        />
+        {labels[state]}
+      </span>
+      <span className="table-subtitle">
+        HTTP checked:{' '}
+        <Timestamp value={site.health?.availability.lastCheckedAt ?? null} />
+      </span>
+    </div>
+  );
+}
+export function SecurityHealth({ site }: { site: DirectorySite }) {
+  const health = site.health?.security;
+  const risks =
+    (health?.environmentRisks ?? 0) + (health?.vulnerabilities ?? 0);
+  const complete =
+    health?.status === 'current' &&
+    Object.values(health.coverage).every((value) => value === 'complete');
+  const severity = health?.highestSeverity;
+  return (
+    <div className="site-health-summary">
+      <span
+        className={
+          risks
+            ? `security-severity severity-${severity ?? 'unknown'}`
+            : 'status-badge'
+        }
+      >
+        <Icon name="shield" />
+        {risks
+          ? `${risks} risks · ${severity ?? 'unknown'}`
+          : health?.localIndicators
+            ? 'Code review needed'
+            : complete
+              ? 'No reported risks'
+              : 'Assessment incomplete'}
+      </span>
+      {!!health?.localIndicators && (
+        <span className="status-badge status-warning">
+          {health.localIndicators} local indicators · review
+        </span>
+      )}
+      <span className="table-subtitle">
+        {health?.status ?? 'pending'}
+        {health && !complete ? ' · incomplete coverage or freshness' : ''}
+      </span>
+      <span className="table-subtitle">
+        Assessed: <Timestamp value={health?.checkedAt ?? null} />
+      </span>
+    </div>
   );
 }
 function WorkspaceFilter({
@@ -155,6 +235,16 @@ export function SiteDirectory({
                     )?.name
                   }
                 </span>
+                <div className="site-card-health">
+                  <div>
+                    <span className="table-subtitle">Website</span>
+                    <WebsiteHealth site={site} />
+                  </div>
+                  <div>
+                    <span className="table-subtitle">Security</span>
+                    <SecurityHealth site={site} />
+                  </div>
+                </div>
                 <dl className="site-card-facts">
                   <div>
                     <dt>
@@ -195,9 +285,9 @@ export function SiteDirectory({
             <thead>
               <tr>
                 <th scope="col">Site / workspace</th>
+                <th scope="col">Website</th>
+                <th scope="col">Security</th>
                 <th scope="col">Connector</th>
-                <th scope="col">Last heartbeat</th>
-                <th scope="col">Recent unresolved</th>
                 <th scope="col">Quick access</th>
               </tr>
             </thead>
@@ -218,20 +308,27 @@ export function SiteDirectory({
                       }
                     </span>
                   </td>
+                  <td data-label="Website">
+                    <WebsiteHealth site={site} />
+                  </td>
+                  <td data-label="Security">
+                    <SecurityHealth site={site} />
+                  </td>
                   <td data-label="Connector">
                     <StatusBadge status={site.status} />
-                  </td>
-                  <td data-label="Last heartbeat">
-                    <Timestamp value={site.lastSeenAt} />
-                  </td>
-                  <td data-label="Recent unresolved">
-                    {
-                      incidents.filter(
-                        (incident) =>
-                          incident.siteId === site.id &&
-                          incident.status !== 'resolved',
-                      ).length
-                    }
+                    <span className="table-subtitle">
+                      Heartbeat: <Timestamp value={site.lastSeenAt} />
+                    </span>
+                    <span className="table-subtitle">
+                      Recent unresolved:{' '}
+                      {
+                        incidents.filter(
+                          (incident) =>
+                            incident.siteId === site.id &&
+                            incident.status !== 'resolved',
+                        ).length
+                      }
+                    </span>
                   </td>
                   <td data-label="Quick access">
                     <div className="row-actions">

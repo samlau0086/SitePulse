@@ -1871,6 +1871,19 @@ h3 {
   width: 15px;
   height: 15px;
 }
+.site-health-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.site-card-health {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
 .site-card-facts {
   margin: 16px 0;
   padding: 14px 0;

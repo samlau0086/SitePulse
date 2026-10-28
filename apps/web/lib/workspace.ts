@@ -2,7 +2,7 @@ import { cache } from 'react';
 import type {
   Incident,
   Organization,
-  Site,
+  DirectorySite,
   OrganizationUsage,
 } from '@sitepulse/api-contracts';
 import { serverApi } from './server-api';
@@ -27,14 +27,14 @@ export const workspaceUsage = cache((organizationId: string) =>
 );
 export const workspaceData = cache(async () => {
   const { organizations } = await workspaceOrganizations();
-  const sites: Site[] = [];
+  const sites: DirectorySite[] = [];
   const incidents: Incident[] = [];
   // Each endpoint checks membership; bound concurrent requests across organizations.
   for (let offset = 0; offset < organizations.length; offset += 4) {
     const batches = await Promise.all(
       organizations.slice(offset, offset + 4).map(async (organization) => {
         const [siteResult, incidentResult] = await Promise.all([
-          serverApi<{ sites: Site[] }>(
+          serverApi<{ sites: DirectorySite[] }>(
             `/organizations/${organization.id}/sites`,
           ),
           serverApi<{ incidents: Incident[] }>(

@@ -350,6 +350,29 @@ export type Organization = {
   slug: string;
   role: 'owner' | 'admin' | 'member';
 };
+export type SiteHealthSummary = {
+  availability: {
+    state:
+      | 'up'
+      | 'down'
+      | 'suspected'
+      | 'recovering'
+      | 'pending'
+      | 'stale'
+      | 'disabled';
+    lastCheckedAt: string | null;
+  };
+  security: {
+    status: SiteSecurityReport['status'];
+    coverage: SiteSecurityReport['coverage'];
+    checkedAt: string | null;
+    highestSeverity: PublicVulnerability['severity'] | null;
+    environmentRisks: number;
+    vulnerabilities: number;
+    localIndicators: number;
+  };
+};
+export type DirectorySite = Site & { health?: SiteHealthSummary };
 export type ApiError = {
   error: { code: string; message: string; requestId: string };
 };

@@ -1,7 +1,12 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { Incident, Organization, Site } from '@sitepulse/api-contracts';
+import type {
+  DirectorySite,
+  Incident,
+  Organization,
+  Site,
+} from '@sitepulse/api-contracts';
 import { AppNavigation, PublicHeader } from '../components/app-navigation';
 import { IncidentSignal } from '../components/incident-signal';
 import { MonitoringPanel } from '../components/monitoring-panel';
@@ -9,6 +14,8 @@ import {
   filterSites,
   SiteDirectory,
   IncidentDirectory,
+  WebsiteHealth,
+  SecurityHealth,
 } from '../components/workspace-directory';
 import NewSitePage from '../app/app/sites/new/page';
 import { workspaceData } from './workspace';
@@ -63,6 +70,93 @@ const incident: Incident = {
   resolutionReason: null,
 };
 const render = (component: React.ReactNode) => renderToStaticMarkup(component);
+const health: NonNullable<DirectorySite['health']> = {
+  availability: { state: 'up', lastCheckedAt: '2026-10-28T01:00:00.000Z' },
+  security: {
+    status: 'current',
+    checkedAt: '2026-10-28T01:00:00.000Z',
+    highestSeverity: 'high',
+    environmentRisks: 1,
+    vulnerabilities: 2,
+    localIndicators: 1,
+    coverage: {
+      inventory: 'complete',
+      localFiles: 'complete',
+      publicVulnerabilities: 'complete',
+    },
+  },
+};
+it.each([
+  ['up', 'UP'],
+  ['down', 'DOWN'],
+  ['suspected', 'First failure'],
+  ['recovering', 'Confirming recovery'],
+  ['stale', 'Probe overdue'],
+  ['pending', 'Awaiting probe'],
+  ['disabled', 'Monitoring disabled'],
+] as const)('renders HTTP %s explicitly', (state, label) => {
+  const html = render(
+    createElement(WebsiteHealth, {
+      site: {
+        ...site,
+        health: { ...health, availability: { ...health.availability, state } },
+      },
+    }),
+  );
+  expect(html).toContain(label);
+  expect(html).toContain('HTTP checked:');
+});
+it('shows risk counts, severity and local indicators in tables and overview cards', () => {
+  for (const compact of [true, false]) {
+    const html = render(
+      createElement(SiteDirectory, {
+        sites: [{ ...site, health }],
+        organizations: [org],
+        incidents: [],
+        compact,
+      }),
+    );
+    expect(html).toContain('3 risks · high');
+    expect(html).toContain('severity-high');
+    expect(html).toContain('1 local indicators · review');
+    expect(html).toContain('UP');
+    expect(html).toContain('Stale heartbeat');
+  }
+});
+it('does not turn missing or stale assessments into a clean security result', () => {
+  expect(render(createElement(WebsiteHealth, { site }))).toContain(
+    'Awaiting probe',
+  );
+  expect(render(createElement(SecurityHealth, { site }))).toContain(
+    'Assessment incomplete',
+  );
+  const clean = {
+    ...health.security,
+    environmentRisks: 0,
+    vulnerabilities: 0,
+    localIndicators: 0,
+    highestSeverity: null,
+  };
+  expect(
+    render(
+      createElement(SecurityHealth, {
+        site: { ...site, health: { ...health, security: clean } },
+      }),
+    ),
+  ).toContain('No reported risks');
+  for (const status of ['stale', 'unavailable', 'pending'] as const) {
+    const html = render(
+      createElement(SecurityHealth, {
+        site: {
+          ...site,
+          health: { ...health, security: { ...clean, status } },
+        },
+      }),
+    );
+    expect(html).toContain('Assessment incomplete');
+    expect(html).not.toContain('No reported risks');
+  }
+});
 beforeEach(() => {
   vi.clearAllMocks();
   pathname.mockReturnValue('/app/sites/site-a');

@@ -27,6 +27,8 @@ Notification settings use the direct `/app/notifications` sidebar destination an
 
 ## Visibility and feedback
 
+Security assessments use bordered finding cards and shared semantic tokens: filled danger Critical, tinted danger High, warning Medium, informational Low and neutral Unknown badges with icons and words. Sort advisories by severity and show environment/advisory counts separately from unscored local indicators. Keep coverage and assessment freshness visible. Each finding gets a labeled Recommended action; distinguish hosting-level PHP work from software management, absent patches and supply-chain review. Never imply automatic remediation, classify a local indicator as confirmed malware or present one advisory boundary as fixing every issue. Keep cards and metadata responsive, paths wrapping and action links at least 44px high.
+
 Inventory feedback is independent of heartbeat and management readiness. Use a visible per-site Sync inventory action outside selection labels; distinguish it from Reload results. Explain next-poll/Cron delivery, never-synced versus genuinely empty inventory, pending/timeout/failure and retained last-success timestamps. Only accepted inventory uploads establish success; read-only members cannot queue collection.
 
 Slack and Telegram share the direct notification settings page and recipient actions. Use password inputs for webhook URLs and bot tokens, clear credential fields on submit, and show only labels and hidden-credential notices afterward. Telegram Chat IDs remain text inputs to preserve signed IDs exactly. Reuse existing form, fieldset, pending, read-only, error and confirmation patterns; channel verification grants no workspace access.

@@ -62,7 +62,7 @@ describe('shared UI contrast', () => {
     },
   );
 
-  it.each(['ink', 'ink-deep', 'surface-dark-elevated'])(
+  it.each(['ink', 'ink-deep', 'surface-dark-elevated', 'danger-ink'])(
     'keeps primary button labels readable on %s',
     (surface) =>
       expect(contrast('canvas', surface)).toBeGreaterThanOrEqual(4.5),

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Security assessment clarity
+
+- Replace dense security lists with severity-sorted finding cards, filled/tinted Critical/High/Medium/Low/Unknown badges and explicit environment/advisory counts. Keep local indicators unscored and coverage independent from findings.
+- Add review recommendations for environment settings, local code indicators and PHP/WordPress/plugin/theme advisories, including missing-patch and supply-chain cases. Preserve read-only assessment, tenant permissions and incomplete/stale scan warnings; no automatic remediation or migration.
+
 ## Unreleased — Scanned attachment library
 
 - Detect attachment folder slugs from the unique validated ZIP root during server scanning; remove manual slug entry and use the kind-only upload endpoint. Retain malformed, multiple-root and protected-package rejection.

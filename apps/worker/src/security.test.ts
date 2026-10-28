@@ -124,4 +124,28 @@ describe('security advisory matching', () => {
       result.findings.every((finding) => finding.fixedVersion === null),
     ).toBe(true);
   });
+  it('removes exact provider duplicates without collapsing distinct advisory IDs', () => {
+    const common = {
+      name: 'PHP 8.4 before patched boundary',
+      operator: { max_version: '8.4.21', max_operator: 'lt' },
+      impact: { cvss3: { severity: 'critical' } },
+    };
+    const result = parseAdvisories(
+      { type: 'php', identifier: 'php', version: '8.4.13' },
+      {
+        error: 0,
+        data: {
+          vulnerability: [
+            { ...common, uuid: 'CVE-ONE' },
+            { ...common, uuid: 'CVE-ONE' },
+            { ...common, uuid: 'CVE-TWO' },
+          ],
+        },
+      },
+    );
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      'CVE-ONE',
+      'CVE-TWO',
+    ]);
+  });
 });

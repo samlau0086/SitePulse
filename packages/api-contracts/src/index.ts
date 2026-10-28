@@ -316,6 +316,28 @@ export type PublicVulnerability = {
   sourceUrl: string | null;
   supplyChain: boolean;
 };
+
+export function uniquePublicVulnerabilities<T extends PublicVulnerability>(
+  findings: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  return findings.filter((finding) => {
+    const key = JSON.stringify([
+      finding.componentType,
+      finding.component,
+      finding.installedVersion,
+      finding.id,
+      finding.title,
+      finding.severity,
+      finding.fixedVersion,
+      finding.sourceUrl,
+      finding.supplyChain,
+    ]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 export type SiteSecurityReport = {
   status: 'current' | 'stale' | 'pending' | 'unavailable';
   checkedAt: string | null;

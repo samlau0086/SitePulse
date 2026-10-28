@@ -1,8 +1,12 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import type {
-  PublicVulnerability,
-  SiteInventory,
-  SiteSecurityReport,
+import {
+  uniquePublicVulnerabilities,
+  type PublicVulnerability,
+  type SiteInventory,
+  type SiteSecurityReport,
 } from '@sitepulse/api-contracts';
 import { Icon } from './icon';
 
@@ -71,7 +75,10 @@ export function SecurityPanel({
   softwareHref: string;
   canManage: boolean;
 }) {
-  const vulnerabilities = [...security.vulnerabilities].sort(
+  const [severityFilter, setSeverityFilter] = useState<Severity | null>(null);
+  const vulnerabilities = uniquePublicVulnerabilities(
+    security.vulnerabilities,
+  ).sort(
     (a, b) =>
       severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity),
   );
@@ -85,6 +92,33 @@ export function SecurityPanel({
       (finding) => finding.severity === severity,
     ).length,
   }));
+  const visibleEnvironmentRisks = severityFilter
+    ? environmentRisks.filter((risk) => risk.severity === severityFilter)
+    : environmentRisks;
+  const visibleVulnerabilities = severityFilter
+    ? vulnerabilities.filter((finding) => finding.severity === severityFilter)
+    : vulnerabilities;
+  const advisoryGroups = visibleVulnerabilities.reduce<
+    Array<{
+      key: string;
+      representative: PublicVulnerability;
+      advisories: PublicVulnerability[];
+    }>
+  >((groups, finding) => {
+    const key = JSON.stringify([
+      finding.componentType,
+      finding.component,
+      finding.installedVersion,
+      finding.title,
+      finding.severity,
+      finding.fixedVersion,
+      finding.supplyChain,
+    ]);
+    const existing = groups.find((group) => group.key === key);
+    if (existing) existing.advisories.push(finding);
+    else groups.push({ key, representative: finding, advisories: [finding] });
+    return groups;
+  }, []);
   return (
     <section className="card security-panel">
       <div className="section-heading">
@@ -111,12 +145,35 @@ export function SecurityPanel({
         aria-label="Environment and advisory finding counts"
       >
         {counts.map(({ severity, count }) => (
-          <div key={severity}>
+          <button
+            type="button"
+            key={severity}
+            className={severityFilter === severity ? 'is-selected' : undefined}
+            aria-pressed={severityFilter === severity}
+            aria-label={`Filter by ${label(severity)} severity: ${count} findings`}
+            onClick={() =>
+              setSeverityFilter((current) =>
+                current === severity ? null : severity,
+              )
+            }
+          >
             <SeverityBadge severity={severity} />
             <strong>{count}</strong>
             <span>findings</span>
-          </div>
+          </button>
         ))}
+      </div>
+      <div className="security-filter-status" aria-live="polite">
+        <span>
+          {severityFilter
+            ? `Showing ${label(severityFilter)} environment and advisory findings.`
+            : 'Showing all environment and advisory findings.'}
+        </span>
+        {severityFilter && (
+          <button type="button" onClick={() => setSeverityFilter(null)}>
+            Clear filter
+          </button>
+        )}
       </div>
       <p className="data-note">
         Counts include environment risks and advisory matches. Local file
@@ -156,7 +213,10 @@ export function SecurityPanel({
       >
         <h3 id="environment-heading">
           Environment risks{' '}
-          <span className="muted">({environmentRisks.length})</span>
+          <span className="muted">
+            ({visibleEnvironmentRisks.length}
+            {severityFilter ? ` of ${environmentRisks.length}` : ''})
+          </span>
         </h3>
         {inventory?.environment && (
           <p className="data-note">
@@ -164,9 +224,9 @@ export function SecurityPanel({
             {inventory.wordpressVersion} · PHP {inventory.phpVersion}
           </p>
         )}
-        {environmentRisks.length ? (
+        {visibleEnvironmentRisks.length ? (
           <ul className="security-findings">
-            {environmentRisks.map((risk) => (
+            {visibleEnvironmentRisks.map((risk) => (
               <li className="security-finding" key={risk.code}>
                 <div className="security-finding-heading">
                   <SeverityBadge severity={risk.severity} />
@@ -181,8 +241,10 @@ export function SecurityPanel({
           </ul>
         ) : (
           <p>
-            No reported environment risks. Unknown coverage is not a clean
-            result.
+            {severityFilter
+              ? `No ${label(severityFilter)} environment risks.`
+              : 'No reported environment risks.'}{' '}
+            Unknown coverage is not a clean result.
           </p>
         )}
       </section>
@@ -229,66 +291,106 @@ export function SecurityPanel({
       >
         <h3 id="advisories-heading">
           Public vulnerability matches{' '}
-          <span className="muted">({vulnerabilities.length})</span>
+          <span className="muted">
+            ({visibleVulnerabilities.length}
+            {severityFilter ? ` of ${vulnerabilities.length}` : ''})
+          </span>
         </h3>
         <p className="data-note">
           Highest severity first. A fixed boundary applies to one advisory, not
           every issue affecting this component.
         </p>
-        {vulnerabilities.length ? (
+        {advisoryGroups.length ? (
           <ul className="security-findings">
-            {vulnerabilities.map((finding) => (
-              <li
-                className="security-finding"
-                key={`${finding.componentType}-${finding.component}-${finding.id}`}
-              >
-                <div className="security-finding-heading">
-                  <SeverityBadge severity={finding.severity} />
-                  <h4>{finding.title}</h4>
-                </div>
-                <dl className="security-finding-meta">
-                  <div>
-                    <dt>Component</dt>
-                    <dd>
-                      {label(finding.componentType)} · {finding.component}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Installed version</dt>
-                    <dd>{finding.installedVersion}</dd>
-                  </div>
-                  <div>
-                    <dt>Fixed boundary (this advisory)</dt>
-                    <dd>
-                      {finding.fixedVersion ?? 'No fixed version reported'}
-                    </dd>
-                  </div>
-                </dl>
-                <Recommendation>{advisoryAction(finding)}</Recommendation>
-                <div className="security-finding-links">
-                  {finding.sourceUrl && (
-                    <a
-                      href={finding.sourceUrl}
-                      aria-label={`Read advisory for ${finding.component}: ${finding.title} (opens in a new tab)`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Read advisory ↗
-                    </a>
-                  )}
-                  {canManage &&
-                    (finding.componentType === 'plugin' ||
-                      finding.componentType === 'theme') && (
-                      <Link href={softwareHref}>
-                        Review in Plugins & themes
-                      </Link>
+            {advisoryGroups.map(
+              ({ key, representative: finding, advisories }) => (
+                <li className="security-finding" key={key}>
+                  <div className="security-finding-heading">
+                    <SeverityBadge severity={finding.severity} />
+                    <h4>{finding.title}</h4>
+                    {advisories.length > 1 && (
+                      <span className="status-badge">
+                        {advisories.length} advisories
+                      </span>
                     )}
-                </div>
-              </li>
-            ))}
+                  </div>
+                  <dl className="security-finding-meta">
+                    <div>
+                      <dt>Component</dt>
+                      <dd>
+                        {label(finding.componentType)} · {finding.component}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Installed version</dt>
+                      <dd>{finding.installedVersion}</dd>
+                    </div>
+                    <div>
+                      <dt>Fixed boundary (this advisory)</dt>
+                      <dd>
+                        {finding.fixedVersion ?? 'No fixed version reported'}
+                      </dd>
+                    </div>
+                  </dl>
+                  {advisories.length === 1 ? (
+                    <p className="security-advisory-id">
+                      Advisory ID: <code>{finding.id}</code>
+                    </p>
+                  ) : (
+                    <details className="security-advisory-details">
+                      <summary>
+                        View {advisories.length} advisory IDs and sources
+                      </summary>
+                      <ul>
+                        {advisories.map((advisory) => (
+                          <li
+                            key={`${advisory.id}-${advisory.sourceUrl ?? ''}`}
+                          >
+                            <code>{advisory.id}</code>
+                            {advisory.sourceUrl && (
+                              <a
+                                href={advisory.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Read source ↗
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  <Recommendation>{advisoryAction(finding)}</Recommendation>
+                  <div className="security-finding-links">
+                    {advisories.length === 1 && finding.sourceUrl && (
+                      <a
+                        href={finding.sourceUrl}
+                        aria-label={`Read advisory for ${finding.component}: ${finding.title} (opens in a new tab)`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Read advisory ↗
+                      </a>
+                    )}
+                    {canManage &&
+                      (finding.componentType === 'plugin' ||
+                        finding.componentType === 'theme') && (
+                        <Link href={softwareHref}>
+                          Review in Plugins & themes
+                        </Link>
+                      )}
+                  </div>
+                </li>
+              ),
+            )}
           </ul>
         ) : (
-          <p>No matched advisories in the available coverage.</p>
+          <p>
+            {severityFilter
+              ? `No ${label(severityFilter)} advisory matches.`
+              : 'No matched advisories in the available coverage.'}
+          </p>
         )}
       </section>
       <div className="security-scan-details">

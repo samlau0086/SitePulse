@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Security filtering and advisory clarity
+
+- Make Critical/High/Medium/Low/Unknown summary tiles accessible toggle filters for environment risks and public advisories, with visible filter state, section result counts and a clear action. Unscored local indicators and coverage warnings remain visible.
+- Remove only byte-for-byte equivalent advisory records. Group distinct advisory IDs that share the same component, title, severity and fixed boundary into a compact card with expandable IDs and source links, so generic provider titles no longer appear as indistinguishable duplicate cards.
+
 ## Unreleased — Site directory health
 
 - Show independent HTTP UP/DOWN, first-failure/recovery confirmation, pending/overdue/disabled monitoring and security summaries in the full directory and overview cards. Retain Connector heartbeat, unresolved counts and direct actions.

@@ -1,4 +1,7 @@
-import type { SiteSecurityReport } from '@sitepulse/api-contracts';
+import {
+  uniquePublicVulnerabilities,
+  type SiteSecurityReport,
+} from '@sitepulse/api-contracts';
 import type { schema } from '@sitepulse/database';
 
 export function buildSecurityReport(
@@ -78,7 +81,9 @@ export function buildSecurityReport(
     },
     environmentRisks,
     localFindings: inventory?.localSecurityScan?.findings ?? [],
-    vulnerabilities: assessment?.vulnerabilities ?? [],
+    vulnerabilities: uniquePublicVulnerabilities(
+      assessment?.vulnerabilities ?? [],
+    ),
     errorCode: assessment?.errorCode ?? null,
   };
   return security;

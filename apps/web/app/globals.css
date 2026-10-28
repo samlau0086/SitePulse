@@ -14,21 +14,54 @@
   gap: 12px;
   margin-top: 24px;
 }
-.security-summary > div {
+.app-shell .security-summary > button {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-height: 56px;
   padding: 14px;
   border: 1px solid var(--product-border);
   border-radius: var(--radius-product-control);
+  background: var(--product-surface);
+  color: var(--body);
+  text-align: left;
+  cursor: pointer;
 }
-.security-summary > div > strong {
+.app-shell .security-summary > button:hover,
+.app-shell .security-summary > button.is-selected {
+  border-color: var(--product-primary);
+  background: var(--product-primary-soft);
+}
+.app-shell .security-summary > button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.security-summary > button > strong {
   font-size: 24px;
 }
-.security-summary > div > span:last-child {
+.security-summary > button > span:last-child {
   color: var(--muted);
   font-size: 14px;
+}
+.security-filter-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.app-shell .security-filter-status button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-product-control);
+  background: var(--product-surface);
+  color: var(--product-primary);
+  font-weight: 700;
 }
 .security-severity {
   display: inline-flex;
@@ -124,6 +157,39 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+}
+.security-advisory-id {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.security-advisory-details {
+  margin-top: 12px;
+  border: 1px solid var(--product-border);
+  border-radius: var(--radius-product-control);
+  background: var(--surface-soft);
+}
+.security-advisory-details summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--product-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.security-advisory-details ul {
+  margin: 0;
+  padding: 0 16px 12px 32px;
+}
+.security-advisory-details li {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.security-advisory-details a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-left: 16px;
 }
 .security-coverage dd {
   margin: 8px 0 0;

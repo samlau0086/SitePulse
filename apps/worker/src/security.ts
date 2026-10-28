@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { uniquePublicVulnerabilities } from '@sitepulse/api-contracts';
 import { and, eq, schema, sql, type Database } from '@sitepulse/database';
 
 type Component = {
@@ -192,7 +193,7 @@ export function parseAdvisories(component: Component, payload: unknown) {
       });
     }
   }
-  return { findings, complete };
+  return { findings: uniquePublicVulnerabilities(findings), complete };
 }
 
 async function query(component: Component, http: Http) {
@@ -353,12 +354,14 @@ export async function runSecurityAssessment(db: Database, http: Http = fetch) {
         complete &&= result.complete;
       }
     }
+    const uniqueFindings = uniquePublicVulnerabilities(findings);
     await db
       .update(schema.siteSecurityAssessments)
       .set({
         status: 'current',
-        vulnerabilities: findings.slice(0, 500),
-        coverage: complete && findings.length <= 500 ? 'complete' : 'partial',
+        vulnerabilities: uniqueFindings.slice(0, 500),
+        coverage:
+          complete && uniqueFindings.length <= 500 ? 'complete' : 'partial',
         errorCode: null,
         checkedAt: sql`now()`,
         nextCheckAt: sql`now() + interval '24 hours'`,

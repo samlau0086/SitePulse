@@ -138,6 +138,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@sitepulse/api-contracts':
+        specifier: workspace:*
+        version: link:../../packages/api-contracts
       '@sitepulse/config':
         specifier: workspace:*
         version: link:../../packages/config

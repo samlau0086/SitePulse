@@ -114,3 +114,22 @@ it('handles missing patches and supply-chain findings without promising an updat
   expect(html).toContain('severity-unknown');
   expect(html).not.toContain('Review in Plugins &amp; themes');
 });
+
+it('deduplicates exact entries and groups visually identical advisories while preserving IDs', () => {
+  const repeated = advisory({ id: 'CVE-ONE', title: 'Shared PHP title' });
+  const html = render([
+    repeated,
+    repeated,
+    advisory({ id: 'CVE-TWO', title: 'Shared PHP title' }),
+    advisory({
+      id: 'CVE-THREE',
+      title: 'Shared PHP title',
+      fixedVersion: '8.4.22',
+    }),
+  ]);
+  expect(html.match(/<h4>Shared PHP title<\/h4>/g)).toHaveLength(2);
+  expect(html).toContain('2 advisories');
+  expect(html).toContain('CVE-ONE');
+  expect(html).toContain('CVE-TWO');
+  expect(html).toContain('CVE-THREE');
+});

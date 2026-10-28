@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@sitepulse/api-contracts": "workspace:*",
     "@sitepulse/config": "workspace:*",
     "@sitepulse/database": "workspace:*",
     "@sitepulse/shared": "workspace:*",

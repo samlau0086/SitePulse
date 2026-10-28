@@ -236,10 +236,11 @@ esac
         'shared',
         'backups',
         'logs',
-      ])
+      ]) {
         assert.equal(statSync(join(remote, name)).isDirectory(), true);
-      if (process.platform !== 'win32')
-        assert.equal(statSync(join(remote, name)).mode & 0o777, 0o700);
+        if (process.platform !== 'win32')
+          assert.equal(statSync(join(remote, name)).mode & 0o777, 0o700);
+      }
       assert.equal(
         readFileSync(join(remote, 'shared', '.env'), 'utf8'),
         'fixture-app-secret',

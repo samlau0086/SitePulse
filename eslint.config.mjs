@@ -15,6 +15,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['scripts/test-deploy-ssh.mjs'],
+    rules: { 'no-undef': 'error' },
+  },
   { languageOptions: { globals: { ...globals.node, ...globals.browser } } },
   prettier,
 );

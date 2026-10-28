@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-10-28
 
+- Fixed the SSH deployment verification harness's fresh-root loop scope so Linux CI can check every directory's permissions without a `ReferenceError`.
+
 - Added Connector 0.2.0 full installed plugin/theme inventory, environment risk flags and a bounded, cached, read-only local PHP risk-indicator scan. Only rule IDs and relative paths are reported; no file contents are uploaded or changed.
 - Added tenant-scoped Security views, migration 0011 security assessments, fixed-endpoint WPVulnerability matching for WordPress/PHP/recognized WordPress.org components, explicit stale/partial/unknown coverage and an operator disable switch.
 - Added conservative version-range, malformed-provider, contract, tenant-isolation and navigation coverage plus a staging runbook. Custom packages and a clean bounded scan are not claimed safe; real Slack/Telegram provider acceptance remains deferred.

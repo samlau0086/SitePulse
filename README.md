@@ -1,5 +1,7 @@
 # SitePulse
 
+Deployment SSH verification: run `node scripts/test-deploy-ssh.mjs`. It uses local transport doubles; Linux also verifies deployment directory permissions. Windows requires Git Bash at `C:/Program Files/Git/bin/bash.exe`.
+
 ## WordPress security and inventory
 
 Connector 0.2.0 adds a tenant-scoped **Security** view and full installed plugin/theme inventory. It reports versions, active/update state, selected deployment flags, bounded local file-risk indicators, and matched public WordPress/PHP/plugin/theme advisories. The Connector remains read-only: no source contents, absolute paths, credentials or plugin settings are uploaded, and SitePulse cannot execute commands, quarantine files or install updates.

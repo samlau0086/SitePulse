@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Software action interactions
+
+- Separate direct plugin/theme actions from bulk preparation: action buttons open an accessible native confirmation dialog and queue only the approved component/targets; cancellation never confirms execution.
+- Add component checkboxes, visible-result selection, selection counts, removal and a distinct Add to bulk arrow. Protect the Connector and exclude ineligible action targets; keep read-only access disabled.
+- Coordinate up to 20 selected components through existing server batches sequentially, waiting for successful results and fresh inventory before revalidating the next target. Stop unsubmitted work on failures, uncertainty, changes or navigation without mutation retries; keep durable queued work visible.
+- Add DOM interaction and serial coordinator regression coverage; document browser lifetime, Cron delivery and non-atomic bulk limitations. No API authorization, Connector protocol or database migration changes.
+
 ## Unreleased — Inventory synchronization
 
 - Connector 0.3.1 queues inventory immediately after upgrade/reactivation and enabling management; inventory exceptions no longer interrupt heartbeat scheduling. Serialize collection and retain sanitized local failures separately from heartbeat health.

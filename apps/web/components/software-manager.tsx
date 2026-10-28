@@ -1,11 +1,19 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   SoftwareCommand,
   SoftwareDirectory,
 } from '@sitepulse/api-contracts';
 import { api } from '../lib/api';
 import { Icon } from './icon';
+import { SoftwareOperationDialog } from './software-operation-dialog';
+import {
+  actionable,
+  executeSoftwarePlans,
+  planOperations,
+  type OperationPlan,
+  type SoftwarePreviewResult,
+} from '../lib/software-operations';
 
 const actions: SoftwareCommand['action'][] = [
   'install',
@@ -19,12 +27,6 @@ function formatTimestamp(value: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Not received' : date.toLocaleString();
 }
-type Preview = {
-  batchId: string;
-  impact: { siteId: string; name: string }[];
-  command: SoftwareCommand;
-  warning: string;
-};
 export function SoftwareArtwork({
   slug,
   official,
@@ -73,14 +75,24 @@ export function SoftwareManager({
   const [kind, setKind] = useState<SoftwareCommand['kind']>('plugin');
   const [action, setAction] = useState<SoftwareCommand['action']>('install');
   const [slug, setSlug] = useState('');
-  const [replacement, setReplacement] = useState('');
-  const [reason, setReason] = useState('');
   const [search, setSearch] = useState('');
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [checkedSlugs, setCheckedSlugs] = useState<string[]>([]);
+  const [dialogPlans, setDialogPlans] = useState<OperationPlan[] | null>(null);
+  const execution = useRef<AbortController | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const base = `/organizations/${organizationId}/software`;
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (execution.current) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      execution.current?.abort();
+    };
+  }, []);
   useEffect(() => {
     let active = true;
     const interval = setInterval(() => {
@@ -110,17 +122,74 @@ export function SoftwareManager({
     try {
       await work();
     } catch (err) {
-      setPreview(null);
       setError(err instanceof Error ? err.message : 'Operation failed.');
     } finally {
       setPending(false);
     }
   }
   function changed() {
-    setPreview(null);
     setMessage('');
   }
+  function selectComponent(slug: string, checked: boolean) {
+    setCheckedSlugs((current) =>
+      checked
+        ? [...new Set([...current, slug])].slice(0, 20)
+        : current.filter((value) => value !== slug),
+    );
+    if (checked && action === 'install') setAction('activate');
+    changed();
+  }
+  function openPlans(plans: OperationPlan[]) {
+    setError('');
+    if (!plans.length) {
+      setError(
+        'No eligible targets for this action. Active components must be deactivated before uninstalling; updates require an available WordPress.org update.',
+      );
+      return;
+    }
+    setDialogPlans(plans);
+  }
+  function execute(
+    plans: OperationPlan[],
+    previews: SoftwarePreviewResult[],
+    changeReason: string,
+  ) {
+    if (execution.current) return;
+    const controller = new AbortController();
+    execution.current = controller;
+    setDialogPlans(null);
+    void run(async () => {
+      try {
+        await executeSoftwarePlans({
+          base,
+          plans,
+          previews,
+          reason: changeReason,
+          signal: controller.signal,
+          request: api,
+          onDirectory: setData,
+          onProgress: setMessage,
+        });
+        setMessage(
+          'Approved items submitted. Queued is not completed: check each site in Recent operations.',
+        );
+        await refresh();
+      } catch (err) {
+        throw new Error(
+          `${err instanceof Error ? err.message : 'Operation failed.'} Remaining submissions stopped. A submitted command may still execute; inspect Recent operations before retrying.`,
+          { cause: err },
+        );
+      } finally {
+        execution.current = null;
+      }
+    });
+  }
   const selected = data.sites.filter((site) => siteIds.includes(site.id));
+  const bulkAction = checkedSlugs.length
+    ? action === 'install'
+      ? 'activate'
+      : action
+    : 'install';
   const components = useMemo(() => {
     const map = new Map<
       string,
@@ -129,6 +198,7 @@ export function SoftwareManager({
         name: string;
         official: boolean;
         sites: {
+          id: string;
           name: string;
           version: string;
           active: boolean;
@@ -146,6 +216,7 @@ export function SoftwareManager({
         };
         row.official ||= item.source === 'wordpress.org';
         row.sites.push({
+          id: site.id,
           name: site.name,
           version: item.version,
           active: item.active,
@@ -162,10 +233,42 @@ export function SoftwareManager({
       )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [data.sites, siteIds, kind, search]);
+  const selectable = components.filter(
+    (item) =>
+      item.slug !== 'sitepulse-connector' &&
+      selected.some(
+        (site) =>
+          site.enabled &&
+          (kind === 'plugin' ? site.plugins : site.themes).some(
+            (component) =>
+              component.identifier === item.slug &&
+              actions.some((value) => actionable(component, value)),
+          ),
+      ),
+  );
+  const visibleChecked = selectable.filter((item) =>
+    checkedSlugs.includes(item.slug),
+  );
   return (
     <div className="software-manager">
+      {dialogPlans && (
+        <SoftwareOperationDialog
+          base={base}
+          plans={dialogPlans}
+          onClose={() => setDialogPlans(null)}
+          onConfirm={execute}
+        />
+      )}
       {error && <p role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
+      {pending && execution.current && (
+        <button
+          className="secondary danger"
+          onClick={() => execution.current?.abort()}
+        >
+          Stop remaining items (queued commands are not cancelled)
+        </button>
+      )}
       {!data.canManage && (
         <p className="notice-warning">
           Verified workspace owners and administrators can manage software. Your
@@ -208,6 +311,7 @@ export function SoftwareManager({
                     (!siteIds.includes(site.id) && siteIds.length >= 20)
                   }
                   onChange={(event) => {
+                    setCheckedSlugs([]);
                     setSiteIds(
                       event.target.checked
                         ? [...siteIds, site.id]
@@ -320,6 +424,8 @@ export function SoftwareManager({
                 onClick={() => {
                   setKind(value);
                   setSlug('');
+                  setCheckedSlugs([]);
+                  setSearch('');
                   changed();
                 }}
               >
@@ -335,6 +441,59 @@ export function SoftwareManager({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
+          <div className="software-bulk-toolbar">
+            <label className="software-select-control">
+              <input
+                type="checkbox"
+                aria-label="Select all visible eligible components"
+                checked={
+                  selectable.length > 0 &&
+                  visibleChecked.length === selectable.length
+                }
+                ref={(element) => {
+                  if (element)
+                    element.indeterminate =
+                      visibleChecked.length > 0 &&
+                      visibleChecked.length < selectable.length;
+                }}
+                disabled={pending || !data.canManage || !selectable.length}
+                onChange={(event) => {
+                  const visible = selectable.map((item) => item.slug);
+                  setCheckedSlugs((current) =>
+                    event.target.checked
+                      ? [...new Set([...current, ...visible])].slice(0, 20)
+                      : current.filter((slug) => !visible.includes(slug)),
+                  );
+                  if (action === 'install') setAction('activate');
+                }}
+              />
+              Select visible
+            </label>
+            <span>
+              {checkedSlugs.length} / 20 selected
+              {checkedSlugs.some(
+                (slug) => !components.some((item) => item.slug === slug),
+              )
+                ? ' (includes hidden search results)'
+                : ''}
+            </span>
+            <button
+              className="secondary"
+              disabled={pending || !checkedSlugs.length}
+              onClick={() => {
+                setCheckedSlugs([]);
+                changed();
+              }}
+            >
+              Clear selection
+            </button>
+          </div>
+          <p className="muted">
+            Action buttons open a direct confirmation for that component. Check
+            items or use Add to bulk → to prepare a shared action in the
+            separate bulk panel. Only eligible installed targets are included;
+            review exact site names before confirming.
+          </p>
           {!selected.length && (
             <p>Select one or more sites to view installed software.</p>
           )}
@@ -347,8 +506,28 @@ export function SoftwareManager({
           )}
           <div className="software-catalog">
             {components.map((item) => (
-              <article className="software-component" key={item.slug}>
+              <article
+                className={`software-component ${checkedSlugs.includes(item.slug) ? 'selected' : ''}`}
+                key={item.slug}
+              >
                 <div className="software-component-title">
+                  <label className="software-select-control">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${item.name} for bulk operation`}
+                      checked={checkedSlugs.includes(item.slug)}
+                      disabled={
+                        pending ||
+                        !data.canManage ||
+                        !selectable.includes(item) ||
+                        (!checkedSlugs.includes(item.slug) &&
+                          checkedSlugs.length >= 20)
+                      }
+                      onChange={(event) =>
+                        selectComponent(item.slug, event.target.checked)
+                      }
+                    />
+                  </label>
                   <SoftwareArtwork
                     key={`${kind}-${item.slug}`}
                     slug={item.slug}
@@ -363,8 +542,8 @@ export function SoftwareManager({
                   </div>
                 </div>
                 <ul className="software-versions">
-                  {item.sites.map((site, index) => (
-                    <li key={`${site.name}-${index}`}>
+                  {item.sites.map((site) => (
+                    <li key={site.id}>
                       <span>{site.name}</span>
                       <span>
                         v{site.version}{' '}
@@ -391,15 +570,16 @@ export function SoftwareManager({
                         disabled={
                           pending ||
                           !data.canManage ||
-                          item.slug === 'sitepulse-connector'
+                          !planOperations(selected, kind, value, [item.slug])
+                            .length
                         }
                         key={value}
-                        onClick={() => {
-                          setSlug(item.slug);
-                          setAction(value);
-                          changed();
-                          document.getElementById('software-command')?.focus();
-                        }}
+                        aria-label={`${value} ${item.name}`}
+                        onClick={() =>
+                          openPlans(
+                            planOperations(selected, kind, value, [item.slug]),
+                          )
+                        }
                       >
                         <Icon
                           name={
@@ -415,6 +595,23 @@ export function SoftwareManager({
                         {value}
                       </button>
                     ))}
+                  <button
+                    className="secondary"
+                    disabled={
+                      pending ||
+                      !data.canManage ||
+                      !selectable.includes(item) ||
+                      (!checkedSlugs.includes(item.slug) &&
+                        checkedSlugs.length >= 20)
+                    }
+                    onClick={() => {
+                      selectComponent(item.slug, true);
+                      document.getElementById('software-command')?.focus();
+                    }}
+                    aria-label={`Add ${item.name} to bulk operation`}
+                  >
+                    <Icon name="arrow" /> Add to bulk
+                  </button>
                 </div>
               </article>
             ))}
@@ -422,155 +619,110 @@ export function SoftwareManager({
         </section>
         <section className="card software-command">
           <h2 id="software-command" tabIndex={-1}>
-            <Icon name="workspace" /> Apply to {selected.length} site(s)
+            <Icon name="workspace" /> Bulk operation
           </h2>
+          <p>
+            {checkedSlugs.length
+              ? `${checkedSlugs.length} selected ${kind}(s) across ${selected.length} site(s)`
+              : `Install by slug or select installed ${kind}s using checkboxes.`}
+          </p>
+          {checkedSlugs.length > 0 && (
+            <ul className="software-bulk-items">
+              {checkedSlugs.map((value) => (
+                <li key={value}>
+                  <span>{value}</span>
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={pending}
+                    aria-label={`Remove ${value} from bulk operation`}
+                    onClick={() => selectComponent(value, false)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {checkedSlugs.length > 0 && (
+            <p className="muted">
+              {planOperations(selected, kind, bulkAction, checkedSlugs).length}{' '}
+              eligible component(s) for {bulkAction}. Active components are
+              excluded from uninstall; update requires an available
+              WordPress.org update; already-active/inactive targets are excluded
+              from activate/deactivate. The confirmation lists exact targets.
+            </p>
+          )}
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              void run(async () => {
-                const result = await api<Preview>(`${base}/preview`, {
-                  siteIds,
-                  command: {
-                    kind,
-                    action,
-                    slug: slug.trim(),
-                    ...(kind === 'theme' && action === 'deactivate'
-                      ? { replacement: replacement.trim() }
-                      : {}),
-                  },
-                  reason,
-                });
-                setPreview(result);
-              });
+              openPlans(
+                planOperations(
+                  selected,
+                  kind,
+                  bulkAction,
+                  checkedSlugs.length ? checkedSlugs : [slug.trim()],
+                ),
+              );
             }}
           >
             <fieldset disabled={pending || !data.canManage}>
-              <label htmlFor="software-slug">
-                {kind === 'plugin' ? 'Plugin' : 'Theme'} slug (WordPress.org)
-              </label>
-              <input
-                id="software-slug"
-                required
-                maxLength={100}
-                pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                placeholder={
-                  kind === 'plugin'
-                    ? 'e.g. wordpress-seo'
-                    : 'e.g. twentytwentyfive'
-                }
-                value={slug}
-                onChange={(event) => {
-                  setSlug(event.target.value);
-                  changed();
-                }}
-              />
+              {!checkedSlugs.length && (
+                <>
+                  <label htmlFor="software-slug">
+                    {kind === 'plugin' ? 'Plugin' : 'Theme'} slug
+                    (WordPress.org)
+                  </label>
+                  <input
+                    id="software-slug"
+                    required
+                    maxLength={100}
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                    placeholder={
+                      kind === 'plugin'
+                        ? 'e.g. wordpress-seo'
+                        : 'e.g. twentytwentyfive'
+                    }
+                    value={slug}
+                    onChange={(event) => {
+                      setSlug(event.target.value);
+                      changed();
+                    }}
+                  />
+                </>
+              )}
               <label htmlFor="software-action">Action</label>
               <select
                 id="software-action"
-                value={action}
+                value={bulkAction}
                 onChange={(event) => {
                   setAction(event.target.value as SoftwareCommand['action']);
                   changed();
                 }}
               >
-                {actions.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
+                {actions
+                  .filter((value) =>
+                    checkedSlugs.length
+                      ? value !== 'install'
+                      : value === 'install',
+                  )
+                  .map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
               </select>
-              {kind === 'theme' && action === 'deactivate' && (
-                <>
-                  <label htmlFor="replacement-theme">
-                    Switch to installed theme slug
-                  </label>
-                  <input
-                    required
-                    id="replacement-theme"
-                    value={replacement}
-                    onChange={(event) => {
-                      setReplacement(event.target.value);
-                      changed();
-                    }}
-                  />
-                  <p className="muted">
-                    WordPress requires an active theme. Deactivation switches to
-                    this theme.
-                  </p>
-                </>
-              )}
-              <label htmlFor="software-reason">Change reason</label>
-              <input
-                required
-                minLength={3}
-                maxLength={300}
-                id="software-reason"
-                value={reason}
-                onChange={(event) => {
-                  setReason(event.target.value);
-                  changed();
-                }}
-              />
               <p className="notice-warning">
                 Back up each WordPress site first. Updates and activation can
                 break a site; uninstall may permanently delete plugin data.
                 There is no automatic rollback.
               </p>
-              <button
-                disabled={
-                  !selected.length || selected.some((site) => !site.enabled)
-                }
-              >
-                <Icon name="info" /> Preview impact
+              <button disabled={!selected.some((site) => site.enabled)}>
+                <Icon name="info" /> Review{' '}
+                {checkedSlugs.length ? 'selected items' : 'installation'}
               </button>
             </fieldset>
           </form>
-          {preview && (
-            <div
-              className="software-preview"
-              role="region"
-              aria-label="Confirm software operation"
-            >
-              <h3>
-                Confirm {preview.command.action}: {preview.command.slug}
-              </h3>
-              <ul>
-                {preview.impact.map((site) => (
-                  <li key={site.siteId}>{site.name}</li>
-                ))}
-              </ul>
-              <p>{preview.warning}</p>
-              <p>
-                Preview expires after 10 minutes. Sites execute independently.
-              </p>
-              <div className="software-actions">
-                <button
-                  disabled={pending || !data.canManage}
-                  onClick={() =>
-                    void run(async () => {
-                      await api(`${base}/${preview.batchId}/confirm`, {});
-                      setPreview(null);
-                      setMessage(
-                        'Queued. Each site will pull its command on its next management poll.',
-                      );
-                      await refresh();
-                    })
-                  }
-                >
-                  Confirm and queue
-                </button>
-                <button
-                  className="secondary"
-                  disabled={pending}
-                  onClick={() => {
-                    setPreview(null);
-                  }}
-                >
-                  Back to editing
-                </button>
-              </div>
-            </div>
-          )}
         </section>
       </div>
       <section className="card">

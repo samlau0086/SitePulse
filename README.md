@@ -7,7 +7,11 @@
 1. 通过现有备份优先的部署流程应用迁移（包含 `0012_tidy_sir_ram` 和 `0013_nappy_shinko_yamashiro`），在 WordPress 后台升级 Connector 到 **0.3.1**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
 2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。每站独立授权，不需要提供 WordPress 管理员密码。
 3. 为 WordPress 配置每分钟执行到期事件的系统 Cron。Connector 每分钟拉取一次指令，受实际 Cron 执行频率影响；原来每 15 分钟的 Cron 会导致最长约 15 分钟等待。等待首次管理轮询及完整 inventory，界面显示 **Management ready**。
-4. 选择站点，在已安装卡片点击操作，或输入 WordPress.org slug（例如 `wordpress-seo`）安装。填写变更原因 → **Preview impact** → 检查站点及警告 → **Confirm and queue**。每站结果独立显示；提交前自行完成 WordPress 文件与数据库备份。
+4. 选择站点，点击已安装卡片的 **activate / deactivate / update / uninstall**，会直接弹出该组件的确认框，不改变批量表单。检查受影响站点及警告、填写变更原因，服务端预览通过后点击 **Confirm and queue**；取消不会提交执行。安装时在批量面板输入 WordPress.org slug（例如 `wordpress-seo`）。每站结果独立显示；提交前自行完成 WordPress 文件与数据库备份。
+
+批量操作：勾选组件前的复选框（可 **Select visible** 全选当前搜索结果），或点击独立的 **Add to bulk →**。右侧 **Bulk operation** 面板显示选中列表，选择统一操作后点击 **Review selected items**，核对每个组件实际影响的站点并统一确认。最多选择 20 个组件、20 个站点；Connector 不可操作，卸载排除启用中的组件，更新只包含有可用更新的官方组件。搜索隐藏的选项仍保留并提示，切换站点或插件/主题类别会清空组件选择。
+
+多组件按顺序提交：上一组件所有目标成功且收到新库存后，才重新校验并提交下一组件。**请保持当前页面打开**；关闭/离开页面或 **Stop remaining items** 仅停止尚未提交的项，不撤销已排队的任务。失败、结果不明、过期、库存变化或权限变化会停止后续提交，不会自动重试，也不是跨组件原子事务。确认后的“Queued”不是已完成，实际执行仍依赖 Connector 轮询及 WordPress Cron。本次交互优化不增加数据库迁移或 Connector 升级要求。
 
 安装和更新仅支持 WordPress.org 官方包，不支持上传 ZIP、付费源、任意 URL 或 shell。卸载前必须先停用；主题停用需要指定已安装的替代主题，活动主题及父主题受保护。Connector 自身在 WordPress 后台维护。更新可能破坏兼容性，卸载可能删除业务数据；此功能不提供 WordPress 自动备份或回滚。
 

@@ -2001,6 +2001,71 @@ h3 {
   margin: 0;
   overflow-wrap: anywhere;
 }
+.software-component.selected {
+  border-color: var(--info-ink);
+  background: var(--info-surface);
+}
+.software-component-title > div {
+  min-width: 0;
+}
+.software-select-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.software-select-control input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+}
+.software-bulk-toolbar,
+.software-bulk-items li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+}
+.software-bulk-items {
+  list-style: none;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.software-dialog {
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-panel);
+  background: var(--product-surface);
+  color: var(--product-ink);
+  overflow-wrap: anywhere;
+}
+.software-dialog::backdrop {
+  background: var(--product-ink);
+  opacity: 0.4;
+}
+.software-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.software-dialog input {
+  width: 100%;
+}
+.software-impact {
+  padding-left: 20px;
+}
+.software-impact > li {
+  margin-bottom: 12px;
+}
 .software-artwork {
   display: grid;
   place-items: center;

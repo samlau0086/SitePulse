@@ -201,7 +201,65 @@ const inventoryItem = z
     version: z
       .string()
       .trim()
-      .regex(/^[0-9A-Za-z.+_-]{1,40}$/),
+      .regex(/^[0-9A-Za-z.+_ -]{1,40}$/),
+  })
+  .strict();
+const installedComponent = inventoryItem
+  .extend({
+    active: z.boolean(),
+    updateVersion: z
+      .string()
+      .trim()
+      .regex(/^[0-9A-Za-z.+_ -]{1,40}$/)
+      .nullable(),
+    source: z.enum(['wordpress.org', 'custom', 'unknown']),
+  })
+  .strict();
+const localSecurityFinding = z
+  .object({
+    rule: z.enum([
+      'php_in_uploads',
+      'encoded_eval',
+      'encoded_inflate',
+      'command_execution',
+    ]),
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .refine(
+        (value) =>
+          !/^[\\/]|[\\:]/.test(value) &&
+          !Array.from(value).some(
+            (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+          ) &&
+          !value
+            .split('/')
+            .some((part) => part === '..' || part === '.' || !part),
+      ),
+  })
+  .strict();
+const connectorEnvironment = z
+  .object({
+    environmentType: z.enum(['local', 'development', 'staging', 'production']),
+    multisite: z.boolean(),
+    wpDebug: z.boolean(),
+    wpDebugDisplay: z.boolean(),
+    scriptDebug: z.boolean(),
+    disallowFileEdit: z.boolean(),
+    forceSslAdmin: z.boolean(),
+    wpCronDisabled: z.boolean(),
+    inventoryComplete: z.boolean().optional(),
+  })
+  .strict();
+const connectorLocalSecurityScan = z
+  .object({
+    status: z.enum(['complete', 'partial', 'unavailable']),
+    scannedAt: z.iso.datetime().optional(),
+    scannedFiles: z.number().int().min(0).max(5000),
+    skippedFiles: z.number().int().min(0).max(1000000),
+    findings: z.array(localSecurityFinding).max(100),
   })
   .strict();
 export const connectorInventory = z
@@ -217,6 +275,18 @@ export const connectorInventory = z
       .max(32),
     activePlugins: z.array(inventoryItem).max(200),
     activeThemes: z.array(inventoryItem).max(20),
+    installedPlugins: z
+      .array(installedComponent)
+      .max(200)
+      .nullable()
+      .default(null),
+    installedThemes: z
+      .array(installedComponent)
+      .max(20)
+      .nullable()
+      .default(null),
+    environment: connectorEnvironment.nullable().default(null),
+    localSecurityScan: connectorLocalSecurityScan.nullable().default(null),
     updateCounts: z
       .object({
         plugins: z.number().int().min(0).max(10000),
@@ -227,8 +297,40 @@ export const connectorInventory = z
   })
   .strict();
 export type InventoryItem = z.infer<typeof inventoryItem>;
+export type InstalledComponent = z.infer<typeof installedComponent>;
+export type ConnectorEnvironment = z.infer<typeof connectorEnvironment>;
+export type LocalSecurityScan = z.infer<typeof connectorLocalSecurityScan>;
 export type SiteInventory = z.infer<typeof connectorInventory> & {
   receivedAt: string;
+};
+export type PublicVulnerability = {
+  componentType: 'wordpress' | 'php' | 'plugin' | 'theme';
+  component: string;
+  installedVersion: string;
+  id: string;
+  title: string;
+  severity: 'unknown' | 'low' | 'medium' | 'high' | 'critical';
+  fixedVersion: string | null;
+  sourceUrl: string | null;
+  supplyChain: boolean;
+};
+export type SiteSecurityReport = {
+  status: 'current' | 'stale' | 'pending' | 'unavailable';
+  checkedAt: string | null;
+  nextCheckAt: string | null;
+  coverage: {
+    inventory: 'complete' | 'partial' | 'unknown';
+    localFiles: 'complete' | 'partial' | 'unknown';
+    publicVulnerabilities: 'complete' | 'partial' | 'unknown';
+  };
+  environmentRisks: Array<{
+    code: string;
+    severity: 'low' | 'medium' | 'high';
+    message: string;
+  }>;
+  localFindings: LocalSecurityScan['findings'];
+  vulnerabilities: PublicVulnerability[];
+  errorCode: string | null;
 };
 export type Site = {
   id: string;

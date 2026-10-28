@@ -79,12 +79,20 @@ describe('environment validation', () => {
           .MONITOR_INTERVAL_SECONDS,
       ).toBe(Number(seconds));
     expect(parseWorkerEnvironment(valid).MONITORING_ENABLED).toBe(true);
+    expect(parseWorkerEnvironment(valid).SECURITY_ADVISORIES_ENABLED).toBe(
+      true,
+    );
     expect(
       parseWorkerEnvironment({ ...valid, MONITORING_ENABLED: 'false' })
         .MONITORING_ENABLED,
     ).toBe(false);
+    expect(
+      parseWorkerEnvironment({ ...valid, SECURITY_ADVISORIES_ENABLED: 'false' })
+        .SECURITY_ADVISORIES_ENABLED,
+    ).toBe(false);
     for (const input of [
       { MONITORING_ENABLED: 'yes' },
+      { SECURITY_ADVISORIES_ENABLED: 'yes' },
       { MONITOR_INTERVAL_SECONDS: '1' },
       { MONITOR_INTERVAL_SECONDS: '59' },
       { MONITOR_INTERVAL_SECONDS: '3601' },

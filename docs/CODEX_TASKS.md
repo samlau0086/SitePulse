@@ -1,5 +1,11 @@
 # Milestones
 
+## Current security visibility milestone
+
+Implemented Connector 0.2.0 installed inventory, environment flags, bounded local file indicators, fixed-provider public advisory matching and the tenant-scoped Security tab. See [scope and staging acceptance](SECURITY_INVENTORY.md). Production migration/deployment and live WordPress security acceptance remain pending.
+
+Deferred at the user's request: Slack/Telegram live delivery acceptance. Keep it on the deployment TODO; do not mark it complete based on automated contracts.
+
 1. Foundation: implemented repository, toolchain, SQL migrations, container configuration, authentication, organizations, isolation tests, and docs. Disposable local Docker image builds, migration-first startup, service health and web/API proxy smoke checks pass; see STAGING_ACCEPTANCE_REPORT.md. Live HTTPS acceptance remains separate.
 2. Authentication recovery: implemented Better Auth password reset, email verification, private development outbox and production Resend transport. Automated expiration, replay, session revocation and generic-response tests pass; real provider delivery still needs staging verification.
 3. Connector pairing, heartbeat and inventory: implemented tenant-scoped sites, public URL/DNS registration validation, single-use challenges, hash-only credentials, rotation/revocation, single-site WP plugin, heartbeat, stale sweeps and minimized inventory. API concurrency/isolation tests and PHP contract tests exist. Live WordPress inventory acceptance is pending; see CONNECTOR_ACCEPTANCE.md.

@@ -3,12 +3,14 @@ import { createDatabase } from '@sitepulse/database';
 import { expireHeartbeats } from './heartbeat';
 import { runMonitoring } from './monitoring';
 import { deliverNotificationBatch } from './notifications';
+import { runSecurityAssessment } from './security';
 
 const env = parseWorkerEnvironment(process.env);
 const { db, pool } = createDatabase(env.DATABASE_URL);
 pool.on('error', () => console.error('Worker database connection error'));
 let stopped = false;
 let wake: (() => void) | undefined;
+let securityTask: Promise<unknown> | undefined;
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
   process.once(signal, () => {
     stopped = true;
@@ -27,6 +29,15 @@ while (!stopped) {
       console.error('Monitoring sweep failed');
     }
   }
+  if (env.SECURITY_ADVISORIES_ENABLED && !stopped && !securityTask) {
+    securityTask = runSecurityAssessment(db)
+      .catch(() => {
+        console.error('Security assessment sweep failed');
+      })
+      .finally(() => {
+        securityTask = undefined;
+      });
+  }
   if (!stopped) {
     try {
       await deliverNotificationBatch(db, env);
@@ -43,4 +54,5 @@ while (!stopped) {
     };
   });
 }
+await securityTask;
 await pool.end();

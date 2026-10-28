@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { recoverConnectorIncident } from '@sitepulse/database/incidents';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -15,6 +16,7 @@ import {
   updateSite,
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
+import type { SiteSecurityReport } from '@sitepulse/api-contracts';
 import { HttpError } from './http-error';
 import { organizationUsage, requireSiteSlot } from './entitlements';
 import {
@@ -289,6 +291,10 @@ export async function registerSiteRoutes(
         .select()
         .from(schema.siteInventorySnapshots)
         .where(eq(schema.siteInventorySnapshots.siteId, site.id));
+      const [assessment] = await tx
+        .select()
+        .from(schema.siteSecurityAssessments)
+        .where(eq(schema.siteSecurityAssessments.siteId, site.id));
       const monitoring = await tx
         .select({
           monitorType: schema.monitorJobs.monitorType,
@@ -298,7 +304,80 @@ export async function registerSiteRoutes(
         })
         .from(schema.monitorJobs)
         .where(eq(schema.monitorJobs.siteId, site.id));
-      return { site, inventory: inventory ?? null, monitoring };
+      const environmentRisks: SiteSecurityReport['environmentRisks'] = [];
+      if (inventory?.environment) {
+        if (
+          inventory.environment.environmentType === 'production' &&
+          inventory.environment.wpDebug
+        )
+          environmentRisks.push({
+            code: 'wp_debug_enabled',
+            severity: 'high',
+            message: 'WP_DEBUG is enabled in production.',
+          });
+        if (inventory.environment.wpDebugDisplay)
+          environmentRisks.push({
+            code: 'debug_display_enabled',
+            severity: 'high',
+            message: 'PHP error details may be displayed to visitors.',
+          });
+        if (!inventory.environment.disallowFileEdit)
+          environmentRisks.push({
+            code: 'dashboard_file_editor',
+            severity: 'medium',
+            message: 'The WordPress dashboard file editor is enabled.',
+          });
+        if (!inventory.environment.forceSslAdmin)
+          environmentRisks.push({
+            code: 'admin_ssl_not_forced',
+            severity: 'medium',
+            message: 'WordPress does not force HTTPS for administration.',
+          });
+        if (inventory.environment.scriptDebug)
+          environmentRisks.push({
+            code: 'script_debug_enabled',
+            severity: 'low',
+            message: 'SCRIPT_DEBUG is enabled.',
+          });
+      }
+      const age = assessment?.checkedAt
+        ? Date.now() - assessment.checkedAt.getTime()
+        : Number.POSITIVE_INFINITY;
+      const security: SiteSecurityReport = {
+        status: !assessment
+          ? 'pending'
+          : assessment.status === 'current' &&
+              (age > 48 * 60 * 60 * 1000 ||
+                site.status !== 'active' ||
+                !inventory ||
+                Date.now() - inventory.receivedAt.getTime() > 60 * 60 * 1000)
+            ? 'stale'
+            : assessment.status,
+        checkedAt: assessment?.checkedAt?.toISOString() ?? null,
+        nextCheckAt: assessment?.nextCheckAt.toISOString() ?? null,
+        coverage: {
+          inventory:
+            inventory?.installedPlugins && inventory.installedThemes
+              ? inventory.environment?.inventoryComplete === false ||
+                inventory.installedPlugins.length >= 200 ||
+                inventory.installedThemes.length >= 20
+                ? 'partial'
+                : 'complete'
+              : 'unknown',
+          localFiles:
+            inventory?.localSecurityScan?.status === 'complete'
+              ? 'complete'
+              : inventory?.localSecurityScan?.status === 'partial'
+                ? 'partial'
+                : 'unknown',
+          publicVulnerabilities: assessment?.coverage ?? 'unknown',
+        },
+        environmentRisks,
+        localFindings: inventory?.localSecurityScan?.findings ?? [],
+        vulnerabilities: assessment?.vulnerabilities ?? [],
+        errorCode: assessment?.errorCode ?? null,
+      };
+      return { site, inventory: inventory ?? null, monitoring, security };
     }),
   );
   for (const resource of ['checks', 'incidents'] as const) {
@@ -604,6 +683,7 @@ export async function registerSiteRoutes(
   app.post(
     '/api/v1/connector/inventory',
     {
+      bodyLimit: 524288,
       schema: {
         tags: ['Connector'],
         security: [{ siteBearer: [] }],
@@ -635,6 +715,27 @@ export async function registerSiteRoutes(
           .for('update');
         if (!site || site.deletedAt || !credential || credential.revokedAt)
           throw invalidCredential();
+        const [previousInventory] = await tx
+          .select()
+          .from(schema.siteInventorySnapshots)
+          .where(eq(schema.siteInventorySnapshots.siteId, site.id));
+        const componentSignature = (value: {
+          wordpressVersion: string;
+          phpVersion: string;
+          installedPlugins: unknown;
+          installedThemes: unknown;
+        }) => [
+          value.wordpressVersion,
+          value.phpVersion,
+          value.installedPlugins,
+          value.installedThemes,
+        ];
+        const componentsChanged =
+          !previousInventory ||
+          !isDeepStrictEqual(
+            componentSignature(previousInventory),
+            componentSignature(input),
+          );
         const [inventory] = await tx
           .insert(schema.siteInventorySnapshots)
           .values({
@@ -643,6 +744,10 @@ export async function registerSiteRoutes(
             phpVersion: input.phpVersion,
             activePlugins: input.activePlugins,
             activeThemes: input.activeThemes,
+            installedPlugins: input.installedPlugins,
+            installedThemes: input.installedThemes,
+            environment: input.environment,
+            localSecurityScan: input.localSecurityScan,
             updateCounts: input.updateCounts,
           })
           .onConflictDoUpdate({
@@ -652,12 +757,33 @@ export async function registerSiteRoutes(
               phpVersion: input.phpVersion,
               activePlugins: input.activePlugins,
               activeThemes: input.activeThemes,
+              installedPlugins: input.installedPlugins,
+              installedThemes: input.installedThemes,
+              environment: input.environment,
+              localSecurityScan: input.localSecurityScan,
               updateCounts: input.updateCounts,
               receivedAt: sql`now()`,
               updatedAt: sql`now()`,
             },
           })
           .returning();
+        await tx
+          .insert(schema.siteSecurityAssessments)
+          .values({ siteId: site.id, nextCheckAt: sql`now()` })
+          .onConflictDoUpdate({
+            target: schema.siteSecurityAssessments.siteId,
+            set: {
+              nextCheckAt: sql`now()`,
+              status: 'pending',
+              errorCode: null,
+              vulnerabilities: [],
+              coverage: 'unknown',
+              leaseToken: null,
+              leaseExpiresAt: null,
+              updatedAt: sql`now()`,
+            },
+            setWhere: sql`${componentsChanged}`,
+          });
         await tx
           .update(schema.siteCredentials)
           .set({ lastUsedAt: sql`now()` })

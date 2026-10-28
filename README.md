@@ -1,5 +1,13 @@
 # SitePulse
 
+## WordPress security and inventory
+
+Connector 0.2.0 adds a tenant-scoped **Security** view and full installed plugin/theme inventory. It reports versions, active/update state, selected deployment flags, bounded local file-risk indicators, and matched public WordPress/PHP/plugin/theme advisories. The Connector remains read-only: no source contents, absolute paths, credentials or plugin settings are uploaded, and SitePulse cannot execute commands, quarantine files or install updates.
+
+The local scan is deliberately bounded and cached for six hours; a match requires human review, and no match is not proof of safety. Public advisory coverage can be partial for custom/premium components, unusual version strings, provider failures or inventories reaching the collection limit. The worker uses fixed WPVulnerability HTTPS endpoints and sends component identifiers/versions from the VPS IP, never the site URL. Set validated `SECURITY_ADVISORIES_ENABLED=false` locally or as a GitHub Environment variable to pause those lookups. See [security and inventory behavior, privacy, limitations and staging acceptance](docs/SECURITY_INVENTORY.md).
+
+Apply migration `0011_many_smiling_tiger` through the normal backup-first deployment, then upgrade the WordPress plugin from `plugins/sitepulse-connector`. Slack/Telegram real-provider acceptance remains on the deployment TODO and is independent of this milestone.
+
 通知现支持 Email、Bark、Slack 和 Telegram，每个通道可添加多个接收者，四种通道合计最多 20 个有效配置，共享验证/测试限额。所有通道接收相同的已确认故障、恢复和 Connector 失联事件；新增通道不会改变监控确认间隔。
 
 启用 Slack / Telegram：在 GitHub 部署 Environment 中添加 Secret `NOTIFICATION_ENCRYPTION_KEY`，本地开发则写入未提交的 `.env`。用以下命令生成独立密钥：
@@ -50,7 +58,7 @@ Incident directories and site incident history pair graphical signals with visib
 
 Authenticated page transitions use shared, route-specific skeleton screens for the overview, directories, workspace cards, details and forms. The sidebar and top bar stay in place. Placeholders are non-interactive, announce loading to screen readers and stop pulsing when reduced motion is preferred.
 
-All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Shared design tokens live in `apps/web/app/globals.css`; follow [UI implementation guidelines](docs/UI_GUIDELINES.md) for future UI changes. The product uses readable system sans-serif typography, SVG navigation/status icons, blue primary actions and rounded white cards on a light background. The overview includes a connector distribution donut with textual counts, actionable attention items and site cards with direct Monitoring / Inventory / Connection links. Charts use authorized site data, not illustrative trends; connector activity does not imply HTTP availability. Public marketing retains the original cream/monospace reference. No commercial font is bundled or downloaded.
+All public, authentication and workspace pages follow [DESIGN.md](DESIGN.md). Shared design tokens live in `apps/web/app/globals.css`; follow [UI implementation guidelines](docs/UI_GUIDELINES.md) for future UI changes. The product uses readable system sans-serif typography, SVG navigation/status icons, blue primary actions and rounded white cards on a light background. The overview includes a connector distribution donut with textual counts, actionable attention items and site cards with direct Monitoring / Security / Inventory / Connection links. Charts use authorized site data, not illustrative trends; connector activity does not imply HTTP availability. Public marketing retains the original cream/monospace reference. No commercial font is bundled or downloaded.
 
 Interactive controls use stronger outlines, bold button labels and 44px minimum heights. Active navigation uses bold blue text/icons on a light blue background, without notification-like dots; inline links remain underlined and card actions have outlined touch targets. Operational badges distinguish healthy, warning and critical states with readable semantic colors, icons and text. Errors and feedback appear in bordered tinted panels; quota and verification warnings are highlighted separately. Connector failures are announced as errors, and destructive actions retain confirmation dialogs.
 
@@ -58,9 +66,9 @@ SitePulse is a multi-tenant workspace for WordPress maintenance providers. Accou
 
 ## Workspace navigation
 
-The signed-in workspace uses a persistent sidebar: **Overview**, **Sites**, **Incidents**, and **Workspaces**. `/app/sites` lists sites across your authorized organizations, with name/hostname search, workspace filtering, connector status, recent unresolved incidents, and direct Monitoring / Inventory / Connection links. `/app/sites/new` lets verified owners/admins select a workspace and opens pairing after creation. `/app/incidents` provides status/workspace filters and acknowledgement for verified owners/admins.
+The signed-in workspace uses a persistent sidebar: **Overview**, **Sites**, **Incidents**, and **Workspaces**. `/app/sites` lists sites across your authorized organizations, with name/hostname search, workspace filtering, connector status, recent unresolved incidents, and direct Monitoring / Security / Inventory / Connection links. `/app/sites/new` lets verified owners/admins select a workspace and opens pairing after creation. `/app/incidents` provides status/workspace filters and acknowledgement for verified owners/admins.
 
-Site sections are directly addressable at `/app/sites/<id>?view=monitoring`, `?view=inventory`, and `?view=connection`. Navigation adapts to small screens, and Refresh data reloads current server data. All reads and mutations retain API membership checks; UI filters do not grant access. Overview connector statistics describe heartbeat activity, not HTTP uptime. Lists include up to 1,000 sites and the latest 100 incidents per organization; unresolved counts apply to that recent history. The interface does not auto-poll.
+Site sections are directly addressable at `/app/sites/<id>?view=monitoring`, `?view=security`, `?view=inventory`, and `?view=connection`. Navigation adapts to small screens, and Refresh data reloads current server data. All reads and mutations retain API membership checks; UI filters do not grant access. Overview connector statistics describe heartbeat activity, not HTTP uptime. Lists include up to 1,000 sites and the latest 100 incidents per organization; unresolved counts apply to that recent history. The interface does not auto-poll.
 
 ## HTTP / SSL monitoring
 

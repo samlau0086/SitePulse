@@ -83,10 +83,12 @@ describe('GitHub deployment configuration', () => {
     const config = prepareDeploymentConfiguration({
       ...valid,
       MONITORING_ENABLED: 'false',
+      SECURITY_ADVISORIES_ENABLED: 'false',
       MONITOR_INTERVAL_SECONDS: '600',
       SSL_INTERVAL_SECONDS: '7200',
     })['.env'];
     expect(config).toContain("MONITORING_ENABLED='false'\n");
+    expect(config).toContain("SECURITY_ADVISORIES_ENABLED='false'\n");
     expect(config).toContain("MONITOR_INTERVAL_SECONDS='600'\n");
     expect(config).toContain("SSL_INTERVAL_SECONDS='7200'\n");
     expect(() =>

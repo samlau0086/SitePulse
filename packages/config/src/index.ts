@@ -51,6 +51,10 @@ export const workerEnvironment = databaseEnvironment.extend({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  SECURITY_ADVISORIES_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   MONITOR_INTERVAL_SECONDS: z.coerce
     .number()
     .int()

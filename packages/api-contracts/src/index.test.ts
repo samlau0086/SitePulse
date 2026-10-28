@@ -41,9 +41,56 @@ it('accepts bounded minimized inventory and rejects oversized entries', () => {
         version: '1.0.0',
       },
     ],
+    installedPlugins: [
+      {
+        identifier: 'seo-plugin',
+        name: 'SEO Plugin',
+        version: '1.2.0',
+        active: true,
+        updateVersion: '1.3.0',
+        source: 'wordpress.org',
+      },
+    ],
+    installedThemes: [],
+    environment: {
+      environmentType: 'production',
+      multisite: false,
+      wpDebug: false,
+      wpDebugDisplay: false,
+      scriptDebug: false,
+      disallowFileEdit: true,
+      forceSslAdmin: true,
+      wpCronDisabled: false,
+    },
+    localSecurityScan: {
+      status: 'complete',
+      scannedFiles: 40,
+      skippedFiles: 0,
+      findings: [],
+    },
     updateCounts: { plugins: 1, themes: 0, core: 0 },
   });
   expect(valid.activePlugins).toHaveLength(1);
+  expect(valid.installedPlugins?.[0]?.active).toBe(true);
+  for (const path of [
+    '/etc/passwd',
+    '../secret.php',
+    'plugins/../../secret.php',
+    'C:\\secret.php',
+    'uploads/line\n.php',
+  ]) {
+    expect(
+      connectorInventory.safeParse({
+        ...valid,
+        localSecurityScan: {
+          status: 'complete',
+          scannedFiles: 1,
+          skippedFiles: 0,
+          findings: [{ rule: 'php_in_uploads', path }],
+        },
+      }).success,
+    ).toBe(false);
+  }
   expect(
     connectorInventory.safeParse({
       ...valid,
@@ -53,5 +100,14 @@ it('accepts bounded minimized inventory and rejects oversized entries', () => {
   expect(
     connectorInventory.safeParse({ ...valid, wordpressVersion: 'latest' })
       .success,
+  ).toBe(false);
+  expect(
+    connectorInventory.safeParse({
+      ...valid,
+      localSecurityScan: {
+        ...valid.localSecurityScan,
+        findings: [{ rule: 'arbitrary_code', path: 'plugin.php' }],
+      },
+    }).success,
   ).toBe(false);
 });

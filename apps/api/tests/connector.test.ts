@@ -5,6 +5,7 @@ import { migrateDatabase } from '@sitepulse/database/migrate';
 import { parseEnvironment } from '@sitepulse/config';
 import { buildApp } from '../src/app';
 import { expireHeartbeats } from '../../worker/src/heartbeat';
+import { runSecurityAssessment } from '../../worker/src/security';
 
 const origin = 'http://localhost:3000';
 let app: Awaited<ReturnType<typeof buildApp>>;
@@ -268,6 +269,87 @@ it('lets members read but requires owner/admin for every mutation and observes r
       .statusCode,
   ).toBe(404);
 });
+async function verifySecurityAssessment(
+  send: (body: object) => ReturnType<typeof call>,
+  payload: { wordpressVersion: string },
+) {
+  await database.db
+    .update(schema.siteSecurityAssessments)
+    .set({
+      status: 'current',
+      nextCheckAt: new Date(Date.now() + 86400000),
+      checkedAt: new Date(),
+      coverage: 'complete',
+    })
+    .where(eq(schema.siteSecurityAssessments.siteId, siteId));
+  expect((await send(payload)).statusCode).toBe(200);
+  const [unchanged] = await database.db
+    .select()
+    .from(schema.siteSecurityAssessments)
+    .where(eq(schema.siteSecurityAssessments.siteId, siteId));
+  expect(unchanged!.status).toBe('current');
+  expect(unchanged!.nextCheckAt.getTime()).toBeGreaterThan(Date.now());
+  await database.db
+    .update(schema.sites)
+    .set({ status: 'active' })
+    .where(eq(schema.sites.id, siteId));
+  await database.db
+    .update(schema.siteSecurityAssessments)
+    .set({ nextCheckAt: new Date(0) })
+    .where(eq(schema.siteSecurityAssessments.siteId, siteId));
+  let replaced = false;
+  const fakeProvider: typeof fetch = async () => {
+    if (!replaced) {
+      replaced = true;
+      expect(
+        (await send({ ...payload, wordpressVersion: '6.9.0' })).statusCode,
+      ).toBe(200);
+    }
+    return Response.json({
+      error: 0,
+      data: { name: 'Example', vulnerability: null },
+    });
+  };
+  expect(await runSecurityAssessment(database.db, fakeProvider)).toBe(1);
+  const [invalidated] = await database.db
+    .select()
+    .from(schema.siteSecurityAssessments)
+    .where(eq(schema.siteSecurityAssessments.siteId, siteId));
+  expect(invalidated).toMatchObject({
+    status: 'pending',
+    leaseToken: null,
+    coverage: 'unknown',
+    vulnerabilities: [],
+  });
+  expect(await runSecurityAssessment(database.db, fakeProvider)).toBe(1);
+  expect((await call('GET', `/sites/${siteId}`)).json().security).toMatchObject(
+    { status: 'current', coverage: { publicVulnerabilities: 'partial' } },
+  );
+  await database.db
+    .update(schema.siteSecurityAssessments)
+    .set({ nextCheckAt: new Date(0) })
+    .where(eq(schema.siteSecurityAssessments.siteId, siteId));
+  let overflowSent = false;
+  const oversizedProvider: typeof fetch = async () =>
+    new Response(
+      new ReadableStream({
+        pull(controller) {
+          if (!overflowSent) {
+            overflowSent = true;
+            controller.enqueue(new Uint8Array(1_000_001));
+          } else controller.close();
+        },
+      }),
+    );
+  expect(await runSecurityAssessment(database.db, oversizedProvider)).toBe(1);
+  expect((await call('GET', `/sites/${siteId}`)).json().security).toMatchObject(
+    {
+      status: 'unavailable',
+      errorCode: 'advisory_provider_unavailable',
+      coverage: { publicVulnerabilities: 'unknown' },
+    },
+  );
+}
 it('issues only a hashed short-lived challenge and invalidates older codes', async () => {
   const old = await issue();
   await issue();
@@ -346,6 +428,42 @@ it('stores and replaces inventory with server receipt time and enforces tenant a
       { identifier: 'example', name: 'Example', version: '1.0.0' },
     ],
     activeThemes: [{ identifier: 'theme', name: 'Theme', version: '1.0.0' }],
+    installedPlugins: [
+      {
+        identifier: 'example',
+        name: 'Example',
+        version: '1.0.0',
+        active: true,
+        updateVersion: '1.1.0',
+        source: 'wordpress.org',
+      },
+    ],
+    installedThemes: [
+      {
+        identifier: 'theme',
+        name: 'Theme',
+        version: '1.0.0',
+        active: true,
+        updateVersion: null,
+        source: 'unknown',
+      },
+    ],
+    environment: {
+      environmentType: 'production',
+      multisite: false,
+      wpDebug: true,
+      wpDebugDisplay: false,
+      scriptDebug: false,
+      disallowFileEdit: false,
+      forceSslAdmin: true,
+      wpCronDisabled: false,
+    },
+    localSecurityScan: {
+      status: 'complete',
+      scannedFiles: 12,
+      skippedFiles: 0,
+      findings: [{ rule: 'php_in_uploads', path: 'uploads/image.php' }],
+    },
     updateCounts: { plugins: 1, themes: 0, core: 0 },
   };
   const send = (body: object, token = credential) =>
@@ -389,6 +507,17 @@ it('stores and replaces inventory with server receipt time and enforces tenant a
   expect(response.statusCode, response.body).toBe(200);
   expect(response.json().inventory).toMatchObject(payload);
   expect(response.json().inventory.receivedAt).toBe(written.json().receivedAt);
+  expect(response.json().security).toMatchObject({
+    status: 'pending',
+    coverage: { inventory: 'complete', localFiles: 'complete' },
+    localFindings: [{ rule: 'php_in_uploads', path: 'uploads/image.php' }],
+  });
+  expect(response.json().security.environmentRisks).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: 'wp_debug_enabled' }),
+      expect.objectContaining({ code: 'dashboard_file_editor' }),
+    ]),
+  );
   expect(
     (await call('GET', `/sites/${siteId}`, undefined, outsider.cookie))
       .statusCode,
@@ -402,6 +531,10 @@ it('stores and replaces inventory with server receipt time and enforces tenant a
     .where(eq(schema.siteInventorySnapshots.siteId, siteId));
   expect(rows).toHaveLength(1);
   expect(rows[0]?.wordpressVersion).toBe('6.8.0');
+  await verifySecurityAssessment(send, {
+    ...payload,
+    wordpressVersion: '6.8.0',
+  });
 });
 it('accepts heartbeat with server time and rejects replay without refreshing freshness', async () => {
   const before = Date.now();

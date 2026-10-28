@@ -116,7 +116,7 @@ it('provides direct site section links and distinguishes connector status from H
       incidents: [incident],
     }),
   );
-  for (const view of ['monitoring', 'inventory', 'connection'])
+  for (const view of ['monitoring', 'security', 'inventory', 'connection'])
     expect(html).toContain(`/app/sites/site-a?view=${view}`);
   expect(html).toContain('Stale heartbeat');
   expect(html).toContain('not HTTP availability');

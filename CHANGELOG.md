@@ -2,6 +2,10 @@
 
 ## Unreleased — 2026-10-28
 
+- Added Connector 0.2.0 full installed plugin/theme inventory, environment risk flags and a bounded, cached, read-only local PHP risk-indicator scan. Only rule IDs and relative paths are reported; no file contents are uploaded or changed.
+- Added tenant-scoped Security views, migration 0011 security assessments, fixed-endpoint WPVulnerability matching for WordPress/PHP/recognized WordPress.org components, explicit stale/partial/unknown coverage and an operator disable switch.
+- Added conservative version-range, malformed-provider, contract, tenant-isolation and navigation coverage plus a staging runbook. Custom packages and a clean bounded scan are not claimed safe; real Slack/Telegram provider acceptance remains deferred.
+
 - Added multiple Slack Incoming Webhook and Telegram Bot recipients per workspace, encrypted credentials, explicit destination opt-in, tests and enable/disable/delete controls. Both channels share existing tenant authorization, recipient limits, cooldowns and incident/recovery outbox policy.
 - Added migration 0010, optional stable `NOTIFICATION_ENCRYPTION_KEY` in validated API/worker/GitHub deployment configuration, fixed official provider destinations, redirect rejection, bounded responses and sanitized retries. Each channel claims up to five deliveries per sweep. Provider timeout/crash retries may duplicate a chat message; provider acceptance is not recipient delivery confirmation.
 - Added contracts, provider, encryption, UI and PostgreSQL integration coverage for both channels. Real Slack/Telegram delivery still requires staging acceptance with operator-owned destinations.

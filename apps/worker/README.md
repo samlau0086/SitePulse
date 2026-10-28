@@ -1,5 +1,7 @@
 # SitePulse worker
 
+Security inventory assessments run separately from the main monitoring loop when `SECURITY_ADVISORIES_ENABLED=true`. Fixed public HTTPS lookups use bounded streamed responses and five-request concurrency. Inventory changes fence obsolete assessment leases. See [security inventory](../../docs/SECURITY_INVENTORY.md) for scope, provider disclosure and limitations.
+
 `pnpm dev` runs this process alongside web/API. Compose starts it after migrations. It expires stale heartbeats in bounded transactions and runs independent external HTTP/SSL jobs. It publishes no ports; the database network stays internal and a separate monitoring network provides outbound DNS/HTTP/HTTPS connectivity.
 
 Settings are validated through packages/config: DATABASE_URL, APP_ORIGIN, AUTH_MAIL_TRANSPORT, AUTH_MAIL_FROM, RESEND_API_KEY when using Resend, optional BARK_ENCRYPTION_KEY and independent NOTIFICATION_ENCRYPTION_KEY for Slack/Telegram (each 64 hex characters), HEARTBEAT_STALE_SECONDS (2700), WORKER_POLL_SECONDS (60), MONITORING_ENABLED (true), MONITOR_INTERVAL_SECONDS (300; 60–3600), SSL_INTERVAL_SECONDS (86400; 3600–604800). Disabling monitoring pauses probes/retention and preserves history; heartbeat expiration and queued delivery across all four channels continue. SIGTERM/SIGINT stops scheduling, waits for the current sweep and closes the pool. Errors are generic and never log response bodies, credentials or arbitrary network errors.

@@ -178,6 +178,9 @@ export function SiteDirectory({
                   <Link href={`/app/sites/${site.id}?view=inventory`}>
                     <Icon name="inventory" /> Inventory
                   </Link>
+                  <Link href={`/app/sites/${site.id}?view=security`}>
+                    <Icon name="shield" /> Security
+                  </Link>
                   <Link href={`/app/sites/${site.id}?view=connection`}>
                     <Icon name="connection" /> Connection
                   </Link>
@@ -239,6 +242,10 @@ export function SiteDirectory({
                       <Link href={`/app/sites/${site.id}?view=inventory`}>
                         <Icon name="inventory" />
                         Inventory
+                      </Link>
+                      <Link href={`/app/sites/${site.id}?view=security`}>
+                        <Icon name="shield" />
+                        Security
                       </Link>
                       <Link href={`/app/sites/${site.id}?view=connection`}>
                         <Icon name="connection" />

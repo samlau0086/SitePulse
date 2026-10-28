@@ -1,5 +1,7 @@
 # Security controls and launch gaps
 
+The WordPress security visibility milestone adds tenant-scoped inventory, environment flags, bounded local rule/path indicators and public advisory matching. It never uploads source contents or provides remote execution/remediation. Third-party requests have fixed HTTPS origins, redirects disabled, deadlines and a streamed 1 MiB cap; results expose partial/unknown/stale coverage. See [security inventory](SECURITY_INVENTORY.md) for operational limitations and acceptance.
+
 Platform entitlement administration is isolated under `/api/v1/admin`. Every request requires a live Better Auth session, verified email and the validated server-only `PLATFORM_ADMIN_USER_IDS` UUID allowlist (empty by default). Organization roles, request headers and submitted identity/operator fields cannot grant platform authority. Mutations require the exact trusted Origin. This narrow cross-tenant capability exposes workspace identity/usage and allocation changes only; tenant APIs retain membership checks. Saves use row locks plus expected snapshots and atomically audit the authenticated actor, reason and before/after values. Allowlist changes require API restart/redeployment; no public elevation endpoint exists. Keep reasons free of secrets/customer content. Search is parameterized and literal; pagination and input lengths are bounded.
 
 Implemented controls:

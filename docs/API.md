@@ -110,6 +110,8 @@ Member administration, arbitrary alert-policy/channel management and billing end
 
 ## External monitoring and incidents
 
+`GET /sites/:siteId` also returns tenant-scoped `security` findings and independent inventory/local-file/public-advisory coverage. Connector 0.2.0 inventory includes installed active/inactive components, available update versions, selected environment flags, and bounded local scan metadata. The inventory endpoint has a 512 KiB body limit. No API uploads source contents or triggers WordPress commands. See [security inventory](SECURITY_INVENTORY.md).
+
 | Method / path                                           | Body           | Access/result                                                                          |
 | ------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
 | `GET /sites/:siteId`                                    | —              | Member; also returns sanitized `monitoring` states/last/next timestamps; no job leases |

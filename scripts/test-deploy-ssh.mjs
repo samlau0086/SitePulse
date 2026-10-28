@@ -11,11 +11,28 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const bashCommand =
+  process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
+const toBashPath = (value) =>
+  process.platform === 'win32'
+    ? value
+        .replaceAll('\\', '/')
+        .replace(/^([A-Za-z]):\//, (_, drive) => `/${drive.toLowerCase()}/`)
+    : value;
+
 // Execute the actual workflow shell block with transport doubles; never contact a VPS.
 const workflow = readFileSync('.github/workflows/deploy.yml', 'utf8');
 const block = workflow.split('        run: |\n')[1];
 assert.ok(block, 'Expected the deployment shell block');
-const script = block.replace(/^ {10}/gm, '');
+const script = `git() {
+  [[ "$TEST_FAILURE" != archive ]] || return 1
+  printf 'fixture-archive'
+}
+node() { "$TEST_BIN/node" "$@"; }
+ssh-keyscan() { "$TEST_BIN/ssh-keyscan" "$@"; }
+ssh() { "$TEST_BIN/ssh" "$@"; }
+scp() { "$TEST_BIN/scp" "$@"; }
+${block.replace(/^ {10}/gm, '')}`;
 const hostKey = 'test-vps.invalid ssh-ed25519 fixture-host-key';
 const cases = [
   {
@@ -151,18 +168,19 @@ esac
     for (const command of ['ssh-keyscan', 'ssh', 'scp', 'git', 'node']) {
       writeFileSync(join(bin, command), stub, { mode: 0o700 });
     }
-    const result = spawnSync('bash', ['-c', script], {
+    const result = spawnSync(bashCommand, ['-c', script], {
       encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        RUNNER_TEMP: directory,
-        TEST_CALLS: calls,
+        PATH: `${toBashPath(bin)}:/usr/bin:/bin`,
+        TEST_BIN: toBashPath(bin),
+        RUNNER_TEMP: toBashPath(directory),
+        TEST_CALLS: toBashPath(calls),
         TEST_SCAN: scenario.scan,
         TEST_HOST_KEY: hostKey,
         TEST_FAILURE: scenario.failure ?? '',
         TEST_REPEAT_SETUP: String(Boolean(scenario.missingDirectory)),
-        TEST_REMOTE: remote,
+        TEST_REMOTE: toBashPath(remote),
         TEST_ROOT: '/opt/sitepulse-staging',
         WEB_BIND_PORT: scenario.port ?? '18080',
         VPS_HOST: 'test-vps.invalid',
@@ -193,13 +211,18 @@ esac
       scenario.ok || ['upload', 'deploy'].includes(scenario.failure),
     );
     assert.equal(result.stdout.includes('::warning::'), !scenario.configured);
-    if (scenario.phase)
+    if (scenario.phase) {
       assert.ok(result.stderr.includes(`failed during ${scenario.phase}`));
+    }
     if (['blocked-directory'].includes(scenario.failure))
       assert.ok(result.stderr.includes('VPS setup incomplete:'));
     if (scenario.missingDirectory) {
-      assert.equal(statSync(join(remote, 'incoming')).mode & 0o777, 0o700);
-      assert.equal(statSync(join(remote, 'shared')).mode & 0o777, 0o750);
+      assert.equal(statSync(join(remote, 'incoming')).isDirectory(), true);
+      assert.equal(statSync(join(remote, 'shared')).isDirectory(), true);
+      if (process.platform !== 'win32') {
+        assert.equal(statSync(join(remote, 'incoming')).mode & 0o777, 0o700);
+        assert.equal(statSync(join(remote, 'shared')).mode & 0o777, 0o750);
+      }
       assert.equal(
         readFileSync(join(remote, 'shared', '.env'), 'utf8'),
         'fixture-app-secret',
@@ -214,6 +237,8 @@ esac
         'backups',
         'logs',
       ])
+        assert.equal(statSync(join(remote, name)).isDirectory(), true);
+      if (process.platform !== 'win32')
         assert.equal(statSync(join(remote, name)).mode & 0o777, 0o700);
       assert.equal(
         readFileSync(join(remote, 'shared', '.env'), 'utf8'),

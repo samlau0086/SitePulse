@@ -99,6 +99,7 @@ Optional `PLATFORM_ADMIN_USER_IDS`: comma-separated verified Better Auth user UU
 | `WEB_BIND_PORT`                | Optional free host port; staging defaults 3000, production 3001                                                             |
 | `POSTGRES_USER`, `POSTGRES_DB` | Optional, default `sitepulse`; lowercase letters/digits/underscore, starts with a letter or underscore, up to 63 characters |
 | `MONITORING_ENABLED`           | Optional `true`/`false`, default `true`; pause external probes while retaining history                                      |
+| `SECURITY_ADVISORIES_ENABLED`  | Optional `true`/`false`, default `true`; pause fixed-provider advisory refreshes while retaining stored results             |
 | `MONITOR_INTERVAL_SECONDS`     | Optional HTTP interval, default `300`, allowed `60`–`3600`                                                                  |
 | `SSL_INTERVAL_SECONDS`         | Optional SSL interval, default `86400`, allowed `3600`–`604800`                                                             |
 

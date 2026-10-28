@@ -271,6 +271,47 @@ export const siteInventorySnapshots = pgTable('site_inventory_snapshots', {
   activeThemes: jsonb('active_themes')
     .$type<Array<{ identifier: string; name: string; version: string }>>()
     .notNull(),
+  installedPlugins: jsonb('installed_plugins').$type<Array<{
+    identifier: string;
+    name: string;
+    version: string;
+    active: boolean;
+    updateVersion: string | null;
+    source: 'wordpress.org' | 'custom' | 'unknown';
+  }> | null>(),
+  installedThemes: jsonb('installed_themes').$type<Array<{
+    identifier: string;
+    name: string;
+    version: string;
+    active: boolean;
+    updateVersion: string | null;
+    source: 'wordpress.org' | 'custom' | 'unknown';
+  }> | null>(),
+  environment: jsonb('environment').$type<{
+    environmentType: 'local' | 'development' | 'staging' | 'production';
+    multisite: boolean;
+    wpDebug: boolean;
+    wpDebugDisplay: boolean;
+    scriptDebug: boolean;
+    disallowFileEdit: boolean;
+    forceSslAdmin: boolean;
+    wpCronDisabled: boolean;
+    inventoryComplete?: boolean;
+  } | null>(),
+  localSecurityScan: jsonb('local_security_scan').$type<{
+    status: 'complete' | 'partial' | 'unavailable';
+    scannedAt?: string;
+    scannedFiles: number;
+    skippedFiles: number;
+    findings: Array<{
+      rule:
+        | 'php_in_uploads'
+        | 'encoded_eval'
+        | 'encoded_inflate'
+        | 'command_execution';
+      path: string;
+    }>;
+  } | null>(),
   updateCounts: jsonb('update_counts')
     .$type<{ plugins: number; themes: number; core: number }>()
     .notNull(),
@@ -279,6 +320,50 @@ export const siteInventorySnapshots = pgTable('site_inventory_snapshots', {
     .defaultNow(),
   updatedAt: updatedAt(),
 });
+
+export const siteSecurityAssessments = pgTable(
+  'site_security_assessments',
+  {
+    siteId: uuid('site_id')
+      .primaryKey()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    status: text('status', {
+      enum: ['pending', 'current', 'unavailable'],
+    })
+      .notNull()
+      .default('pending'),
+    vulnerabilities: jsonb('vulnerabilities').$type<
+      Array<{
+        componentType: 'wordpress' | 'php' | 'plugin' | 'theme';
+        component: string;
+        installedVersion: string;
+        id: string;
+        title: string;
+        severity: 'unknown' | 'low' | 'medium' | 'high' | 'critical';
+        fixedVersion: string | null;
+        sourceUrl: string | null;
+        supplyChain: boolean;
+      }>
+    >(),
+    coverage: text('coverage', {
+      enum: ['complete', 'partial', 'unknown'],
+    })
+      .notNull()
+      .default('unknown'),
+    errorCode: text('error_code'),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    nextCheckAt: timestamp('next_check_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    inventoryUpdatedAt: timestamp('inventory_updated_at', {
+      withTimezone: true,
+    }),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index('site_security_due_idx').on(table.nextCheckAt)],
+);
 
 export const monitorJobs = pgTable(
   'monitor_jobs',

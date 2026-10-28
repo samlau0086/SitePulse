@@ -987,3 +987,11 @@ The initial implementation task should be repository scaffolding and authenticat
 **Third milestone acceptance:** the monitoring worker detects an outage and produces one deduplicated incident.
 
 Only after these milestones are reliable should billing and production onboarding be added.
+
+---
+
+# 15. WordPress security visibility milestone
+
+The product now includes a deliberately bounded, read-only security visibility milestone. It may collect installed plugin/theme identifiers and versions, active/update state, selected non-secret WordPress environment flags, and local rule IDs with paths relative to `wp-content`. It may match those components against a fixed public advisory provider from the worker.
+
+This milestone must preserve tenant membership authorization and Connector site credentials. It must expose complete, partial, stale, unavailable and unknown coverage rather than equating missing findings with safety. It must not upload source contents, introduce remote execution, modify WordPress files, auto-update components, quarantine/delete code, inspect customer database content, or claim antivirus/integrity certification. Resource limits and provider privacy/availability limitations must be documented and tested.

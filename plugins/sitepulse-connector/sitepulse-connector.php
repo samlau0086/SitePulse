@@ -2,17 +2,19 @@
 /**
  * Plugin Name: SitePulse Connector
  * Description: Pairs this site with SitePulse and sends periodic heartbeats. No remote execution.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * License: GPL-2.0-or-later
  */
 if (!defined('ABSPATH')) { exit; }
+require_once __DIR__ . '/security-scanner.php';
 
 final class SitePulse_Connector {
     const OPTION = 'sitepulse_connection';
     const HOOK = 'sitepulse_heartbeat';
     const LOCK = 'sitepulse_heartbeat_lock';
+    const SECURITY_SCAN = 'sitepulse_security_scan';
 
     public static function boot() {
         if (is_multisite()) { return; }
@@ -101,7 +103,7 @@ final class SitePulse_Connector {
             if (!$state) { return; }
             $state['sequence']++;
             update_option(self::OPTION, $state, false); // Reserve before sending, including on timeouts.
-            $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => '0.1.0'), $state['credential']);
+            $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => '0.2.0'), $state['credential']);
             if (!is_wp_error($result) && function_exists('get_bloginfo')) { self::inventory($state); }
             // Do not resurrect a connection removed while the request was in flight.
             $current = get_option(self::OPTION, array());
@@ -116,18 +118,44 @@ final class SitePulse_Connector {
     }
     public static function inventory($state) {
         if (function_exists('plugin_basename') && defined('ABSPATH')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; }
-        $plugins = array();
-        foreach ((array) get_option('active_plugins', array()) as $file) {
-            $data = get_plugin_data(WP_PLUGIN_DIR . '/' . $file, false, false);
-            if (count($plugins) >= 200 || empty($data['Name']) || empty($data['Version'])) { continue; }
-            $plugins[] = array('identifier' => sanitize_key(dirname($file) === '.' ? basename($file, '.php') : dirname($file)), 'name' => sanitize_text_field($data['Name']), 'version' => sanitize_text_field($data['Version']));
-        }
-        $theme = wp_get_theme();
-        $themes = array(array('identifier' => sanitize_key($theme->get_stylesheet()), 'name' => sanitize_text_field($theme->get('Name')), 'version' => sanitize_text_field($theme->get('Version') ?: '0.0.0')));
+        if (!function_exists('get_core_updates')) { require_once ABSPATH . 'wp-admin/includes/update.php'; }
+        $active_files = array_flip((array) get_option('active_plugins', array()));
         $updates = get_site_transient('update_plugins');
         $themeUpdates = get_site_transient('update_themes');
         $coreUpdates = get_core_updates(array('dismissed' => false));
-        self::request($state['origin'], 'inventory', array('siteId' => $state['site_id'], 'wordpressVersion' => get_bloginfo('version'), 'phpVersion' => PHP_VERSION, 'activePlugins' => $plugins, 'activeThemes' => $themes, 'updateCounts' => array('plugins' => is_object($updates) && !empty($updates->response) ? count($updates->response) : 0, 'themes' => is_object($themeUpdates) && !empty($themeUpdates->response) ? count($themeUpdates->response) : 0, 'core' => is_array($coreUpdates) ? count($coreUpdates) : 0)), $state['credential']);
+        $installed_plugins = array(); $plugins = array(); $all_plugins = (array) get_plugins(); $all_themes = (array) wp_get_themes();
+        foreach ($all_plugins as $file => $data) {
+            if (count($installed_plugins) >= 200 || empty($data['Name']) || empty($data['Version'])) { continue; }
+            $identifier = sanitize_key(dirname($file) === '.' ? basename($file, '.php') : dirname($file));
+            $active = isset($active_files[$file]);
+            $update = is_object($updates) && isset($updates->response[$file]) ? sanitize_text_field($updates->response[$file]->new_version ?? '') : '';
+            $metadata = is_object($updates) ? ($updates->response[$file] ?? $updates->no_update[$file] ?? null) : null;
+            $known = is_object($metadata) && isset($metadata->id) && $metadata->id === 'w.org/plugins/' . $identifier && empty($data['UpdateURI']);
+            $item = array('identifier' => $identifier, 'name' => sanitize_text_field($data['Name']), 'version' => sanitize_text_field($data['Version']), 'active' => $active, 'updateVersion' => $update ?: null, 'source' => $known ? 'wordpress.org' : 'unknown');
+            $installed_plugins[] = $item;
+            if ($active) { $plugins[] = array_intersect_key($item, array_flip(array('identifier', 'name', 'version'))); }
+        }
+        $active_theme = wp_get_theme(); $themes = array(); $installed_themes = array();
+        foreach ($all_themes as $stylesheet => $theme) {
+            if (count($installed_themes) >= 20) { break; }
+            $active = $stylesheet === $active_theme->get_stylesheet();
+            $update = is_object($themeUpdates) && isset($themeUpdates->response[$stylesheet]) ? sanitize_text_field($themeUpdates->response[$stylesheet]['new_version'] ?? '') : '';
+            $known = $theme->get('ThemeURI') && preg_match('~^https://wordpress\.org/themes/' . preg_quote($stylesheet, '~') . '/?$~', $theme->get('ThemeURI')) && !$theme->get('UpdateURI');
+            $item = array('identifier' => sanitize_key($stylesheet), 'name' => sanitize_text_field($theme->get('Name')), 'version' => sanitize_text_field($theme->get('Version') ?: '0.0.0'), 'active' => $active, 'updateVersion' => $update ?: null, 'source' => $known ? 'wordpress.org' : 'unknown');
+            $installed_themes[] = $item;
+            if ($active) { $themes[] = array_intersect_key($item, array_flip(array('identifier', 'name', 'version'))); }
+        }
+        $uploads = wp_upload_dir(null, false);
+        $environment = array('environmentType' => function_exists('wp_get_environment_type') ? wp_get_environment_type() : 'production', 'multisite' => is_multisite(), 'wpDebug' => defined('WP_DEBUG') && WP_DEBUG, 'wpDebugDisplay' => defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY, 'scriptDebug' => defined('SCRIPT_DEBUG') && SCRIPT_DEBUG, 'disallowFileEdit' => defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT, 'forceSslAdmin' => function_exists('force_ssl_admin') && force_ssl_admin(), 'wpCronDisabled' => defined('DISABLE_WP_CRON') && DISABLE_WP_CRON);
+        $cached_scan = get_option(self::SECURITY_SCAN, array());
+        $environment['inventoryComplete'] = count($all_plugins) === count($installed_plugins) && count($all_themes) === count($installed_themes);
+        if (!is_array($cached_scan) || empty($cached_scan['scannedAt']) || (int) $cached_scan['scannedAt'] < time() - 21600) {
+            $scan = SitePulse_Security_Scanner::scan(WP_CONTENT_DIR, is_array($uploads) && empty($uploads['error']) ? $uploads['basedir'] : '');
+            $scan['scannedAt'] = gmdate('Y-m-d\TH:i:s\Z');
+            $cached_scan = array('scannedAt' => time(), 'result' => $scan);
+            update_option(self::SECURITY_SCAN, $cached_scan, false);
+        } else { $scan = $cached_scan['result']; }
+        self::request($state['origin'], 'inventory', array('siteId' => $state['site_id'], 'wordpressVersion' => get_bloginfo('version'), 'phpVersion' => PHP_VERSION, 'activePlugins' => $plugins, 'activeThemes' => $themes, 'installedPlugins' => $installed_plugins, 'installedThemes' => $installed_themes, 'environment' => $environment, 'localSecurityScan' => $scan, 'updateCounts' => array('plugins' => is_object($updates) && !empty($updates->response) ? count($updates->response) : 0, 'themes' => is_object($themeUpdates) && !empty($themeUpdates->response) ? count($themeUpdates->response) : 0, 'core' => is_array($coreUpdates) ? count($coreUpdates) : 0)), $state['credential']);
     }
     private static function acquire_lock() {
         $lock = get_option(self::LOCK);

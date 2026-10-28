@@ -15,6 +15,7 @@ import { serverApi } from '../../../../lib/server-api';
 import { SiteControls } from '../../../../components/sites-panel';
 import { MonitoringPanel } from '../../../../components/monitoring-panel';
 import { SecurityPanel } from '../../../../components/security-panel';
+import { SiteTabs } from '../../../../components/site-tabs';
 
 export default async function SitePage({
   params,
@@ -67,30 +68,11 @@ export default async function SitePage({
           All sites
         </Link>
       </div>
-      <nav className="site-tabs" aria-label="Site sections">
-        <Link
-          href={`/app/software?workspace=${site.organizationId}&site=${siteId}`}
-        >
-          Plugins & themes
-        </Link>
-        {(['monitoring', 'security', 'inventory', 'connection'] as const).map(
-          (tab) => (
-            <Link
-              key={tab}
-              href={`/app/sites/${siteId}?view=${tab}`}
-              aria-current={view === tab ? 'page' : undefined}
-            >
-              {tab === 'monitoring'
-                ? 'Monitoring'
-                : tab === 'security'
-                  ? 'Security'
-                  : tab === 'inventory'
-                    ? 'Inventory'
-                    : 'Connection'}
-            </Link>
-          ),
-        )}
-      </nav>
+      <SiteTabs
+        siteId={siteId}
+        organizationId={site.organizationId}
+        view={view}
+      />
       {view === 'connection' && (
         <section className="card">
           <p>

@@ -64,12 +64,14 @@ export function SoftwareManager({
   organizationId,
   initial,
   initialSite,
+  siteScoped = false,
   attachments = [],
   initialAttachment,
 }: {
   organizationId: string;
   initial: SoftwareDirectory;
   initialSite?: string;
+  siteScoped?: boolean;
   attachments?: SoftwareAttachment[];
   initialAttachment?: string;
 }) {
@@ -194,6 +196,9 @@ export function SoftwareManager({
     });
   }
   const selected = data.sites.filter((site) => siteIds.includes(site.id));
+  const visibleOperations = data.operations.filter(
+    (op) => !siteScoped || op.siteId === initialSite,
+  );
   const bulkAction = checkedSlugs.length
     ? action === 'install'
       ? 'activate'
@@ -287,8 +292,10 @@ export function SoftwareManager({
       <section className="card">
         <div className="page-heading">
           <h2>
-            <Icon name="globe" /> Select sites{' '}
-            <span className="muted">{selected.length} / 20</span>
+            <Icon name="globe" /> {siteScoped ? 'Current site' : 'Select sites'}{' '}
+            {!siteScoped && (
+              <span className="muted">{selected.length} / 20</span>
+            )}
           </h2>
           <button
             className="secondary"
@@ -307,117 +314,124 @@ export function SoftwareManager({
           site is down.
         </p>
         <div className="software-site-grid">
-          {data.sites.map((site) => (
-            <article className="software-site-card" key={site.id}>
-              <label
-                className={`software-site ${siteIds.includes(site.id) ? 'selected' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={siteIds.includes(site.id)}
-                  disabled={
-                    pending ||
-                    (!siteIds.includes(site.id) && siteIds.length >= 20)
-                  }
-                  onChange={(event) => {
-                    setCheckedSlugs([]);
-                    setSiteIds(
-                      event.target.checked
-                        ? [...siteIds, site.id]
-                        : siteIds.filter((id) => id !== site.id),
-                    );
-                    changed();
-                  }}
-                />
-                <span>
-                  <strong>{site.name}</strong>
-                  <small>{new URL(site.canonicalUrl).hostname}</small>
-                  <small>
-                    Last inventory received: {formatTimestamp(site.inventoryAt)}
-                  </small>
-                  <small>
-                    Management poll:{' '}
-                    {site.polledAt && new Date(site.polledAt).getTime() > 0
-                      ? formatTimestamp(site.polledAt)
-                      : 'Not received'}
-                  </small>
-                  <span
-                    className={`status-badge ${site.enabled ? 'status-healthy' : 'status-warning'}`}
-                  >
-                    <Icon name={site.enabled ? 'check' : 'clock'} />
-                    {site.enabled
-                      ? 'Management ready'
-                      : 'Enable / refresh Connector'}
-                  </span>
-                </span>
-              </label>
-              <div className="software-sync">
-                <span
-                  className={`status-badge ${site.inventorySync.status === 'succeeded' ? 'status-healthy' : site.inventorySync.status === 'failed' ? 'status-critical' : 'status-warning'}`}
+          {data.sites
+            .filter((site) => !siteScoped || site.id === initialSite)
+            .map((site) => (
+              <article className="software-site-card" key={site.id}>
+                <label
+                  className={`software-site ${siteIds.includes(site.id) ? 'selected' : ''}`}
                 >
-                  <Icon
-                    name={
-                      site.inventorySync.status === 'succeeded'
-                        ? 'check'
-                        : 'clock'
+                  <input
+                    type="checkbox"
+                    checked={siteIds.includes(site.id)}
+                    disabled={
+                      pending ||
+                      siteScoped ||
+                      (!siteIds.includes(site.id) && siteIds.length >= 20)
                     }
-                  />
-                  {site.inventorySync.status === 'not_received' &&
-                    'Not yet synced'}
-                  {site.inventorySync.status === 'pending' &&
-                    'Sync queued · awaiting Connector'}
-                  {site.inventorySync.status === 'timed_out' &&
-                    'Sync timed out · check WordPress Cron'}
-                  {site.inventorySync.status === 'failed' &&
-                    'Inventory sync failed'}
-                  {site.inventorySync.status === 'succeeded' &&
-                    'Inventory received'}
-                </span>
-                {site.inventorySync.status === 'failed' && (
-                  <small role="alert">
-                    {site.inventorySync.error === 'collection'
-                      ? 'WordPress could not collect inventory.'
-                      : site.inventorySync.error === 'network'
-                        ? 'Connector could not reach SitePulse.'
-                        : 'SitePulse rejected the inventory. Check the Connector and its reported component metadata.'}{' '}
-                    Last successful inventory is retained.
-                  </small>
-                )}
-                {site.inventorySync.requestedAt && (
-                  <small>
-                    Requested: {formatTimestamp(site.inventorySync.requestedAt)}
-                  </small>
-                )}
-                {site.inventorySync.attemptedAt && (
-                  <small>
-                    Last attempt:{' '}
-                    {formatTimestamp(site.inventorySync.attemptedAt)}
-                  </small>
-                )}
-                <button
-                  className="secondary"
-                  disabled={
-                    pending ||
-                    !data.canManage ||
-                    !site.canSync ||
-                    site.inventorySync.status === 'pending'
-                  }
-                  aria-label={`Sync inventory for ${site.name}`}
-                  onClick={() =>
-                    void run(async () => {
-                      await api(`${base}/inventory-sync`, { siteId: site.id });
-                      setMessage(
-                        `Inventory sync requested for ${site.name}. Connector 0.4.0+ also refreshes the bounded local code scan. Collection runs on its next poll; allow up to 15 minutes and check WordPress Cron if it times out.`,
+                    onChange={(event) => {
+                      setCheckedSlugs([]);
+                      setSiteIds(
+                        event.target.checked
+                          ? [...siteIds, site.id]
+                          : siteIds.filter((id) => id !== site.id),
                       );
-                      await refresh();
-                    })
-                  }
-                >
-                  <Icon name="refresh" /> Sync inventory
-                </button>
-              </div>
-            </article>
-          ))}
+                      changed();
+                    }}
+                  />
+                  <span>
+                    <strong>{site.name}</strong>
+                    <small>{new URL(site.canonicalUrl).hostname}</small>
+                    <small>
+                      Last inventory received:{' '}
+                      {formatTimestamp(site.inventoryAt)}
+                    </small>
+                    <small>
+                      Management poll:{' '}
+                      {site.polledAt && new Date(site.polledAt).getTime() > 0
+                        ? formatTimestamp(site.polledAt)
+                        : 'Not received'}
+                    </small>
+                    <span
+                      className={`status-badge ${site.enabled ? 'status-healthy' : 'status-warning'}`}
+                    >
+                      <Icon name={site.enabled ? 'check' : 'clock'} />
+                      {site.enabled
+                        ? 'Management ready'
+                        : 'Enable / refresh Connector'}
+                    </span>
+                  </span>
+                </label>
+                <div className="software-sync">
+                  <span
+                    className={`status-badge ${site.inventorySync.status === 'succeeded' ? 'status-healthy' : site.inventorySync.status === 'failed' ? 'status-critical' : 'status-warning'}`}
+                  >
+                    <Icon
+                      name={
+                        site.inventorySync.status === 'succeeded'
+                          ? 'check'
+                          : 'clock'
+                      }
+                    />
+                    {site.inventorySync.status === 'not_received' &&
+                      'Not yet synced'}
+                    {site.inventorySync.status === 'pending' &&
+                      'Sync queued · awaiting Connector'}
+                    {site.inventorySync.status === 'timed_out' &&
+                      'Sync timed out · check WordPress Cron'}
+                    {site.inventorySync.status === 'failed' &&
+                      'Inventory sync failed'}
+                    {site.inventorySync.status === 'succeeded' &&
+                      'Inventory received'}
+                  </span>
+                  {site.inventorySync.status === 'failed' && (
+                    <small role="alert">
+                      {site.inventorySync.error === 'collection'
+                        ? 'WordPress could not collect inventory.'
+                        : site.inventorySync.error === 'network'
+                          ? 'Connector could not reach SitePulse.'
+                          : 'SitePulse rejected the inventory. Check the Connector and its reported component metadata.'}{' '}
+                      Last successful inventory is retained.
+                    </small>
+                  )}
+                  {site.inventorySync.requestedAt && (
+                    <small>
+                      Requested:{' '}
+                      {formatTimestamp(site.inventorySync.requestedAt)}
+                    </small>
+                  )}
+                  {site.inventorySync.attemptedAt && (
+                    <small>
+                      Last attempt:{' '}
+                      {formatTimestamp(site.inventorySync.attemptedAt)}
+                    </small>
+                  )}
+                  <button
+                    className="secondary"
+                    disabled={
+                      pending ||
+                      !data.canManage ||
+                      !site.canSync ||
+                      site.inventorySync.status === 'pending'
+                    }
+                    aria-label={`Sync inventory for ${site.name}`}
+                    onClick={() =>
+                      void run(async () => {
+                        await api(`${base}/inventory-sync`, {
+                          siteId: site.id,
+                        });
+                        setMessage(
+                          `Inventory sync requested for ${site.name}. Connector 0.4.0+ also refreshes the bounded local code scan. Collection runs on its next poll; allow up to 15 minutes and check WordPress Cron if it times out.`,
+                        );
+                        await refresh();
+                      })
+                    }
+                  >
+                    <Icon name="refresh" /> Sync inventory
+                  </button>
+                </div>
+              </article>
+            ))}
         </div>
         {data.sites.length === 0 && <p>Add and pair a WordPress site first.</p>}
       </section>
@@ -794,9 +808,9 @@ export function SoftwareManager({
           hour. Unknown means execution may have happened; inspect WordPress
           before resolving or trying another operation.
         </p>
-        {!data.operations.length && <p>No operations yet.</p>}
+        {!visibleOperations.length && <p>No operations yet.</p>}
         <div className="software-results">
-          {data.operations.map((op) => (
+          {visibleOperations.map((op) => (
             <article key={op.id}>
               <div>
                 <strong>{op.siteName}</strong>

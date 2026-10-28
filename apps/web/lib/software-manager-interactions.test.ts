@@ -95,6 +95,7 @@ async function mount(
   initial = fixture(),
   attachments: SoftwareAttachment[] = [],
   initialAttachment?: string,
+  siteScoped = false,
 ) {
   await act(async () =>
     root.render(
@@ -102,12 +103,32 @@ async function mount(
         organizationId: 'workspace',
         initial,
         initialSite: 'site-a',
+        siteScoped,
         attachments,
         initialAttachment,
       }),
     ),
   );
 }
+it('opens a site-scoped inventory without exposing other site selectors', async () => {
+  const data = fixture();
+  data.sites.push({
+    ...data.sites[0]!,
+    id: 'site-b',
+    name: 'Other site',
+    plugins: [item('other-only-plugin')],
+  });
+  await mount(data, [], undefined, true);
+  expect(host.textContent).toContain('Current site');
+  expect(host.textContent).toContain('alpha');
+  expect(host.textContent).not.toContain('Other site');
+  expect(host.textContent).not.toContain('other-only-plugin');
+  const siteCheckbox = host.querySelector<HTMLInputElement>(
+    '.software-site input',
+  )!;
+  expect(siteCheckbox.checked).toBe(true);
+  expect(siteCheckbox.disabled).toBe(true);
+});
 function labeled<T extends HTMLElement>(name: string): T {
   const element = host.querySelector<T>(`[aria-label="${name}"]`);
   expect(element, name).not.toBeNull();

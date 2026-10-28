@@ -115,6 +115,8 @@ Site sections are directly addressable at `/app/sites/<id>?view=monitoring`, `?v
 
 ## HTTP / SSL monitoring
 
+The single-site Monitoring view uses side-by-side HTTP/SSL status cards and separate Recent checks / Incidents views, each paginated to five loaded records. Incident status filtering and expandable lifecycle guidance keep the page compact. Times are shown in UTC with full timestamps available on hover. This is not a full historical uptime percentage. Site navigation uses shared icon-based segmented links; Plugins & themes opens the current site's installed inventory directly, with an explicit Manage across sites link for bulk management.
+
 Paired sites are monitored by the worker independently of connector heartbeats. Site details show HTTP availability, latency, certificate expiry, recent checks and incidents; organization pages list recent incidents. Verified owners/admins can acknowledge an incident. Two consecutive failures open an incident; two successes recover it. Disconnecting, rotating or re-pairing closes existing incidents with `connection_reset`, which does not assert recovery.
 
 Only public HTTP(S) destinations on standard ports are allowed. Every connection and redirect resolves and validates all addresses, pins an approved address and verifies TLS. Each probe has a 10-second total budget, at most three redirects, and a 16 KiB header limit; response bodies are discarded. HTTPS downgrade is rejected. HTTP 200–399 is healthy after redirect processing; 4xx/5xx (including WAF blocks) count as failures. SSL checks validate the original HTTPS hostname and flag expiry at 14/7/3 days. HTTP-only sites have no SSL job.

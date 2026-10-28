@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Compact site operations
+
+- Replace long monitoring lists with HTTP/SSL status cards, check/incident switching, five-record pagination, incident status filters and readable UTC times. Preserve confirmation semantics and acknowledgement permissions.
+- Scope the single-site Plugins & themes destination to that site's inventory, sync controls and operation history. Retain a direct cross-site management link and shared icon-based segmented site navigation.
+
 ## Unreleased — Security filtering and advisory clarity
 
 - Make Critical/High/Medium/Low/Unknown summary tiles accessible toggle filters for environment risks and public advisories, with visible filter state, section result counts and a clear action. Unscored local indicators and coverage warnings remain visible.

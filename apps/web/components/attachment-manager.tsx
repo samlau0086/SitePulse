@@ -60,7 +60,7 @@ export function AttachmentManager({
             }
             void run(async () => {
               const response = await fetch(
-                `/api/v1${base}/${fields.get('kind')}/${encodeURIComponent(String(fields.get('slug')))}`,
+                `/api/v1${base}/${fields.get('kind')}`,
                 {
                   method: 'POST',
                   credentials: 'same-origin',
@@ -86,17 +86,10 @@ export function AttachmentManager({
               <option value="plugin">Plugin</option>
               <option value="theme">Theme</option>
             </select>
-            <label htmlFor="attachment-slug">
-              Folder slug (must match the ZIP root directory)
-            </label>
-            <input
-              id="attachment-slug"
-              name="slug"
-              required
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              maxLength={100}
-              placeholder="my-plugin"
-            />
+            <p>
+              The folder slug is detected automatically from the ZIP root
+              directory during scanning.
+            </p>
             <label htmlFor="attachment-package">ZIP package</label>
             <input
               id="attachment-package"

@@ -2,6 +2,40 @@ import { expect, it } from 'vitest';
 import { scanPackage, codeFindings, PACKAGE_LIMIT } from './package-scanner';
 import { packageFixture, pluginFixture } from './package-fixture';
 
+it('detects the root slug from archive entries without a declared slug', async () => {
+  expect(await scanPackage(pluginFixture(), 'plugin')).toMatchObject({
+    slug: 'sample',
+  });
+  const theme = packageFixture([
+    { path: 'custom-theme/', content: '' },
+    {
+      path: 'custom-theme/style.css',
+      content: '/*\nTheme Name: Custom\nVersion: 1.0\n*/',
+    },
+  ]);
+  expect(await scanPackage(theme, 'theme')).toMatchObject({
+    slug: 'custom-theme',
+    name: 'Custom',
+  });
+});
+
+it.each(['other-root', 'Invalid_Root', 'sitepulse-connector'])(
+  'rejects ambiguous or disallowed inferred roots: %s',
+  async (root) => {
+    const files = [
+      {
+        path: `${root}/main.php`,
+        content: '<?php\n/*\nPlugin Name: Test\nVersion: 1.0\n*/',
+      },
+    ];
+    if (root === 'other-root')
+      files.unshift({ path: 'sample/readme.txt', content: 'metadata' });
+    await expect(
+      scanPackage(packageFixture(files), 'plugin'),
+    ).rejects.toThrow();
+  },
+);
+
 it('inspects WordPress plugin and theme headers and immutable digest', async () => {
   const result = await scanPackage(pluginFixture(), 'plugin', 'sample');
   expect(result).toMatchObject({

@@ -258,7 +258,7 @@ export async function registerSoftwareRoutes(
     },
   );
   app.post(
-    '/api/v1/organizations/:organizationId/attachments/:kind/:slug',
+    '/api/v1/organizations/:organizationId/attachments/:kind',
     {
       ...options(attachmentUploadParams),
       bodyLimit: PACKAGE_LIMIT,
@@ -281,7 +281,7 @@ export async function registerSoftwareRoutes(
       const bytes = request.body;
       let inspected: Awaited<ReturnType<typeof scanPackage>>;
       try {
-        inspected = await scanPackage(bytes, input.kind, input.slug);
+        inspected = await scanPackage(bytes, input.kind);
       } catch {
         throw new HttpError(
           400,
@@ -324,7 +324,6 @@ export async function registerSoftwareRoutes(
             organizationId: input.organizationId,
             actorUserId: user.id,
             kind: input.kind,
-            slug: input.slug,
             ...inspected,
             byteSize: bytes.length,
             zipBase64: bytes.toString('base64'),

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { fromBuffer, type Entry, type ZipFile } from 'yauzl';
 import type { AttachmentScan } from '@sitepulse/api-contracts';
+import { softwareSlug } from '@sitepulse/api-contracts';
 
 export const SCANNER_VERSION = 'sitepulse-static-1';
 export const PACKAGE_LIMIT = 8 * 1024 * 1024;
@@ -35,13 +36,10 @@ export function codeFindings(source: string): string[] {
 export async function scanPackage(
   bytes: Buffer,
   kind: 'plugin' | 'theme',
-  slug: string,
+  expectedSlug?: string,
 ) {
-  if (
-    !bytes.length ||
-    bytes.length > PACKAGE_LIMIT ||
-    slug === 'sitepulse-connector'
-  )
+  let slug: string | undefined;
+  if (!bytes.length || bytes.length > PACKAGE_LIMIT)
     throw new Error('Invalid package size or protected slug.');
   // Restrict to a single ordinary ZIP directory. Match local and central headers
   // so the scanner and WordPress cannot interpret different filenames/payloads.
@@ -106,6 +104,17 @@ export async function scanPackage(
     zip.on('entry', (entry: Entry) => {
       void (async () => {
         const path = entry.fileName;
+        const root = path.split('/')[0];
+        if (
+          !softwareSlug.safeParse(root).success ||
+          root === 'sitepulse-connector' ||
+          (expectedSlug !== undefined && root !== expectedSlug) ||
+          (slug !== undefined && root !== slug)
+        )
+          throw new Error(
+            'A single valid WordPress root directory is required.',
+          );
+        slug = root!;
         const canonical = path.toLowerCase().replace(/\/$/, '');
         const mode = entry.externalFileAttributes >>> 16;
         const offset = entry.relativeOffsetOfLocalHeader;
@@ -243,6 +252,7 @@ export async function scanPackage(
       'A single matching WordPress name/version header is required.',
     );
   return {
+    slug: slug!,
     ...metadata,
     sha256: createHash('sha256').update(bytes).digest('hex'),
     scan: {

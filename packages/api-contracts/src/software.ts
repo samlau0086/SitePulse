@@ -97,7 +97,6 @@ export const attachmentUploadParams = z
   .object({
     organizationId: z.uuid(),
     kind: z.enum(['plugin', 'theme']),
-    slug: softwareSlug,
   })
   .strict();
 export const attachmentParams = z

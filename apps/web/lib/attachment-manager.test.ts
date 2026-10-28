@@ -56,6 +56,8 @@ it('shows reusable clean packages, blocks risky installs, and never calls a clea
   expect(html).toContain('Scan complete: no patterns detected');
   expect(html).toContain('Blocked: risk found');
   expect(html).toContain('does not prove safety');
+  expect(html).toContain('detected automatically from the ZIP root directory');
+  expect(html).not.toContain('name="slug"');
   expect(html).toContain(
     '/app/software?workspace=workspace-fixture&amp;attachment=11111111-1111-4111-8111-111111111111',
   );

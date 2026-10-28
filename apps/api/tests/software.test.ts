@@ -26,7 +26,7 @@ const upload = (
 ) =>
   app.inject({
     method: 'POST',
-    url: `/api/v1/organizations/${org}/attachments/plugin/sample`,
+    url: `/api/v1/organizations/${org}/attachments/plugin`,
     headers: { origin, cookie, 'content-type': 'application/zip' },
     payload: bytes,
   });
@@ -226,6 +226,7 @@ it('stores scoped attachments, deduplicates and exposes metadata without source'
   expect(list.json().attachments[0]).toMatchObject({
     id,
     name: 'Sample',
+    slug: 'sample',
     scan: { status: 'complete' },
   });
   expect(list.body).not.toContain('zipBase64');
@@ -247,6 +248,26 @@ it('stores scoped attachments, deduplicates and exposes metadata without source'
   expect((await removeAttachment(id, reader.cookie)).statusCode).toBe(403);
   expect((await removeAttachment(id)).statusCode).toBe(200);
 });
+it('stores the inferred ZIP root slug without a client-supplied slug', async () => {
+  const bytes = packageFixture([
+    {
+      path: 'custom-package/main.php',
+      content: '<?php\n/*\nPlugin Name: Custom\nVersion: 2.0\n*/',
+    },
+  ]);
+  const response = await upload(bytes);
+  expect(response.statusCode, response.body).toBe(200);
+  const list = await call(
+    'GET',
+    `/organizations/${organizationId}/attachments`,
+  );
+  expect(list.json().attachments[0]).toMatchObject({
+    slug: 'custom-package',
+    name: 'Custom',
+    version: '2.0',
+  });
+});
+
 it('rejects invalid archives and blocks risky attachments from installation', async () => {
   expect((await upload(Buffer.from('invalid zip'))).statusCode).toBe(400);
   const response = await upload(
@@ -415,7 +436,7 @@ it('enforces upload size, storage quota, verified identity and trusted Origin', 
     (
       await app.inject({
         method: 'POST',
-        url: `${libraryBase()}/plugin/sample`,
+        url: `${libraryBase()}/plugin`,
         headers: {
           cookie: owner.cookie,
           origin: 'https://evil.example',
@@ -459,7 +480,7 @@ it('enforces upload size, storage quota, verified identity and trusted Origin', 
 it('accepts theme packages with matching headers', async () => {
   const result = await app.inject({
     method: 'POST',
-    url: `${libraryBase()}/theme/sample`,
+    url: `${libraryBase()}/theme`,
     headers: {
       origin,
       cookie: owner.cookie,

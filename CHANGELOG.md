@@ -2,6 +2,7 @@
 
 ## Unreleased — Scanned attachment library
 
+- Detect attachment folder slugs from the unique validated ZIP root during server scanning; remove manual slug entry and use the kind-only upload endpoint. Retain malformed, multiple-root and protected-package rejection.
 - Add a tenant-scoped reusable plugin/theme ZIP library with verified owner/admin uploads, member metadata reads, SHA-256 deduplication, audited deletion and migration 0014. Enforce 8 MiB per package, 100 packages and 64 MiB raw data per workspace; store immutable package bytes in PostgreSQL for the initial small-library deployment and document base64/backup growth.
 - Add bounded ZIP structure validation and static PHP/JavaScript/HTML/SVG risk indicators. Block malformed archives, protected Connector packages, nested archives/executables, stale scanner results and packages with findings from installation. A clean result is explicitly not an antivirus, vulnerability or compatibility guarantee.
 - Add Attachment library UI, quota/fingerprint/scan visibility and a scanned-upload source in the existing preview/confirmation/bulk workflow. Package reads never expose bytes or arbitrary uploaded artwork; tenant members remain read-only.

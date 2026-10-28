@@ -23,6 +23,7 @@ import { createAuth } from './auth';
 import { createAuthMailer, type SendAuthMail } from './auth-mail';
 import { HttpError } from './http-error';
 import { registerSiteRoutes } from './sites';
+import { registerSoftwareRoutes } from './software';
 import { registerNotificationRoutes } from './notification-settings';
 import { isPlatformAdmin, registerPlatformAdminRoutes } from './platform-admin';
 import type { ResolveHost } from './site-url';
@@ -587,6 +588,7 @@ export async function buildApp({
     },
   );
   await registerSiteRoutes(app, { db, requireUser, resolveHost });
+  await registerSoftwareRoutes(app, { db, requireUser });
   await registerPlatformAdminRoutes(app, { db, env, requireUser });
   return app;
 }

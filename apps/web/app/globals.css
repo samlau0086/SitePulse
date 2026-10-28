@@ -1907,3 +1907,141 @@ h3 {
     font-size: 13px;
   }
 }
+/* WordPress software management reuses the authenticated product palette. */
+.software-manager {
+  display: grid;
+  gap: 24px;
+}
+.software-site-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.software-site {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-product-control);
+  padding: 16px;
+  cursor: pointer;
+}
+.software-site.selected {
+  background: var(--info-surface);
+  border-color: var(--info-ink);
+}
+.software-site input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+}
+.software-site small,
+.software-site strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.software-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 24px;
+  align-items: start;
+}
+.software-command {
+  position: sticky;
+  top: 16px;
+}
+.software-command fieldset {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+}
+.software-command input,
+.software-command select {
+  width: 100%;
+}
+.software-catalog {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+.software-component {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-panel);
+  padding: 16px;
+}
+.software-component-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.software-component-title h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.software-artwork {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-product-control);
+  background: var(--product-background);
+  color: var(--product-primary);
+  overflow: hidden;
+}
+.software-artwork .ui-icon {
+  width: 32px;
+  height: 32px;
+}
+.software-artwork img {
+  object-fit: contain;
+}
+.software-versions {
+  padding: 0;
+  list-style: none;
+}
+.software-versions li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.software-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.software-preview {
+  margin-top: 24px;
+  border-top: 1px solid var(--border-control);
+  padding-top: 16px;
+}
+.software-results article {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--hairline);
+  overflow-wrap: anywhere;
+}
+.software-results article > div {
+  display: grid;
+  gap: 8px;
+}
+.software-results p {
+  margin: 0;
+}
+@media (max-width: 1000px) {
+  .software-layout {
+    grid-template-columns: 1fr;
+  }
+  .software-command {
+    position: static;
+  }
+}

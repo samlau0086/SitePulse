@@ -1,10 +1,25 @@
 # SitePulse
 
+## 插件与主题远程管理
+
+侧栏 **Plugins & themes**（`/app/software`）提供插件图标卡片、安装版本/启用/更新状态、站点选择与操作记录；站点详情也有直接入口。已验证的工作区 owner/admin 可以安装、启用、停用、卸载和更新插件/主题，并将同一个操作批量应用到最多 20 个站点。
+
+1. 通过现有备份优先的部署流程应用新增迁移 `0012_tidy_sir_ram`，在 WordPress 后台升级 Connector 到 **0.3.0**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
+2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。每站独立授权，不需要提供 WordPress 管理员密码。
+3. 为 WordPress 配置每分钟执行到期事件的系统 Cron。Connector 每分钟拉取一次指令，受实际 Cron 执行频率影响；原来每 15 分钟的 Cron 会导致最长约 15 分钟等待。等待首次管理轮询及完整 inventory，界面显示 **Management ready**。
+4. 选择站点，在已安装卡片点击操作，或输入 WordPress.org slug（例如 `wordpress-seo`）安装。填写变更原因 → **Preview impact** → 检查站点及警告 → **Confirm and queue**。每站结果独立显示；提交前自行完成 WordPress 文件与数据库备份。
+
+安装和更新仅支持 WordPress.org 官方包，不支持上传 ZIP、付费源、任意 URL 或 shell。卸载前必须先停用；主题停用需要指定已安装的替代主题，活动主题及父主题受保护。Connector 自身在 WordPress 后台维护。更新可能破坏兼容性，卸载可能删除业务数据；此功能不提供 WordPress 自动备份或回滚。
+
+预览 10 分钟有效，待执行任务一小时过期，每站同时只允许一个未完成操作。执行中断/超时显示 **unknown**，不会自动重试；必须检查 WordPress 实际状态后点击 **Reviewed in WordPress**，再决定是否发起新操作。停用管理权限、撤销成员或轮换凭据可阻止未开始任务，无法撤回已经领取执行的变更。详见 [安全边界、API 与验收步骤](docs/SOFTWARE_MANAGEMENT.md)。
+
+本地检查：`pnpm check`、`pnpm db:check`、`pnpm test:plugin`（PHP 8.1+）、`pnpm build`、`pnpm compose:check`。集成测试先运行 `pnpm test:db:up`，设置 `TEST_DATABASE_URL=postgresql://sitepulse_test:sitepulse_test@127.0.0.1:5433/sitepulse_test` 后运行 `pnpm test:integration`，最后 `pnpm test:db:down`；不可使用生产数据库。
+
 Deployment SSH verification: run `node scripts/test-deploy-ssh.mjs`. It uses local transport doubles; Linux also verifies deployment directory permissions. Windows requires Git Bash at `C:/Program Files/Git/bin/bash.exe`.
 
 ## WordPress security and inventory
 
-Connector 0.2.0 adds a tenant-scoped **Security** view and full installed plugin/theme inventory. It reports versions, active/update state, selected deployment flags, bounded local file-risk indicators, and matched public WordPress/PHP/plugin/theme advisories. The Connector remains read-only: no source contents, absolute paths, credentials or plugin settings are uploaded, and SitePulse cannot execute commands, quarantine files or install updates.
+Connector 0.2.0 adds a tenant-scoped **Security** view and full installed plugin/theme inventory. It reports versions, active/update state, selected deployment flags, bounded local file-risk indicators, and matched public WordPress/PHP/plugin/theme advisories. Security scanning remains read-only: no source contents, absolute paths, credentials or plugin settings are uploaded. Connector 0.3.0 separately adds optional, explicitly authorized plugin/theme management described above; it does not add quarantine or arbitrary command execution.
 
 The local scan is deliberately bounded and cached for six hours; a match requires human review, and no match is not proof of safety. Public advisory coverage can be partial for custom/premium components, unusual version strings, provider failures or inventories reaching the collection limit. The worker uses fixed WPVulnerability HTTPS endpoints and sends component identifiers/versions from the VPS IP, never the site URL. Set validated `SECURITY_ADVISORIES_ENABLED=false` locally or as a GitHub Environment variable to pause those lookups. See [security and inventory behavior, privacy, limitations and staging acceptance](docs/SECURITY_INVENTORY.md).
 

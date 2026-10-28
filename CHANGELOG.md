@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — WordPress software management
+
+- Add a direct Plugins & themes workspace destination with site selection, official plugin icons with fallback, installed versions, active/update states, preview confirmation and per-site results.
+- Add tenant-scoped PostgreSQL operation queue (migration 0012); verified owner/admin authorization, audit reasons, credential/membership fencing, bounded batches, per-site serialization and sanitized results.
+- Connector 0.3.0 supports opt-in plugin/theme install, update, activation, deactivation and uninstall with WordPress-native APIs. Only official packages, direct filesystem access and single-site WordPress are supported. Protect the Connector, active components and dependencies; theme deactivation switches to a replacement.
+- Reserve operations durably before mutation, retry acknowledgements without repeating execution, and require review of uncertain outcomes. Document WordPress backup, Cron and acceptance requirements.
+
 ## Unreleased — 2026-10-28
 
 - Fixed the SSH deployment verification harness's fresh-root loop scope so Linux CI can check every directory's permissions without a `ReferenceError`.

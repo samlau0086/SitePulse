@@ -1,6 +1,7 @@
 # SitePulse — Complete Product & Technical Specification
 
 **Document Version:** 1.0  
+**Post-MVP additions:** Section 16 explicitly permits opt-in plugin/theme management; earlier MVP exclusions retain their original foundation scope.
 **Status:** Ready for MVP implementation planning  
 **Product Type:** Multi-tenant SaaS + WordPress connector plugin  
 **Target Market:** WordPress freelancers, agencies, and website maintenance providers  
@@ -995,3 +996,11 @@ Only after these milestones are reliable should billing and production onboardin
 The product now includes a deliberately bounded, read-only security visibility milestone. It may collect installed plugin/theme identifiers and versions, active/update state, selected non-secret WordPress environment flags, and local rule IDs with paths relative to `wp-content`. It may match those components against a fixed public advisory provider from the worker.
 
 This milestone must preserve tenant membership authorization and Connector site credentials. It must expose complete, partial, stale, unavailable and unknown coverage rather than equating missing findings with safety. It must not upload source contents, introduce remote execution, modify WordPress files, auto-update components, quarantine/delete code, inspect customer database content, or claim antivirus/integrity certification. Resource limits and provider privacy/availability limitations must be documented and tested.
+
+# 16. Opt-in WordPress software management milestone
+
+Following explicit product-owner authorization, SitePulse may install, uninstall, activate, deactivate and update plugins/themes and perform the same specified plugin operation across at most 20 selected sites. This is separate from foundation and read-only security scanning. The earlier MVP remote-update/install exclusions do not prohibit this later, explicitly authorized milestone.
+
+Use a tenant-scoped PostgreSQL queue, verified owner/admin membership, mandatory preview/confirmation/reason, per-site serialization and audit records. Current site credentials authenticate Connector pull/result endpoints. WordPress administrators must explicitly enable management locally, with nonce/capability protection and current-user capability rechecks. Installation/update sources are restricted to official WordPress.org packages; no arbitrary URLs, ZIP uploads, shell, SQL, PHP editing or generic code execution API. Protect Connector self-management, active components and declared dependencies. Theme deactivation switches to a specified replacement. Preserve SSRF controls, sanitized logging, tenant isolation and immutable migrations.
+
+The direct graphical manager shows site selection, installed versions/active/update states, official plugin icons with safe fallback, impact preview and individual results. Ambiguous outcomes never automatically rerun mutations; the operator must inspect WordPress before releasing uncertain work. Backups, Cron timing, compatibility and absent automatic rollback are explained before confirmation. See `docs/SOFTWARE_MANAGEMENT.md` for API, security boundaries and staging acceptance.

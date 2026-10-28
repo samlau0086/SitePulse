@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export * from './software';
 
 export const planCode = z.enum(['free', 'pro', 'agency', 'agency_plus']);
 // Operator-only input; never accepted by organization mutation routes.

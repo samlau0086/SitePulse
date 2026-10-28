@@ -1,14 +1,15 @@
 <?php
 /**
  * Plugin Name: SitePulse Connector
- * Description: Pairs this site with SitePulse and sends periodic heartbeats. No remote execution.
- * Version: 0.2.0
+ * Description: Reports inventory and heartbeats, with optional plugin and theme management.
+ * Version: 0.3.0
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * License: GPL-2.0-or-later
  */
 if (!defined('ABSPATH')) { exit; }
 require_once __DIR__ . '/security-scanner.php';
+require_once __DIR__ . '/management.php';
 
 final class SitePulse_Connector {
     const OPTION = 'sitepulse_connection';
@@ -22,6 +23,7 @@ final class SitePulse_Connector {
         add_action('admin_init', array(__CLASS__, 'settings'));
         add_action('admin_post_sitepulse_connect', array(__CLASS__, 'admin_action'));
         add_action(self::HOOK, array(__CLASS__, 'heartbeat'));
+        SitePulse_Management::boot();
     }
     public static function activate() {
         if (is_multisite()) { wp_die('SitePulse currently supports single-site WordPress only.'); }
@@ -29,12 +31,14 @@ final class SitePulse_Connector {
     }
     public static function deactivate() {
         wp_clear_scheduled_hook(self::HOOK);
+        wp_clear_scheduled_hook(SitePulse_Management::HOOK);
         // Preserve the credential so an administrator can revoke it after reactivation.
     }
     public static function settings() {
         // Connection secrets are deliberately excluded from options.php and rendered fields.
         register_setting('sitepulse', 'sitepulse_display', array('type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'show_in_rest' => false));
         if (get_option(self::OPTION) && !wp_next_scheduled(self::HOOK)) { wp_schedule_single_event(time() + 60, self::HOOK); }
+        SitePulse_Management::schedule();
     }
     public static function menu() {
         add_options_page('SitePulse', 'SitePulse', 'manage_options', 'sitepulse', array(__CLASS__, 'page'));
@@ -44,7 +48,7 @@ final class SitePulse_Connector {
         if (!$parts || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || !empty($parts['path']) || isset($parts['port'])) {
             return new WP_Error('sitepulse_url', 'Use an HTTPS SitePulse origin without a path or port.');
         }
-        if (!in_array($path, array('pair', 'heartbeat', 'inventory', 'disconnect'), true)) { return new WP_Error('sitepulse_path', 'Invalid endpoint.'); }
+        if (!in_array($path, array('pair', 'heartbeat', 'inventory', 'disconnect', 'software-poll', 'software-result'), true)) { return new WP_Error('sitepulse_path', 'Invalid endpoint.'); }
         $headers = array('Content-Type' => 'application/json', 'Origin' => $origin);
         if ($credential) { $headers['Authorization'] = 'Bearer ' . $credential; }
         $response = wp_safe_remote_post($origin . '/api/v1/connector/' . $path, array('headers' => $headers, 'body' => wp_json_encode($body), 'timeout' => 15, 'redirection' => 0, 'sslverify' => true, 'limit_response_size' => 8192));
@@ -75,6 +79,7 @@ final class SitePulse_Connector {
         } else { wp_die('Invalid action.'); }
         } finally { delete_option(self::LOCK); }
         if ($operation === 'pair') { self::heartbeat(); }
+        SitePulse_Management::schedule();
         wp_safe_redirect(admin_url('options-general.php?page=sitepulse'));
         exit;
     }
@@ -91,6 +96,8 @@ final class SitePulse_Connector {
             // A 401 means rotation/revocation has already invalidated this local credential.
             if (is_wp_error($result) && ($result->get_error_data()['status'] ?? 0) !== 401) { return $result; }
             delete_option(self::OPTION);
+            delete_option(SitePulse_Management::OPTION);
+            delete_option(SitePulse_Management::RECEIPT);
         }
         self::deactivate();
         return true;
@@ -103,7 +110,7 @@ final class SitePulse_Connector {
             if (!$state) { return; }
             $state['sequence']++;
             update_option(self::OPTION, $state, false); // Reserve before sending, including on timeouts.
-            $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => '0.2.0'), $state['credential']);
+            $result = self::request($state['origin'], 'heartbeat', array('siteId' => $state['site_id'], 'sequence' => $state['sequence'], 'connectorVersion' => '0.3.0'), $state['credential']);
             if (!is_wp_error($result) && function_exists('get_bloginfo')) { self::inventory($state); }
             // Do not resurrect a connection removed while the request was in flight.
             $current = get_option(self::OPTION, array());
@@ -178,7 +185,9 @@ final class SitePulse_Connector {
             echo '<input type="hidden" name="operation" value="pair"><p><label>SitePulse HTTPS origin <input type="url" name="origin" required placeholder="https://pulse.your-domain.com"></label></p><p><label>Pairing code <input type="password" name="challenge" required autocomplete="off" maxlength="43"></label></p>';
             submit_button('Pair site');
         }
-        echo '</form></div>';
+        echo '</form>';
+        if ($state) { SitePulse_Management::page(); }
+        echo '</div>';
     }
 }
 register_activation_hook(__FILE__, array('SitePulse_Connector', 'activate'));

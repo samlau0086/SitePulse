@@ -67,6 +67,11 @@ export default async function SitePage({
         </Link>
       </div>
       <nav className="site-tabs" aria-label="Site sections">
+        <Link
+          href={`/app/software?workspace=${site.organizationId}&site=${siteId}`}
+        >
+          Plugins & themes
+        </Link>
         {(['monitoring', 'security', 'inventory', 'connection'] as const).map(
           (tab) => (
             <Link

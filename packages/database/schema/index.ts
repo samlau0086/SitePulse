@@ -259,6 +259,74 @@ export const pairingChallenges = pgTable(
   (table) => [index('pairing_site_idx').on(table.siteId)],
 );
 
+// Capability is reported by the paired Connector, never by a browser.
+export const siteManagement = pgTable('site_management', {
+  siteId: uuid('site_id')
+    .primaryKey()
+    .references(() => sites.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(false),
+  secretVersion: integer('secret_version').notNull(),
+  polledAt: timestamp('polled_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const softwareOperations = pgTable(
+  'software_operations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    batchId: uuid('batch_id').notNull(),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    actorUserId: uuid('actor_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    command: jsonb('command')
+      .$type<{
+        kind: 'plugin' | 'theme';
+        action: 'install' | 'uninstall' | 'activate' | 'deactivate' | 'update';
+        slug: string;
+        replacement?: string;
+      }>()
+      .notNull(),
+    reason: text('reason').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    secretVersion: integer('secret_version').notNull(),
+    status: text('status', {
+      enum: [
+        'preview',
+        'queued',
+        'running',
+        'succeeded',
+        'failed',
+        'unknown',
+        'cancelled',
+        'expired',
+      ],
+    })
+      .notNull()
+      .default('preview'),
+    token: text('token'),
+    resultCode: text('result_code'),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('software_operations_site_idx').on(table.siteId, table.createdAt),
+    index('software_operations_batch_idx').on(table.batchId),
+    uniqueIndex('software_operations_busy_unique')
+      .on(table.siteId)
+      .where(sql`${table.status} in ('queued', 'running', 'unknown')`),
+    check(
+      'software_operations_status_valid',
+      sql`${table.status} in ('preview', 'queued', 'running', 'succeeded', 'failed', 'unknown', 'cancelled', 'expired')`,
+    ),
+  ],
+);
+
 export const siteInventorySnapshots = pgTable('site_inventory_snapshots', {
   siteId: uuid('site_id')
     .primaryKey()

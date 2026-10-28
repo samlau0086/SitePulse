@@ -14,35 +14,48 @@
   gap: 12px;
   margin-top: 24px;
 }
-.app-shell .security-summary > button {
+.app-shell .security-summary > button.secondary {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-height: 56px;
-  padding: 14px;
-  border: 1px solid var(--product-border);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  min-height: 116px;
+  padding: 16px;
+  border: 2px solid var(--product-border);
   border-radius: var(--radius-product-control);
   background: var(--product-surface);
   color: var(--body);
   text-align: left;
   cursor: pointer;
 }
-.app-shell .security-summary > button:hover,
-.app-shell .security-summary > button.is-selected {
+.app-shell .security-summary > button.secondary:hover {
+  border-color: var(--border-control);
+  background: var(--surface-soft);
+}
+.app-shell .security-summary > button.secondary.is-selected {
   border-color: var(--product-primary);
-  background: var(--product-primary-soft);
+  background: var(--info-surface);
 }
 .app-shell .security-summary > button:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.security-summary > button > strong {
-  font-size: 24px;
+.security-summary-count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--product-ink);
 }
-.security-summary > button > span:last-child {
+.security-summary-count strong {
+  font-size: 28px;
+  line-height: 1;
+}
+.security-summary-count > span {
   color: var(--muted);
   font-size: 14px;
+  font-weight: 400;
 }
 .security-filter-status {
   display: flex;
@@ -2240,42 +2253,100 @@ h3 {
 }
 .software-site-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 12px;
 }
 .software-site-card {
   display: grid;
   min-width: 0;
   align-content: start;
-  border: 1px solid var(--border-control);
+  border: 1px solid var(--product-border);
   border-radius: var(--radius-product-control);
   overflow: hidden;
 }
-.software-site-card .software-site {
-  border: 0;
-  border-radius: 0;
+.software-site-card.is-selected {
+  border-color: var(--info-ink);
+}
+.software-site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 20px;
+}
+.software-site-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.software-site-identity > svg {
+  margin-top: 4px;
+  color: var(--info-ink);
+}
+.software-site-identity h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.software-site-identity > div,
+.software-site > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.software-site-identity .muted,
+.software-site small {
+  font-size: 14px;
+  font-weight: 400;
+}
+.software-site-readiness {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  font-size: 14px;
+}
+.software-site-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px 24px;
+  margin: 0;
+  padding: 0 20px 20px;
+  font-size: 14px;
+}
+.software-site-meta > div {
+  min-width: 0;
+}
+.software-site-meta dt {
+  color: var(--muted);
+}
+.software-site-meta dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
 }
 .software-sync {
   display: grid;
   gap: 8px;
-  padding: 0 16px 16px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--product-border);
   overflow-wrap: anywhere;
 }
-.software-sync .status-badge {
+.software-site-card .status-badge {
   white-space: normal;
+}
+.software-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .software-site {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-product-control);
-  padding: 16px;
+  min-height: 44px;
+  margin: 0;
   cursor: pointer;
-}
-.software-site.selected {
-  background: var(--info-surface);
-  border-color: var(--info-ink);
 }
 .software-site input {
   width: 20px;
@@ -2287,6 +2358,16 @@ h3 {
 .software-site strong {
   display: block;
   overflow-wrap: anywhere;
+}
+.software-connector-help {
+  margin-top: 16px;
+  font-size: 14px;
+}
+.software-connector-help summary {
+  min-height: 44px;
+  align-content: center;
+  color: var(--info-ink);
+  cursor: pointer;
 }
 .software-layout {
   display: grid;

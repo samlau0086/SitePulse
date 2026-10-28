@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Security filters and software site cards
+
+- Keep severity filters on neutral surfaces with readable counts and a distinct selected border; prevent primary-button styles from overriding the filters.
+- Reorganize software site cards into identity/readiness, timestamp metadata and a compact sync footer. Remove the redundant selection checkbox in single-site views and move Connector setup guidance into a disclosure.
+
 ## Unreleased — User time zones
 
 - Add account-level IANA time zone preferences with a UTC default and explicit browser-zone selection. Persist through a session-protected self-service endpoint; reject invalid zones and client-supplied user IDs.

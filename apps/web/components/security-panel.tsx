@@ -149,7 +149,7 @@ export function SecurityPanel({
           <button
             type="button"
             key={severity}
-            className={severityFilter === severity ? 'is-selected' : undefined}
+            className={`secondary${severityFilter === severity ? ' is-selected' : ''}`}
             aria-pressed={severityFilter === severity}
             aria-label={`Filter by ${label(severity)} severity: ${count} findings`}
             onClick={() =>
@@ -159,8 +159,10 @@ export function SecurityPanel({
             }
           >
             <SeverityBadge severity={severity} />
-            <strong>{count}</strong>
-            <span>findings</span>
+            <span className="security-summary-count">
+              <strong>{count}</strong>
+              <span>findings</span>
+            </span>
           </button>
         ))}
       </div>

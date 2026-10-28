@@ -123,11 +123,10 @@ it('opens a site-scoped inventory without exposing other site selectors', async 
   expect(host.textContent).toContain('alpha');
   expect(host.textContent).not.toContain('Other site');
   expect(host.textContent).not.toContain('other-only-plugin');
-  const siteCheckbox = host.querySelector<HTMLInputElement>(
-    '.software-site input',
-  )!;
-  expect(siteCheckbox.checked).toBe(true);
-  expect(siteCheckbox.disabled).toBe(true);
+  expect(host.querySelector('.software-site input')).toBeNull();
+  expect(host.querySelector('.software-site-identity')?.textContent).toContain(
+    'Site A',
+  );
 });
 function labeled<T extends HTMLElement>(name: string): T {
   const element = host.querySelector<T>(`[aria-label="${name}"]`);

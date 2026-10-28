@@ -2039,6 +2039,9 @@ h3 {
   overflow-wrap: anywhere;
 }
 .software-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(640px, calc(100% - 32px));
   max-height: calc(100dvh - 32px);
   overflow: auto;

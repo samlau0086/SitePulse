@@ -136,3 +136,7 @@ The upload scanner automatically detects the unique root slug from archive entri
 | `POST /sites/:siteId/incidents/:incidentId/acknowledge` | `{}` or absent | Verified owner/admin and trusted Origin; idempotent acknowledgement                    |
 
 Non-members/deleted sites return 404. A foreign or nonexistent incident on an authorized site returns `INCIDENT_NOT_FOUND` (404); members and unverified administrators cannot acknowledge. Acknowledgement never closes an incident or suppresses checks. Check fields include type, server timestamp, result, HTTP status, latency, certificate expiry and safe error code. Incident fields include type, severity, lifecycle timestamps and `resolutionReason` (`recovered` or `connection_reset` when resolved). No public endpoint accepts probe results, schedules arbitrary fetches, changes target identity or exposes lease tokens. Reads are bounded history snapshots; pagination and aggregate availability percentages are deferred.
+
+# Email branding
+
+See [EMAIL_BRANDING.md](EMAIL_BRANDING.md) for authenticated account `GET/PATCH /api/v1/users/me/email-branding`, allowlisted platform `GET/PATCH /api/v1/admin/branding`, strict request contracts and the narrowly extended global-branding administration exception.

@@ -1,5 +1,35 @@
 import { z } from 'zod';
+import { validLogoUrl } from '@sitepulse/shared/email';
+export { validLogoUrl } from '@sitepulse/shared/email';
 export * from './software';
+
+export const emailBrandInput = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .refine(
+        (value) =>
+          ![...value].some((character) => character.charCodeAt(0) < 32),
+        'Brand name cannot contain control characters.',
+      ),
+    logoUrl: z
+      .string()
+      .refine(
+        validLogoUrl,
+        'Use a public HTTPS logo URL without credentials, port or fragment.',
+      )
+      .nullable(),
+  })
+  .strict();
+export type EmailBrandSettings = z.infer<typeof emailBrandInput>;
+export type AccountBrandSettings = {
+  brand: EmailBrandSettings;
+  platform: EmailBrandSettings;
+  canCustomize: boolean;
+};
 
 export const userPreferences = z
   .object({

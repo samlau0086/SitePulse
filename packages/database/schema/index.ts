@@ -28,6 +28,8 @@ export const users = pgTable(
     email: text('email').notNull().unique(),
     name: text('name').notNull(),
     timeZone: text('time_zone').notNull().default('UTC'),
+    emailBrandName: text('email_brand_name'),
+    emailLogoUrl: text('email_logo_url'),
     emailVerified: boolean('email_verified').notNull().default(false),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     image: text('image'),
@@ -40,6 +42,17 @@ export const users = pgTable(
       sql`${table.email} = lower(trim(${table.email}))`,
     ),
   ],
+);
+
+export const platformBranding = pgTable(
+  'platform_branding',
+  {
+    id: integer('id').primaryKey().default(1),
+    name: text('name').notNull().default('SitePulse'),
+    logoUrl: text('logo_url'),
+    updatedAt: updatedAt(),
+  },
+  (table) => [check('platform_branding_singleton', sql`${table.id} = 1`)],
 );
 
 // Better Auth owns these three tables. Password hashes live on credential accounts.

@@ -22,6 +22,7 @@ import {
 import { canManageOrganization } from '@sitepulse/shared';
 import { createAuth } from './auth';
 import { createAuthMailer, type SendAuthMail } from './auth-mail';
+import { registerAccountBranding } from './branding';
 import { HttpError } from './http-error';
 import { registerSiteRoutes } from './sites';
 import { registerSoftwareRoutes } from './software';
@@ -74,7 +75,7 @@ export async function buildApp({
       ],
     },
   });
-  const mailer = sendAuthMail ?? createAuthMailer(env);
+  const mailer = sendAuthMail ?? createAuthMailer(env, db);
   const auth = createAuth(db, env, async (mail) => {
     try {
       await mailer(mail);
@@ -616,5 +617,6 @@ export async function buildApp({
   await registerSiteRoutes(app, { db, requireUser, resolveHost });
   await registerSoftwareRoutes(app, { db, requireUser });
   await registerPlatformAdminRoutes(app, { db, env, requireUser });
+  await registerAccountBranding(app, { db, requireUser });
   return app;
 }

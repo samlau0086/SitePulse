@@ -156,6 +156,9 @@ importers:
 
   packages/api-contracts:
     dependencies:
+      '@sitepulse/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^4.1.12
         version: 4.6.7

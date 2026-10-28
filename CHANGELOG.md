@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Branded HTML email
+
+- Add shared responsive HTML templates with a brand header, explicit event state, action button and fallback link, retaining plain text for authentication, recipient verification/tests and incident/recovery emails.
+- Add allowlisted, verified platform administrator email branding settings and account-owned Agency/Agency Plus white-label logos. Resolve the current workspace plan on delivery; Free/Pro, unconfigured Agency and account authentication mail use the platform brand.
+- Add Preferences branding controls, logo previews, strict HTTPS URL validation, audited changes and migration `0016_rainy_frog_thor.sql`. The sending identity remains operator-configured.
+
 ## Unreleased — Security filters and software site cards
 
 - Keep severity filters on neutral surfaces with readable counts and a distinct selected border; prevent primary-button styles from overriding the filters.

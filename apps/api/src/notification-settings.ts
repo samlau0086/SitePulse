@@ -293,6 +293,7 @@ export async function registerNotificationRoutes(
     }
     return {
       to: row.destination,
+      organizationId,
       kind: test ? 'notification-test' : 'notification-verify',
       url,
     };

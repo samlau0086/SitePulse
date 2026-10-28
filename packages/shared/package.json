@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./network": "./src/network.ts",
+    "./email": "./src/email.ts",
     "./bark": "./src/bark.ts",
     "./chat-notifications": "./src/chat-notifications.ts"
   },

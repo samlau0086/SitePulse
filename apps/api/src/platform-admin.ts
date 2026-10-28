@@ -9,6 +9,8 @@ import { planSiteLimits, type Environment } from '@sitepulse/config';
 import { eq, schema, sql, type Database } from '@sitepulse/database';
 import { changeEntitlements, organizationUsage } from './entitlements';
 import { HttpError } from './http-error';
+import { emailBrandInput } from '@sitepulse/api-contracts';
+import { platformEmailBrand } from '@sitepulse/database/branding';
 
 type User = { id: string; emailVerified: boolean };
 export function isPlatformAdmin(user: User, env: Environment) {
@@ -27,7 +29,7 @@ export async function registerPlatformAdminRoutes(
     requireUser: (request: FastifyRequest) => Promise<User>;
   },
 ) {
-  // This scope grants entitlement administration only. Tenant APIs still require membership.
+  // Global entitlements and platform email branding only. Tenant APIs require membership.
   await app.register(
     async (admin) => {
       admin.addHook('preValidation', async (request) => {
@@ -37,6 +39,28 @@ export async function registerPlatformAdminRoutes(
             'PLATFORM_ADMIN_REQUIRED',
             'Platform administrator access is required.',
           );
+      });
+      admin.get('/branding', async () => ({
+        brand: await platformEmailBrand(db),
+      }));
+      admin.patch('/branding', async (request) => {
+        const user = await requireUser(request);
+        const brand = emailBrandInput.parse(request.body);
+        await db.transaction(async (tx) => {
+          await tx
+            .insert(schema.platformBranding)
+            .values({ id: 1, ...brand })
+            .onConflictDoUpdate({
+              target: schema.platformBranding.id,
+              set: brand,
+            });
+          await tx.insert(schema.auditLogs).values({
+            actorUserId: user.id,
+            action: 'platform.email_branding.updated',
+            requestId: request.id,
+          });
+        });
+        return { brand };
       });
       admin.get('/workspaces', async (request) => {
         const { q, page } = adminWorkspaceSearch.parse(request.query);

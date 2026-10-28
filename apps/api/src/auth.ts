@@ -9,7 +9,7 @@ import { createAuthMailer, type SendAuthMail } from './auth-mail';
 export function createAuth(
   db: Database,
   env: Environment,
-  sendMail: SendAuthMail = createAuthMailer(env),
+  sendMail: SendAuthMail = createAuthMailer(env, db),
 ) {
   const send = async (to: string, kind: 'reset' | 'verify', token: string) => {
     const url = new URL(

@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { and, eq, schema, sql, type Database } from '@sitepulse/database';
+import { workspaceEmailBrand } from '@sitepulse/database/branding';
+import {
+  emailHtml,
+  defaultEmailBrand,
+  type EmailBrand,
+} from '@sitepulse/shared/email';
 import {
   decryptBarkKey,
   sendBark,
@@ -140,6 +146,7 @@ export function incidentMail(
     'eventType' | 'monitorType' | 'siteName' | 'siteUrl' | 'severity'
   >,
   origin: string,
+  brand: EmailBrand = defaultEmailBrand,
 ) {
   const recovered = delivery.eventType === 'recovered';
   const connector = delivery.monitorType === 'stale_data';
@@ -159,11 +166,32 @@ export function incidentMail(
     '',
     'This alert was sent to a verified recipient of the site workspace.',
   ].join('\n');
-  return { subject, text };
+  const html = emailHtml({
+    brand,
+    title: subject,
+    text: text
+      .split('\n')
+      .slice(2)
+      .filter((line) => !line.startsWith('Incident history:'))
+      .join('\n'),
+    actionUrl: `${origin}/app/incidents`,
+    actionLabel: 'View incident history',
+    status: recovered ? 'success' : 'attention',
+  });
+  return { subject, text, html };
 }
 
-async function sendMail(delivery: Delivery, options: MailOptions) {
-  const { subject, text } = incidentMail(delivery, options.APP_ORIGIN);
+async function sendMail(
+  db: Database,
+  delivery: Delivery,
+  options: MailOptions,
+) {
+  const brand = await workspaceEmailBrand(db, delivery.organizationId);
+  const { subject, text, html } = incidentMail(
+    delivery,
+    options.APP_ORIGIN,
+    brand,
+  );
 
   if (options.AUTH_MAIL_TRANSPORT === 'file') {
     const directory = resolve(process.cwd(), '.local/alert-mail');
@@ -171,7 +199,7 @@ async function sendMail(delivery: Delivery, options: MailOptions) {
     try {
       await writeFile(
         resolve(directory, `${delivery.id}.json`),
-        JSON.stringify({ to: delivery.recipient, subject, text }),
+        JSON.stringify({ to: delivery.recipient, subject, text, html }),
         { mode: 0o600, flag: 'wx' },
       );
     } catch (error) {
@@ -200,6 +228,7 @@ async function sendMail(delivery: Delivery, options: MailOptions) {
       to: [delivery.recipient],
       subject,
       text,
+      html,
     }),
   });
   if (!response.ok) {
@@ -390,7 +419,7 @@ export async function deliverNotificationBatch(
             url: `${options.APP_ORIGIN}/app/incidents`,
           });
           providerMessageId = `${delivery.channel}:${delivery.id}`;
-        } else providerMessageId = await sendMail(delivery, options);
+        } else providerMessageId = await sendMail(db, delivery, options);
         await finishDelivery(db, delivery, { providerMessageId });
       } catch (error) {
         const errorCode =

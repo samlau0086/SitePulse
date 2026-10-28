@@ -37,11 +37,16 @@ it('guards server rendering before accessing the platform directory', async () =
   await expect(PlatformAdminPage()).rejects.toThrow('NOT_FOUND');
   expect(serverApi).not.toHaveBeenCalled();
   session.mockResolvedValue({ user: { isPlatformAdmin: true } });
-  serverApi.mockResolvedValue({ workspaces: [], hasMore: false });
-  expect(renderToStaticMarkup(await PlatformAdminPage())).toContain(
-    'Workspace entitlements',
+  serverApi.mockImplementation(async (path: string) =>
+    path === '/admin/branding'
+      ? { brand: { name: 'SitePulse', logoUrl: null } }
+      : { workspaces: [], hasMore: false },
   );
+  const html = renderToStaticMarkup(await PlatformAdminPage());
+  expect(html).toContain('Platform administration');
+  expect(html).toContain('Platform email branding');
   expect(serverApi).toHaveBeenCalledWith('/admin/workspaces');
+  expect(serverApi).toHaveBeenCalledWith('/admin/branding');
 });
 it('renders searchable usage and empty states without an unpreviewed save button', () => {
   const empty = renderToStaticMarkup(

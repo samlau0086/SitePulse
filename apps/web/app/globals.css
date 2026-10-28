@@ -2548,3 +2548,21 @@ h3 {
   display: grid;
   gap: 24px;
 }
+.email-branding {
+  margin-top: 24px;
+}
+.email-brand-preview {
+  padding: 24px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-panel);
+  background: var(--product-surface);
+  overflow-wrap: anywhere;
+}
+.email-brand-preview img {
+  display: block;
+  max-width: min(180px, 100%);
+  max-height: 64px;
+  width: auto;
+  height: auto;
+  margin-bottom: 16px;
+}

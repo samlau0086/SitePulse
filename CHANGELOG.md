@@ -6,6 +6,7 @@
 
 ## Unreleased — Personal Google Drive attachment storage
 
+- Set the Next.js upload proxy limit to 9 MB so valid 8 MiB ZIPs are not dropped before reaching the API, and show an actionable message when an upstream proxy blocks the request.
 - Replace the attachment file chooser with an accessible drag-and-drop ZIP target that displays the selected file and still requires explicit upload-and-scan submission.
 - Require personal Google Drive for all new attachment uploads, using Better Auth linking, encrypted OAuth tokens and `drive.file` permissions. Remove the storage selector and disable uploads until connected. Reject explicit database storage and never fall back to SitePulse ZIP storage when Drive is unavailable.
 - Preserve database attachments and the original Connector protocol. Proxy Drive downloads through tenant/site leases and verify size/SHA-256; bind files to the original Google account and recheck the uploader's verified administrator membership.

@@ -168,16 +168,29 @@ export function AttachmentManager({
               return;
             }
             void run(async () => {
-              const response = await fetch(
-                `/api/v1${base}/${fields.get('kind')}`,
-                {
+              let response: Response;
+              try {
+                response = await fetch(`/api/v1${base}/${fields.get('kind')}`, {
                   method: 'POST',
                   credentials: 'same-origin',
                   headers: { 'Content-Type': 'application/zip' },
                   body: selectedPackage,
-                },
-              );
-              const result = await response.json();
+                });
+              } catch {
+                throw new Error(
+                  'Upload could not reach SitePulse. Check the connection and that the reverse proxy allows ZIP requests up to 9 MB.',
+                );
+              }
+              let result: { reused?: boolean; error?: { message?: string } };
+              try {
+                result = (await response.json()) as typeof result;
+              } catch {
+                throw new Error(
+                  response.status === 413
+                    ? 'The upload was rejected because it exceeds the 8 MiB package limit.'
+                    : 'Upload failed because SitePulse returned an invalid response.',
+                );
+              }
               if (!response.ok)
                 throw new Error(result.error?.message ?? 'Upload failed.');
               form.reset();

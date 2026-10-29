@@ -7,6 +7,10 @@ const config: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.resolve(import.meta.dirname, '../..'),
   poweredByHeader: false,
+  experimental: {
+    // Keep enough framing headroom for the API's exact 8 MiB ZIP limit.
+    proxyClientMaxBodySize: '9mb',
+  },
   async rewrites() {
     return [
       {

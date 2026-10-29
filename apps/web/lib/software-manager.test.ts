@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 import type { SoftwareDirectory } from '@sitepulse/api-contracts';
-import { SoftwareManager } from '../components/software-manager';
+import {
+  operationResultMessage,
+  SoftwareManager,
+} from '../components/software-manager';
 
 function render(
   status: SoftwareDirectory['sites'][number]['inventorySync']['status'],
@@ -110,4 +113,17 @@ it('disables duplicate and read-only sync actions and explains timeout', () => {
   );
   expect(render('pending')).toContain('Sync queued');
   expect(render('timed_out')).toContain('Sync timed out');
+});
+
+it('explains package installation failures without exposing raw connector output', () => {
+  expect(operationResultMessage('package_download')).toContain(
+    'outbound HTTPS access',
+  );
+  expect(operationResultMessage('package_checksum')).toContain(
+    'integrity check',
+  );
+  expect(operationResultMessage('wordpress_error')).toContain(
+    'native installer',
+  );
+  expect(operationResultMessage('package')).toContain('rejected');
 });

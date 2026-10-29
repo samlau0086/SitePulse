@@ -121,7 +121,7 @@ final class SitePulse_Management {
         $state = get_option(SitePulse_Connector::OPTION, array());
         $origin = $state['origin'] ?? '';
         $parts = wp_parse_url($origin);
-        if (!$parts || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['port']) || !empty($parts['path']) || isset($parts['query']) || isset($parts['fragment'])) { return 'package'; }
+        if (!$parts || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['port']) || !empty($parts['path']) || isset($parts['query']) || isset($parts['fragment'])) { return 'package_download'; }
         $temp = wp_tempnam('sitepulse-attachment.zip');
         if (!$temp) { return 'filesystem'; }
         try {
@@ -130,7 +130,10 @@ final class SitePulse_Management {
                 'body' => wp_json_encode(array('siteId' => $state['site_id'], 'operationId' => $command['id'], 'token' => $command['token'])),
                 'timeout' => 30, 'redirection' => 0, 'sslverify' => true, 'stream' => true, 'filename' => $temp, 'limit_response_size' => 8388609,
             ));
-            if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200 || filesize($temp) > 8388608 || !hash_equals($command['packageSha256'], hash_file('sha256', $temp))) { return 'package'; }
+            if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) { return 'package_download'; }
+            if (!is_file($temp) || filesize($temp) > 8388608) { return 'package_size'; }
+            $digest = hash_file('sha256', $temp);
+            if (!is_string($digest) || !hash_equals($command['packageSha256'], $digest)) { return 'package_checksum'; }
             $current = get_option(SitePulse_Connector::OPTION, array());
             if (!self::packages_enabled() || ($current['credential'] ?? '') !== $state['credential'] || strtotime($command['executeBefore']) < time()) { return 'disabled'; }
             $upgrader = $command['kind'] === 'plugin' ? new Plugin_Upgrader(new Automatic_Upgrader_Skin()) : new Theme_Upgrader(new Automatic_Upgrader_Skin());

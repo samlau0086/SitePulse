@@ -4,6 +4,11 @@
 
 - Keep the software site card's Sync details clock icon inline with its disclosure arrow and label instead of splitting the control across multiple lines.
 
+## Unreleased — Actionable package installation failures
+
+- Split Connector package failures into safe download, size/write and SHA-256 integrity result codes while retaining the legacy `package` fallback for older Connectors.
+- Show Recent operations guidance for package download, temporary filesystem, checksum, native WordPress installer, disabled-consent and uncertain-result failures instead of exposing a bare error code.
+
 ## Unreleased — Personal Google Drive attachment storage
 
 - Set the Next.js upload proxy limit to 9 MB so valid 8 MiB ZIPs are not dropped before reaching the API, and show an actionable message when an upstream proxy blocks the request.

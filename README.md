@@ -51,6 +51,8 @@ LOGO 使用公开 HTTPS 图片地址（推荐 PNG/JPEG、360 × 128），由邮�
 
 安装来源支持 WordPress.org 官方包，以及工作区 **Attachment library** 中由管理员明确上传、完成静态扫描且未命中阻止规则的 ZIP；不支持任意 URL、付费源或 shell。更新仍只使用 WordPress.org 官方更新路径，不会用上传包覆盖更新。卸载前必须先停用；主题停用需要指定已安装的替代主题，活动主题及父主题受保护。Connector 自身在 WordPress 后台维护。安装/更新可能破坏兼容性，卸载可能删除业务数据；此功能不提供 WordPress 自动备份或回滚。
 
+安装失败时 **Recent operations** 会显示可执行的原因：下载/出站 HTTPS、8 MiB 大小或临时写入、SHA-256 校验、WordPress 原生安装器、权限未开启或结果未知。旧版 Connector 返回的 `package` 仍会显示为兼容性提示；不会展示原始 PHP 输出、服务器路径或响应内容。
+
 ### 附件库与上传包扫描
 
 侧栏 **Attachment library**（`/app/attachments`）允许已验证的工作区 owner/admin 上传并复用本地插件/主题 ZIP。上传时选择类型，并将 ZIP 拖入上传区或点击选择文件，确认文件名/大小后再点击 **Upload and scan**；服务端扫描时自动读取 ZIP 唯一顶层目录作为 slug，无需手动填写。每个 ZIP 最大 8 MiB，每个工作区最多 100 个包、原始 ZIP 合计 64 MiB。成员可查看元数据和扫描结果，但不能上传、删除或安装。相同工作区内相同 SHA-256 的包会复用已有记录。

@@ -81,6 +81,9 @@ export const softwareResultCode = z.enum([
   'dependency',
   'filesystem',
   'package',
+  'package_download',
+  'package_size',
+  'package_checksum',
   'wordpress_error',
   'uncertain',
 ]);

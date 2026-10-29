@@ -143,14 +143,14 @@ try {
     $theme_attachment = array_merge($attachment,array('kind'=>'theme','slug'=>'uploaded-theme'));
     check(SitePulse_Management::execute($theme_attachment) === 'ok' && end($upgrader)[0] === 'theme-install', 'Install authenticated theme attachment through native upgrader');
     $bad_hash = array_merge($attachment,array('packageSha256'=>str_repeat('0',64)));
-    check(SitePulse_Management::execute($bad_hash) === 'package', 'Reject attachment digest mismatch');
+    check(SitePulse_Management::execute($bad_hash) === 'package_checksum', 'Reject attachment digest mismatch');
     $package_status = 503;
-    check(SitePulse_Management::execute($attachment) === 'package' && !is_file(end($deleted_temp_files)), 'Reject non-success package response and clean temporary file');
+    check(SitePulse_Management::execute($attachment) === 'package_download' && !is_file(end($deleted_temp_files)), 'Reject non-success package response and clean temporary file');
     $package_status = 200; $package_transport_error = true;
-    check(SitePulse_Management::execute($attachment) === 'package' && !is_file(end($deleted_temp_files)), 'Reject package transport failure and clean temporary file');
+    check(SitePulse_Management::execute($attachment) === 'package_download' && !is_file(end($deleted_temp_files)), 'Reject package transport failure and clean temporary file');
     $package_transport_error = false; $package_bytes = str_repeat('x', 8388609);
     $oversized = array_merge($attachment,array('packageSha256'=>hash('sha256',$package_bytes)));
-    check(SitePulse_Management::execute($oversized) === 'package' && !is_file(end($deleted_temp_files)), 'Reject oversized package response and clean temporary file');
+    check(SitePulse_Management::execute($oversized) === 'package_size' && !is_file(end($deleted_temp_files)), 'Reject oversized package response and clean temporary file');
     $package_bytes = 'attachment-zip-fixture';
     $before_upgrades = count($upgrader);
     $package_mutation = static function () { update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>false,'user_id'=>7)); };

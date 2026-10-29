@@ -25,6 +25,31 @@ const actions: SoftwareCommand['action'][] = [
   'update',
   'uninstall',
 ];
+
+export function operationResultMessage(code: string | null) {
+  switch (code) {
+    case 'package_download':
+      return "WordPress could not download the package from SitePulse. Check the site's outbound HTTPS access, Connector pairing and firewall, then retry.";
+    case 'package_size':
+      return 'The downloaded package exceeded the 8 MiB limit or was not written completely. Retry; if it continues, upload the package again.';
+    case 'package_checksum':
+      return 'The downloaded package failed its integrity check and was not installed. Retry; if it continues, upload the package again.';
+    case 'package':
+      return 'The Connector rejected the package before installation. Update the Connector, verify the package permission and retry.';
+    case 'filesystem':
+      return 'WordPress could not create or use its temporary directory. Check disk space and WordPress file permissions.';
+    case 'wordpress_error':
+      return "WordPress's native installer rejected the package. Check disk space, file permissions, PHP ZIP/unzip support and plugin compatibility.";
+    case 'disabled':
+      return 'Remote management or uploaded-package installation is disabled on this WordPress site. Enable both settings in Settings > SitePulse, save, wait for a poll, then retry.';
+    case 'uncertain':
+      return 'Execution could not be confirmed. Check WordPress before retrying or resolving this operation.';
+    default:
+      return code
+        ? `The Connector reported ${code}. Check WordPress and the Connector settings before retrying.`
+        : 'No result was reported.';
+  }
+}
 export function SoftwareArtwork({
   slug,
   official,
@@ -991,7 +1016,9 @@ export function SoftwareManager({
                   />
                   {op.status}
                 </span>
-                {op.resultCode && <small>{op.resultCode}</small>}
+                {op.resultCode && (
+                  <small>{operationResultMessage(op.resultCode)}</small>
+                )}
                 {data.canManage &&
                   (['preview', 'queued'].includes(op.status) ||
                     op.status === 'unknown') && (

@@ -13,6 +13,7 @@ import {
   inventorySync,
   inventoryFailure,
   attachmentUploadParams,
+  attachmentUploadQuery,
   attachmentParams,
   softwarePackage,
   type SoftwareCommand,
@@ -20,6 +21,7 @@ import {
 import { HttpError } from './http-error';
 import { hashCredential } from './sites';
 import { scanPackage, PACKAGE_LIMIT, SCANNER_VERSION } from './package-scanner';
+import type { DriveStorage } from './google-drive';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 type User = { id: string; emailVerified: boolean };
@@ -34,9 +36,11 @@ export async function registerSoftwareRoutes(
   {
     db,
     requireUser,
+    drive,
   }: {
     db: Database;
     requireUser: (request: FastifyRequest) => Promise<User>;
+    drive: DriveStorage;
   },
 ) {
   const json = (value: z.ZodType) => {
@@ -206,6 +210,18 @@ export async function registerSoftwareRoutes(
       )
       .for('share');
     if (!row) throw unavailable();
+    if (row.storage === 'google_drive') {
+      const [owner] = await tx
+        .select({
+          id: schema.users.id,
+          emailVerified: schema.users.emailVerified,
+        })
+        .from(schema.users)
+        .where(eq(schema.users.id, row.actorUserId))
+        .for('share');
+      if (!owner) throw conflict('The Drive storage owner is unavailable.');
+      await member(tx, organizationId, owner, true);
+    }
     if (
       command.action !== 'install' ||
       row.kind !== command.kind ||
@@ -243,6 +259,7 @@ export async function registerSoftwareRoutes(
             byteSize: schema.softwareAttachments.byteSize,
             scan: schema.softwareAttachments.scan,
             createdAt: schema.softwareAttachments.createdAt,
+            storage: schema.softwareAttachments.storage,
           })
           .from(schema.softwareAttachments)
           .where(eq(schema.softwareAttachments.organizationId, organizationId))
@@ -261,6 +278,10 @@ export async function registerSoftwareRoutes(
     '/api/v1/organizations/:organizationId/attachments/:kind',
     {
       ...options(attachmentUploadParams),
+      schema: {
+        ...options(attachmentUploadParams).schema,
+        querystring: json(attachmentUploadQuery),
+      },
       bodyLimit: PACKAGE_LIMIT,
       onRequest: async (request) => {
         const user = await requireUser(request);
@@ -273,6 +294,7 @@ export async function registerSoftwareRoutes(
     async (request) => {
       const user = await requireUser(request);
       const input = attachmentUploadParams.parse(request.params);
+      const { storage } = attachmentUploadQuery.parse(request.query);
       if (
         request.headers['content-type'] !== 'application/zip' ||
         !Buffer.isBuffer(request.body)
@@ -289,60 +311,86 @@ export async function registerSoftwareRoutes(
           'Package rejected: check archive paths, limits and WordPress headers.',
         );
       }
-      return db.transaction(async (tx) => {
-        await member(tx, input.organizationId, user, true);
-        await tx
-          .select({ id: schema.organizations.id })
-          .from(schema.organizations)
-          .where(eq(schema.organizations.id, input.organizationId))
-          .for('update');
-        const existing = await tx
-          .select({
-            id: schema.softwareAttachments.id,
-            sha256: schema.softwareAttachments.sha256,
-            byteSize: schema.softwareAttachments.byteSize,
-          })
-          .from(schema.softwareAttachments)
-          .where(
-            eq(schema.softwareAttachments.organizationId, input.organizationId),
+      let uploaded: Awaited<ReturnType<DriveStorage['upload']>> | undefined;
+      try {
+        return await db.transaction(async (tx) => {
+          await member(tx, input.organizationId, user, true);
+          await tx
+            .select({ id: schema.organizations.id })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.id, input.organizationId))
+            .for('update');
+          const existing = await tx
+            .select({
+              id: schema.softwareAttachments.id,
+              sha256: schema.softwareAttachments.sha256,
+              byteSize: schema.softwareAttachments.byteSize,
+            })
+            .from(schema.softwareAttachments)
+            .where(
+              eq(
+                schema.softwareAttachments.organizationId,
+                input.organizationId,
+              ),
+            );
+          const duplicate = existing.find(
+            (row) => row.sha256 === inspected.sha256,
           );
-        const duplicate = existing.find(
-          (row) => row.sha256 === inspected.sha256,
-        );
-        if (duplicate) return { id: duplicate.id, reused: true };
-        if (
-          existing.length >= 100 ||
-          existing.reduce((sum, row) => sum + row.byteSize, 0) + bytes.length >
-            64 * 1024 * 1024
-        )
-          throw conflict(
-            'Attachment storage limit reached (64 MiB / 100 packages). Delete unused packages first.',
+          if (duplicate) return { id: duplicate.id, reused: true };
+          if (
+            existing.length >= 100 ||
+            existing.reduce((sum, row) => sum + row.byteSize, 0) +
+              bytes.length >
+              64 * 1024 * 1024
+          )
+            throw conflict(
+              'Attachment storage limit reached (64 MiB / 100 packages). Delete unused packages first.',
+            );
+          if (storage === 'google_drive')
+            uploaded = await drive.upload(
+              user.id,
+              `${inspected.slug}-${inspected.version}.zip`,
+              bytes,
+            );
+          const [row] = await tx
+            .insert(schema.softwareAttachments)
+            .values({
+              organizationId: input.organizationId,
+              actorUserId: user.id,
+              kind: input.kind,
+              ...inspected,
+              byteSize: bytes.length,
+              storage,
+              zipBase64:
+                storage === 'database' ? bytes.toString('base64') : null,
+              driveFileId: uploaded?.fileId ?? null,
+              driveAccountId: uploaded?.accountId ?? null,
+            })
+            .returning({ id: schema.softwareAttachments.id });
+          await audit(
+            tx,
+            input.organizationId,
+            user.id,
+            'attachment.uploaded',
+            {
+              attachmentId: row!.id,
+              sha256: inspected.sha256,
+              scanStatus: inspected.scan.status,
+            },
+            request.id,
           );
-        const [row] = await tx
-          .insert(schema.softwareAttachments)
-          .values({
-            organizationId: input.organizationId,
-            actorUserId: user.id,
-            kind: input.kind,
-            ...inspected,
-            byteSize: bytes.length,
-            zipBase64: bytes.toString('base64'),
-          })
-          .returning({ id: schema.softwareAttachments.id });
-        await audit(
-          tx,
-          input.organizationId,
-          user.id,
-          'attachment.uploaded',
-          {
-            attachmentId: row!.id,
-            sha256: inspected.sha256,
-            scanStatus: inspected.scan.status,
-          },
-          request.id,
-        );
-        return { id: row!.id, reused: false };
-      });
+          return { id: row!.id, reused: false };
+        });
+      } catch (error) {
+        if (uploaded)
+          await uploaded.cleanup().catch(() => {
+            app.log.warn(
+              { event: 'drive.upload.cleanup_failed' },
+              'Drive upload cleanup failed',
+            );
+          });
+        throw error;
+      }
     },
   );
   app.delete(
@@ -987,7 +1035,10 @@ export async function registerSoftwareRoutes(
         const value = await context(tx, site.organizationId, site.id);
         ready(value, op.command);
         const row = (await attachment(tx, site.organizationId, op.command))!;
-        const data = Buffer.from(row.zipBase64, 'base64');
+        const data =
+          row.storage === 'google_drive'
+            ? await drive.download(row)
+            : Buffer.from(row.zipBase64!, 'base64');
         if (
           data.length !== row.byteSize ||
           data.length > PACKAGE_LIMIT ||

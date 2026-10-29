@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { symmetricEncrypt } from 'better-auth/crypto';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { createDatabase, eq, schema, sql } from '@sitepulse/database';
 import { migrateDatabase } from '@sitepulse/database/migrate';
@@ -8,6 +9,42 @@ import { hashCredential } from '../src/sites';
 import { pluginFixture, packageFixture } from '../src/package-fixture';
 
 const origin = 'http://localhost:3000';
+const authSecret = randomBytes(48).toString('base64url');
+const driveFiles = new Map<string, Buffer>();
+const driveRequests: string[] = [];
+let hostileDriveSession = false;
+const driveFetch: typeof fetch = async (input, init) => {
+  const url = new URL(String(input));
+  driveRequests.push(url.href);
+  expect(url.origin).toBe('https://www.googleapis.com');
+  expect(init?.redirect).toBe('error');
+  expect(new Headers(init?.headers).get('authorization')).toBe(
+    'Bearer fixture-access',
+  );
+  if (url.pathname.endsWith('/generateIds'))
+    return Response.json({ ids: ['drive-fixture'] });
+  if (init?.method === 'POST')
+    return new Response(null, {
+      status: 200,
+      headers: {
+        location: hostileDriveSession
+          ? 'https://evil.example/upload?upload_id=secret'
+          : 'https://www.googleapis.com/upload/drive/v3/files?upload_id=fixture',
+      },
+    });
+  if (init?.method === 'PUT') {
+    driveFiles.set('drive-fixture', Buffer.from(init.body as Uint8Array));
+    return Response.json({ id: 'drive-fixture' });
+  }
+  if (init?.method === 'DELETE') {
+    driveFiles.delete('drive-fixture');
+    return new Response(null, { status: 204 });
+  }
+  const bytes = driveFiles.get('drive-fixture');
+  return bytes
+    ? new Response(new Uint8Array(bytes))
+    : new Response(null, { status: 404 });
+};
 let app: Awaited<ReturnType<typeof buildApp>>;
 let database: ReturnType<typeof createDatabase>;
 let owner: { id: string; cookie: string };
@@ -99,10 +136,13 @@ beforeAll(async () => {
       NODE_ENV: 'test',
       DATABASE_URL: url,
       APP_ORIGIN: origin,
-      BETTER_AUTH_SECRET: randomBytes(48).toString('base64url'),
+      BETTER_AUTH_SECRET: authSecret,
+      GOOGLE_DRIVE_CLIENT_ID: 'fixture-client',
+      GOOGLE_DRIVE_CLIENT_SECRET: 'fixture-secret',
       LOG_LEVEL: 'silent',
     }),
     sendAuthMail: async () => {},
+    driveFetch,
   });
   async function signup(email: string) {
     const response = await call(
@@ -146,12 +186,22 @@ beforeAll(async () => {
     .values({ organizationId, userId: reader.id, role: 'member' });
 });
 beforeEach(async () => {
+  driveFiles.clear();
+  driveRequests.length = 0;
+  hostileDriveSession = false;
+  await database.db
+    .delete(schema.accounts)
+    .where(eq(schema.accounts.providerId, 'google'));
   await database.db.delete(schema.sites);
   await database.db.delete(schema.softwareAttachments);
   await database.db
     .update(schema.organizationMembers)
     .set({ role: 'owner' })
     .where(eq(schema.organizationMembers.userId, owner.id));
+  await database.db
+    .update(schema.organizationMembers)
+    .set({ role: 'member' })
+    .where(eq(schema.organizationMembers.userId, reader.id));
   await database.db.update(schema.users).set({ emailVerified: true });
   sites = (
     await database.db
@@ -211,6 +261,250 @@ beforeEach(async () => {
       updateCounts: { plugins: 0, themes: 0, core: 0 },
     });
   }
+});
+async function linkDrive(subject = 'google-original') {
+  await database.db.insert(schema.accounts).values({
+    id: randomUUID(),
+    userId: owner.id,
+    providerId: 'google',
+    accountId: subject,
+    accessToken: await symmetricEncrypt({
+      key: authSecret,
+      data: 'fixture-access',
+    }),
+    refreshToken: await symmetricEncrypt({
+      key: authSecret,
+      data: 'fixture-refresh',
+    }),
+    accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+    scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+  });
+}
+const uploadDrive = (
+  bytes = pluginFixture(),
+  cookie = owner.cookie,
+  kind = 'plugin',
+) =>
+  app.inject({
+    method: 'POST',
+    url: `${libraryBase()}/${kind}?storage=google_drive`,
+    headers: { origin, cookie, 'content-type': 'application/zip' },
+    payload: bytes,
+  });
+async function driveLease(kind = 'plugin') {
+  const bytes =
+    kind === 'plugin'
+      ? pluginFixture()
+      : packageFixture([
+          {
+            path: 'sample/style.css',
+            content: '/*\nTheme Name: Sample\nVersion: 1.0\n*/',
+          },
+        ]);
+  const uploaded = await uploadDrive(bytes, owner.cookie, kind);
+  expect(uploaded.statusCode, uploaded.body).toBe(200);
+  await packagePoll();
+  const response = await preview([sites[0]!], {
+    ...uploadedCommand(uploaded.json().id),
+    kind,
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  expect((await confirm(response.json().batchId)).statusCode).toBe(200);
+  const cmd = (await packagePoll()).json().command;
+  const download = () =>
+    call(
+      'POST',
+      '/connector/software-package',
+      { siteId: sites[0], operationId: cmd.id, token: cmd.token },
+      '',
+      credential,
+    );
+  return { bytes, download, id: uploaded.json().id as string };
+}
+it.each(['plugin', 'theme'])(
+  'installs Drive %s bytes through the existing lease without exposing Drive identifiers',
+  async (kind) => {
+    await linkDrive();
+    const { bytes, download } = await driveLease(kind);
+    const result = await download();
+    expect(result.statusCode, result.body).toBe(200);
+    expect(result.rawPayload.equals(bytes)).toBe(true);
+    const [row] = await database.db.select().from(schema.softwareAttachments);
+    expect(row).toMatchObject({
+      storage: 'google_drive',
+      zipBase64: null,
+      driveFileId: 'drive-fixture',
+      driveAccountId: 'google-original',
+    });
+    const list = await call(
+      'GET',
+      `/organizations/${organizationId}/attachments`,
+    );
+    expect(list.json().attachments[0].storage).toBe('google_drive');
+    expect(list.body).not.toMatch(
+      /drive-fixture|google-original|fixture-access|fixture-refresh|zipBase64/,
+    );
+    driveFiles.set('drive-fixture', Buffer.alloc(bytes.length));
+    expect((await download()).statusCode).toBe(409);
+    driveFiles.set('drive-fixture', Buffer.alloc(bytes.length + 1));
+    expect((await download()).statusCode).toBe(409);
+    driveFiles.delete('drive-fixture');
+    expect((await download()).statusCode).toBe(409);
+  },
+);
+it('binds Drive storage to the original account and current owner authority', async () => {
+  await linkDrive();
+  const { download } = await driveLease();
+  expect(
+    (
+      await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/me/google-drive',
+        headers: { origin, cookie: owner.cookie },
+      })
+    ).statusCode,
+  ).toBe(200);
+  expect(driveFiles.size).toBe(1);
+  expect((await download()).statusCode).toBe(409);
+  await linkDrive('other-account');
+  expect((await download()).statusCode).toBe(409);
+  await database.db
+    .delete(schema.accounts)
+    .where(eq(schema.accounts.providerId, 'google'));
+  await linkDrive();
+  expect((await download()).statusCode).toBe(200);
+  await database.db
+    .update(schema.organizationMembers)
+    .set({ role: 'member' })
+    .where(eq(schema.organizationMembers.userId, owner.id));
+  expect((await download()).statusCode).toBe(403);
+});
+it('rechecks the Drive owner even when another administrator runs the installation', async () => {
+  await linkDrive();
+  await database.db
+    .update(schema.organizationMembers)
+    .set({ role: 'admin' })
+    .where(eq(schema.organizationMembers.userId, reader.id));
+  const uploaded = await uploadDrive();
+  await packagePoll();
+  const response = await call(
+    'POST',
+    `${base()}/preview`,
+    {
+      siteIds: [sites[0]],
+      command: uploadedCommand(uploaded.json().id),
+      reason: 'Shared library test',
+    },
+    reader.cookie,
+  );
+  expect(response.statusCode, response.body).toBe(200);
+  expect(
+    (
+      await call(
+        'POST',
+        `${base()}/${response.json().batchId}/confirm`,
+        {},
+        reader.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  const cmd = (await packagePoll()).json().command;
+  const download = () =>
+    call(
+      'POST',
+      '/connector/software-package',
+      { siteId: sites[0], operationId: cmd.id, token: cmd.token },
+      '',
+      credential,
+    );
+  expect((await download()).statusCode).toBe(200);
+  await database.db
+    .update(schema.organizationMembers)
+    .set({ role: 'member' })
+    .where(eq(schema.organizationMembers.userId, owner.id));
+  expect((await download()).statusCode).toBe(403);
+});
+it('authorizes Drive uploads before contacting Google and reuses existing fingerprints', async () => {
+  expect((await uploadDrive()).statusCode).toBe(409);
+  await linkDrive();
+  expect((await uploadDrive(pluginFixture(), reader.cookie)).statusCode).toBe(
+    403,
+  );
+  expect((await uploadDrive(pluginFixture(), outsider.cookie)).statusCode).toBe(
+    404,
+  );
+  expect(driveRequests).toHaveLength(0);
+  const id = (await upload()).json().id;
+  expect((await uploadDrive()).json()).toMatchObject({ id, reused: true });
+  expect(driveRequests).toHaveLength(0);
+  await removeAttachment(id);
+  const uploaded = await uploadDrive();
+  expect(uploaded.statusCode).toBe(200);
+  expect((await removeAttachment(uploaded.json().id)).statusCode).toBe(200);
+  expect(driveFiles.size).toBe(1);
+});
+it('refuses untrusted resumable upload hosts and leaves no library entry on failure', async () => {
+  await linkDrive();
+  hostileDriveSession = true;
+  expect((await uploadDrive()).statusCode).toBe(409);
+  expect(
+    await database.db.select().from(schema.softwareAttachments),
+  ).toHaveLength(0);
+  expect(
+    driveRequests.every((url) => url.startsWith('https://www.googleapis.com/')),
+  ).toBe(true);
+});
+it('protects Google account connection with session, Origin, verification and OAuth state', async () => {
+  expect(
+    (await call('GET', '/me/google-drive', undefined, '')).statusCode,
+  ).toBe(401);
+  expect(
+    (await call('POST', '/me/google-drive/connect', {}, '')).statusCode,
+  ).toBe(401);
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/me/google-drive/connect',
+        headers: { cookie: owner.cookie },
+        payload: {},
+      })
+    ).statusCode,
+  ).toBe(403);
+  await database.db
+    .update(schema.users)
+    .set({ emailVerified: false })
+    .where(eq(schema.users.id, owner.id));
+  expect((await call('POST', '/me/google-drive/connect', {})).statusCode).toBe(
+    403,
+  );
+  await database.db
+    .update(schema.users)
+    .set({ emailVerified: true })
+    .where(eq(schema.users.id, owner.id));
+  const response = await call('POST', '/me/google-drive/connect', {});
+  expect(response.statusCode, response.body).toBe(200);
+  const url = new URL(response.json().url);
+  expect(url.origin).toBe('https://accounts.google.com');
+  expect(url.searchParams.get('scope')).toContain(
+    'https://www.googleapis.com/auth/drive.file',
+  );
+  expect(url.searchParams.get('access_type')).toBe('offline');
+  expect(url.searchParams.get('state')).toBeTruthy();
+  expect(
+    response.cookies.some(
+      (cookie) => cookie.httpOnly && cookie.sameSite === 'Lax',
+    ),
+  ).toBe(true);
+  const callback = await app.inject({
+    method: 'GET',
+    url: '/api/v1/auth/callback/google?state=invalid&code=fixture',
+  });
+  expect(callback.headers.location).toBe('/app/attachments?drive=error');
+  expect(callback.body).not.toContain('fixture');
+  expect((await call('POST', '/auth/get-access-token', {})).statusCode).toBe(
+    404,
+  );
 });
 
 it('stores scoped attachments, deduplicates and exposes metadata without source', async () => {

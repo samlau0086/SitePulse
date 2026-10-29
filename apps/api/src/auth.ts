@@ -26,6 +26,24 @@ export function createAuth(
     basePath: '/api/v1/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: [env.APP_ORIGIN],
+    account: {
+      encryptOAuthTokens: true,
+      accountLinking: { enabled: true, disableImplicitLinking: true },
+    },
+    socialProviders:
+      env.GOOGLE_DRIVE_CLIENT_ID && env.GOOGLE_DRIVE_CLIENT_SECRET
+        ? {
+            google: {
+              clientId: env.GOOGLE_DRIVE_CLIENT_ID,
+              clientSecret: env.GOOGLE_DRIVE_CLIENT_SECRET,
+              accessType: 'offline',
+              prompt: 'consent',
+              scope: ['https://www.googleapis.com/auth/drive.file'],
+              disableSignUp: true,
+              disableImplicitSignUp: true,
+            },
+          }
+        : {},
     database: drizzleAdapter(db, {
       provider: 'pg',
       transaction: true,

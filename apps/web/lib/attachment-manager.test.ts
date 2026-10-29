@@ -77,3 +77,22 @@ it('keeps attachment mutations disabled for read-only members', () => {
   expect(html).toContain('administrator access is required');
   expect(html).not.toContain('Choose sites &amp; install');
 });
+
+it('shows personal Drive connection, explicit storage and remote-original retention guidance', () => {
+  const initial = fixture(true);
+  initial.attachments[0]!.storage = 'google_drive';
+  const html = renderToStaticMarkup(
+    createElement(AttachmentManager, {
+      organizationId: 'workspace-fixture',
+      initial,
+      initialDrive: { enabled: true, connected: true },
+      driveResult: 'error',
+    }),
+  );
+  expect(html).toContain('Reconnect Google Drive');
+  expect(html).toContain('name="storage"');
+  expect(html).toContain('value="google_drive"');
+  expect(html).toContain('Uploader’s Google Drive');
+  expect(html).toContain('Drive originals are kept');
+  expect(html).toContain('Google Drive connection failed');
+});

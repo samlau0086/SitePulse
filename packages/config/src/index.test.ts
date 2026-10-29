@@ -11,6 +11,28 @@ const valid = {
   BETTER_AUTH_SECRET: 'a'.repeat(48),
 };
 describe('environment validation', () => {
+  it('requires paired optional Google Drive OAuth credentials', () => {
+    expect(
+      parseEnvironment({
+        ...valid,
+        GOOGLE_DRIVE_CLIENT_ID: '',
+        GOOGLE_DRIVE_CLIENT_SECRET: '',
+      }).GOOGLE_DRIVE_CLIENT_ID,
+    ).toBeUndefined();
+    expect(() =>
+      parseEnvironment({ ...valid, GOOGLE_DRIVE_CLIENT_ID: 'fixture' }),
+    ).toThrow();
+    expect(() =>
+      parseEnvironment({ ...valid, GOOGLE_DRIVE_CLIENT_SECRET: 'fixture' }),
+    ).toThrow();
+    expect(
+      parseEnvironment({
+        ...valid,
+        GOOGLE_DRIVE_CLIENT_ID: 'client',
+        GOOGLE_DRIVE_CLIENT_SECRET: 'secret',
+      }).GOOGLE_DRIVE_CLIENT_ID,
+    ).toBe('client');
+  });
   it('validates the optional chat encryption key on API and worker', () => {
     for (const parse of [parseEnvironment, parseWorkerEnvironment]) {
       expect(parse(valid).NOTIFICATION_ENCRYPTION_KEY).toBeUndefined();

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Personal Google Drive attachment storage
+
+- Add optional per-user Google Drive linking through Better Auth, encrypted OAuth tokens and `drive.file` permissions. Add storage selection, connection state and disconnect confirmation to Attachments.
+- Preserve database attachments and the original Connector protocol. Proxy Drive downloads through tenant/site leases and verify size/SHA-256; bind files to the original Google account and recheck the uploader's verified administrator membership.
+- Add migration 0017, paired optional OAuth configuration and deployment wiring. Deletion/disconnection retains Drive originals; existing bytes are not migrated. See `docs/GOOGLE_DRIVE_STORAGE.md` for setup and acceptance limits.
+
 ## Unreleased — Persistent software queue feedback
 
 - Keep software actions, bulk targets and installation submission blocked per site while operations are queued, running or unknown. Show the action and queue state beside installed versions, retaining server-reported inventory.

@@ -365,7 +365,12 @@ export const softwareAttachments = pgTable(
     version: text('version').notNull(),
     sha256: text('sha256').notNull(),
     byteSize: integer('byte_size').notNull(),
-    zipBase64: text('zip_base64').notNull(),
+    zipBase64: text('zip_base64'),
+    storage: text('storage', { enum: ['database', 'google_drive'] })
+      .notNull()
+      .default('database'),
+    driveFileId: text('drive_file_id'),
+    driveAccountId: text('drive_account_id'),
     scan: jsonb('scan')
       .$type<{
         version: string;
@@ -384,6 +389,10 @@ export const softwareAttachments = pgTable(
     check(
       'software_attachments_kind_valid',
       sql`${table.kind} in ('plugin','theme')`,
+    ),
+    check(
+      'software_attachments_storage_valid',
+      sql`(${table.storage} = 'database' and ${table.zipBase64} is not null and ${table.driveFileId} is null and ${table.driveAccountId} is null) or (${table.storage} = 'google_drive' and ${table.zipBase64} is null and ${table.driveFileId} is not null and ${table.driveAccountId} is not null)`,
     ),
     check(
       'software_attachments_size_valid',

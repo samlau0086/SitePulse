@@ -10,6 +10,24 @@ const valid = {
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 describe('GitHub deployment configuration', () => {
+  it('transfers paired Drive credentials and rejects dotenv injection', () => {
+    const drive = {
+      GOOGLE_DRIVE_CLIENT_ID: 'fixture-client',
+      GOOGLE_DRIVE_CLIENT_SECRET: 'fixture-secret',
+    };
+    expect(
+      prepareDeploymentConfiguration({ ...valid, ...drive })['.env'],
+    ).toContain("GOOGLE_DRIVE_CLIENT_SECRET='fixture-secret'\n");
+    for (const value of ["bad'quote", 'bad\nINJECTED=true', 'bad\\escape']) {
+      expect(() =>
+        prepareDeploymentConfiguration({
+          ...valid,
+          ...drive,
+          GOOGLE_DRIVE_CLIENT_SECRET: value,
+        }),
+      ).toThrow('GOOGLE_DRIVE_CLIENT_SECRET');
+    }
+  });
   it('validates and transfers optional stable chat encryption configuration', () => {
     expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
       "NOTIFICATION_ENCRYPTION_KEY=''\n",

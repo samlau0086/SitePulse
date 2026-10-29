@@ -6,6 +6,8 @@ Platform entitlement administration is isolated under `/api/v1/admin`. Every req
 
 Implemented controls:
 
+- Optional personal Google Drive storage uses Better Auth explicit account linking, encrypted access/refresh tokens and `drive.file` permissions. The narrow OAuth callback relies on Better Auth state/PKCE; other mutations retain exact Origin checks. Google tokens/IDs never enter package or library responses. File bytes are proxied through the existing tenant/site lease with original size/SHA-256 validation and current uploader authority checks. See [Drive storage](GOOGLE_DRIVE_STORAGE.md) for token backups, retained originals and staging acceptance.
+
 - Homepage and login/registration navigation validate sessions through the API on the server with no response caching. Cookie presence alone does not grant authenticated navigation; workspace APIs continue to enforce authorization independently.
 
 - Maintained Better Auth session/password flow; Argon2id passwords, minimum 12 characters, bounded 128-character input, no password logging.

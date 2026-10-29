@@ -2,21 +2,37 @@
 import { Timestamp } from './user-preferences';
 import Link from 'next/link';
 import { useState } from 'react';
-import type { AttachmentDirectory } from '@sitepulse/api-contracts';
+import type {
+  AttachmentDirectory,
+  DriveConnection,
+} from '@sitepulse/api-contracts';
 import { api } from '../lib/api';
 import { Icon } from './icon';
 
 export function AttachmentManager({
   organizationId,
   initial,
+  initialDrive = { enabled: false, connected: false },
+  driveResult,
 }: {
   organizationId: string;
   initial: AttachmentDirectory;
+  initialDrive?: DriveConnection;
+  driveResult?: string;
 }) {
   const [data, setData] = useState(initial);
+  const [drive, setDrive] = useState(initialDrive);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState(
+    driveResult === 'error'
+      ? 'Google Drive connection failed. Try again with the Google account matching your SitePulse email.'
+      : '',
+  );
+  const [message, setMessage] = useState(
+    driveResult === 'connected'
+      ? 'Google account linked. Drive uploads require offline file access; reconnect if unavailable.'
+      : '',
+  );
   const base = `/organizations/${organizationId}/attachments`;
   async function run(work: () => Promise<void>) {
     setPending(true);
@@ -35,6 +51,73 @@ export function AttachmentManager({
     <div className="attachment-manager">
       {error && <p role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
+      <section className="card">
+        <h2>My Google Drive</h2>
+        <p>
+          {drive.connected
+            ? 'Connected'
+            : drive.enabled
+              ? 'Not connected'
+              : 'Google Drive is not configured on this server.'}
+        </p>
+        <p>
+          Connect the Google account matching your SitePulse email. Only files
+          created or selected for SitePulse are accessible. Packages remain
+          private in your Drive and are shared through workspace permissions.
+        </p>
+        <p>
+          Disconnecting prevents future downloads of your Drive packages.
+          Existing WordPress installations and Drive originals are kept.
+          Reconnect the same account to restore access.
+        </p>
+        <div className="software-actions">
+          <button
+            className="secondary"
+            disabled={pending || !drive.enabled || !data.canManage}
+            onClick={() =>
+              void run(async () => {
+                const result = await api<{ url: string }>(
+                  '/me/google-drive/connect',
+                  {},
+                );
+                window.location.assign(result.url);
+              })
+            }
+          >
+            {drive.connected
+              ? 'Reconnect Google Drive'
+              : 'Connect Google Drive'}
+          </button>
+          {drive.connected && (
+            <button
+              className="secondary danger"
+              disabled={pending || !data.canManage}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Disconnect your Google Drive? Future installations using your Drive packages will fail until you reconnect the same account. Original files are kept.',
+                  )
+                )
+                  void run(async () => {
+                    await api('/me/google-drive', undefined, 'DELETE');
+                    setDrive(
+                      await api<DriveConnection>(
+                        '/me/google-drive',
+                        undefined,
+                        'GET',
+                      ),
+                    );
+                    setMessage(
+                      'Google Drive disconnected. Original files are kept.',
+                    );
+                  });
+              }}
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
+      </section>
       <section className="card">
         <h2>
           <Icon name="up" /> Upload package
@@ -61,7 +144,7 @@ export function AttachmentManager({
             }
             void run(async () => {
               const response = await fetch(
-                `/api/v1${base}/${fields.get('kind')}`,
+                `/api/v1${base}/${fields.get('kind')}?storage=${fields.get('storage')}`,
                 {
                   method: 'POST',
                   credentials: 'same-origin',
@@ -82,6 +165,18 @@ export function AttachmentManager({
           }}
         >
           <fieldset disabled={pending || !data.canManage}>
+            <label htmlFor="attachment-storage">Package storage</label>
+            <select name="storage" id="attachment-storage">
+              <option value="database">SitePulse storage</option>
+              <option value="google_drive" disabled={!drive.connected}>
+                My Google Drive{!drive.connected ? ' (connect first)' : ''}
+              </option>
+            </select>
+            <p>
+              Storage applies to new packages. Identical ZIPs reuse the existing
+              library entry. The workspace quota applies to both storage
+              options.
+            </p>
             <label htmlFor="attachment-kind">Package type</label>
             <select name="kind" id="attachment-kind">
               <option value="plugin">Plugin</option>
@@ -144,7 +239,10 @@ export function AttachmentManager({
                   : 'Scan complete: no patterns detected'}
               </p>
               <p className="muted">
-                {item.scan.scannedFiles} code files ·{' '}
+                {item.storage === 'google_drive'
+                  ? 'Uploader’s Google Drive'
+                  : 'SitePulse storage'}{' '}
+                · {item.scan.scannedFiles} code files ·{' '}
                 {Math.ceil(item.byteSize / 1024)} KiB ·{' '}
                 <Timestamp value={item.createdAt} />
               </p>
@@ -173,7 +271,7 @@ export function AttachmentManager({
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Delete ${item.name} v${item.version} from this workspace library? Installed sites are unaffected.`,
+                        `Delete ${item.name} v${item.version} from this workspace library? Installed sites are unaffected.${item.storage === 'google_drive' ? ' The original Google Drive file is kept.' : ''}`,
                       )
                     )
                       void run(async () => {

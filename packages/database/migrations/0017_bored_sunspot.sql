@@ -1,0 +1,5 @@
+ALTER TABLE "software_attachments" ALTER COLUMN "zip_base64" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "software_attachments" ADD COLUMN "storage" text DEFAULT 'database' NOT NULL;--> statement-breakpoint
+ALTER TABLE "software_attachments" ADD COLUMN "drive_file_id" text;--> statement-breakpoint
+ALTER TABLE "software_attachments" ADD COLUMN "drive_account_id" text;--> statement-breakpoint
+ALTER TABLE "software_attachments" ADD CONSTRAINT "software_attachments_storage_valid" CHECK (("software_attachments"."storage" = 'database' and "software_attachments"."zip_base64" is not null and "software_attachments"."drive_file_id" is null and "software_attachments"."drive_account_id" is null) or ("software_attachments"."storage" = 'google_drive' and "software_attachments"."zip_base64" is null and "software_attachments"."drive_file_id" is not null and "software_attachments"."drive_account_id" is not null));

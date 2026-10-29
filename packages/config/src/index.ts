@@ -93,6 +93,14 @@ export function parseWorkerEnvironment(
   return result.data;
 }
 const schema = databaseEnvironment.extend({
+  GOOGLE_DRIVE_CLIENT_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
+  GOOGLE_DRIVE_CLIENT_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
   NOTIFICATION_ENCRYPTION_KEY: barkEncryptionKey,
   BARK_ENCRYPTION_KEY: barkEncryptionKey,
   PLATFORM_ADMIN_USER_IDS: z
@@ -145,6 +153,13 @@ export function parseEnvironment(input: Record<string, string | undefined>) {
       `Invalid environment variables: ${result.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
     );
   }
+  if (
+    !!result.data.GOOGLE_DRIVE_CLIENT_ID !==
+    !!result.data.GOOGLE_DRIVE_CLIENT_SECRET
+  )
+    throw new Error(
+      'Configure both GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET',
+    );
   if (
     result.data.NODE_ENV === 'production' &&
     !result.data.APP_ORIGIN.startsWith('https://')

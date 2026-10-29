@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import type { AttachmentDirectory } from '@sitepulse/api-contracts';
+import type {
+  AttachmentDirectory,
+  DriveConnection,
+} from '@sitepulse/api-contracts';
 import { workspaceOrganizations } from '../../../lib/workspace';
 import { serverApi } from '../../../lib/server-api';
 import { AttachmentManager } from '../../../components/attachment-manager';
@@ -7,10 +10,11 @@ import { AttachmentManager } from '../../../components/attachment-manager';
 export default async function AttachmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ workspace?: string }>;
+  searchParams: Promise<{ workspace?: string; drive?: string }>;
 }) {
   const { organizations } = await workspaceOrganizations();
   const query = await searchParams;
+  const drive = await serverApi<DriveConnection>('/me/google-drive');
   const selected =
     organizations.find((org) => org.id === query.workspace) ?? organizations[0];
   const initial = selected
@@ -50,6 +54,8 @@ export default async function AttachmentsPage({
             key={selected.id}
             organizationId={selected.id}
             initial={initial}
+            initialDrive={drive}
+            driveResult={query.drive}
           />
         </>
       ) : (

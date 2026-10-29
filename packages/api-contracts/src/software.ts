@@ -102,6 +102,24 @@ export const attachmentUploadParams = z
 export const attachmentParams = z
   .object({ organizationId: z.uuid(), attachmentId: z.uuid() })
   .strict();
+export const attachmentUploadQuery = z
+  .object({
+    storage: z.enum(['database', 'google_drive']).default('database'),
+  })
+  .strict();
+export const driveCallbackQuery = z
+  .object({
+    code: z.string().max(4096).optional(),
+    state: z.string().max(4096).optional(),
+    error: z.string().max(256).optional(),
+    error_description: z.string().max(2048).optional(),
+    scope: z.string().max(2048).optional(),
+    authuser: z.string().max(32).optional(),
+    prompt: z.string().max(64).optional(),
+    iss: z.string().max(256).optional(),
+  })
+  .strict();
+export type DriveConnection = { enabled: boolean; connected: boolean };
 export const softwarePackage = z
   .object({
     siteId: z.uuid(),
@@ -116,6 +134,7 @@ export type AttachmentScan = {
   findings: Array<{ rule: string; path: string }>;
 };
 export type SoftwareAttachment = {
+  storage?: 'database' | 'google_drive';
   id: string;
   kind: 'plugin' | 'theme';
   slug: string;

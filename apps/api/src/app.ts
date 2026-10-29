@@ -26,6 +26,7 @@ import { registerAccountBranding } from './branding';
 import { HttpError } from './http-error';
 import { registerSiteRoutes } from './sites';
 import { registerSoftwareRoutes } from './software';
+import { createDriveStorage, registerDriveRoutes } from './google-drive';
 import { registerNotificationRoutes } from './notification-settings';
 import { isPlatformAdmin, registerPlatformAdminRoutes } from './platform-admin';
 import type { ResolveHost } from './site-url';
@@ -43,6 +44,7 @@ export async function buildApp({
   sendBark,
   sendChat,
   resolveHost,
+  driveFetch,
 }: {
   db: Database;
   env: Environment;
@@ -50,6 +52,7 @@ export async function buildApp({
   sendBark?: SendBark;
   sendChat?: SendChat;
   resolveHost?: ResolveHost;
+  driveFetch?: typeof fetch;
 }) {
   const app = Fastify({
     bodyLimit: 16 * 1024,
@@ -615,7 +618,9 @@ export async function buildApp({
     },
   );
   await registerSiteRoutes(app, { db, requireUser, resolveHost });
-  await registerSoftwareRoutes(app, { db, requireUser });
+  const drive = createDriveStorage(db, auth, env, driveFetch);
+  await registerDriveRoutes(app, { db, auth, env, drive, requireUser });
+  await registerSoftwareRoutes(app, { db, requireUser, drive });
   await registerPlatformAdminRoutes(app, { db, env, requireUser });
   await registerAccountBranding(app, { db, requireUser });
   return app;

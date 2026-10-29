@@ -1,5 +1,11 @@
 # SitePulse
 
+## 用户 Google Drive 附件存储
+
+Attachments 新增个人 Google Drive 连接和上传存储选择。原附件继续使用 SitePulse 存储；新附件可存入上传者的 Drive，插件/主题仍通过原来的预览、确认、队列和 Connector 接口安装，无需升级 Connector。两种存储共用扫描、SHA-256 校验和配额。断开授权、删除/修改 Drive 文件会导致后续安装失败；删除库记录保留 Drive 原文件。
+
+启用前需配置 `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET`，备份并应用迁移 `0017_bored_sunspot.sql`。未配置时原存储继续可用；旧附件不会自动迁移。配置及验收见 [Google Drive 存储](docs/GOOGLE_DRIVE_STORAGE.md)。本次开发不修改生产数据库。
+
 ## 站点信息速览
 
 站点目录提供当前搜索/工作区结果的 HTTP 正常、需安全审查、活跃 Connector 数量；三个指标独立计算，不将心跳当作 HTTP 可用性。Monitoring / Security 状态区域可直接进入详情。时间分为日期与时刻，保留秒和当时的 GMT 偏移，区域时区统一显示在列表上方；悬停可查看完整本地时间与 UTC，辅助技术也可读取完整时间。

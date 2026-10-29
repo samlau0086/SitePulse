@@ -32,6 +32,8 @@ const deploymentSchema = z.object({
   AUTH_MAIL_FROM: z.email().and(literal),
   RESEND_API_KEY: literal.min(16),
   BACKUP_AGE_RECIPIENT: z.string().regex(/^age1[0-9a-z]{58}$/),
+  GOOGLE_DRIVE_CLIENT_ID: z.union([literal, z.literal('')]).optional(),
+  GOOGLE_DRIVE_CLIENT_SECRET: z.union([literal, z.literal('')]).optional(),
 });
 
 export function prepareDeploymentConfiguration(
@@ -54,6 +56,8 @@ export function prepareDeploymentConfiguration(
     BARK_ENCRYPTION_KEY: input.BARK_ENCRYPTION_KEY,
     NOTIFICATION_ENCRYPTION_KEY: input.NOTIFICATION_ENCRYPTION_KEY,
     PLATFORM_ADMIN_USER_IDS: input.PLATFORM_ADMIN_USER_IDS,
+    GOOGLE_DRIVE_CLIENT_ID: input.GOOGLE_DRIVE_CLIENT_ID,
+    GOOGLE_DRIVE_CLIENT_SECRET: input.GOOGLE_DRIVE_CLIENT_SECRET,
   });
   const worker = parseWorkerEnvironment({
     ...input,
@@ -66,6 +70,8 @@ export function prepareDeploymentConfiguration(
     POSTGRES_DB: data.POSTGRES_DB,
     POSTGRES_PASSWORD: data.POSTGRES_PASSWORD,
     BETTER_AUTH_SECRET: api.BETTER_AUTH_SECRET,
+    GOOGLE_DRIVE_CLIENT_ID: api.GOOGLE_DRIVE_CLIENT_ID ?? '',
+    GOOGLE_DRIVE_CLIENT_SECRET: api.GOOGLE_DRIVE_CLIENT_SECRET ?? '',
     BARK_ENCRYPTION_KEY: api.BARK_ENCRYPTION_KEY ?? '',
     NOTIFICATION_ENCRYPTION_KEY: api.NOTIFICATION_ENCRYPTION_KEY ?? '',
     AUTH_MAIL_TRANSPORT: api.AUTH_MAIL_TRANSPORT,

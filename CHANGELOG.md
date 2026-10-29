@@ -29,6 +29,7 @@
 - Replace the attachment file chooser with an accessible drag-and-drop ZIP target that displays the selected file and still requires explicit upload-and-scan submission.
 - Require personal Google Drive for all new attachment uploads, using Better Auth linking, encrypted OAuth tokens and `drive.file` permissions. Remove the storage selector and disable uploads until connected. Reject explicit database storage and never fall back to SitePulse ZIP storage when Drive is unavailable.
 - Preserve database attachments and the original Connector protocol. Proxy Drive downloads through tenant/site leases and verify size/SHA-256; bind files to the original Google account and recheck the uploader's verified administrator membership.
+- Allow users to disconnect Google Drive without re-authenticating in a second Better Auth unlink flow; only the user's Google account link is removed, while Drive originals and attachment metadata remain.
 - Add migration 0017 for Drive references and migration 0018 for the Drive storage default, paired OAuth configuration and deployment wiring. Unconfigured servers retain legacy reads but cannot create uploads. Deletion/disconnection retains Drive originals; existing bytes are not migrated. See `docs/GOOGLE_DRIVE_STORAGE.md` for setup and acceptance limits.
 
 ## Unreleased — Persistent software queue feedback

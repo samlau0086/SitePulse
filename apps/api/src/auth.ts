@@ -28,7 +28,14 @@ export function createAuth(
     trustedOrigins: [env.APP_ORIGIN],
     account: {
       encryptOAuthTokens: true,
-      accountLinking: { enabled: true, disableImplicitLinking: true },
+      // A Google account is also used as a personal Drive storage connection.
+      // Disconnecting Drive must remain possible even when it is the only
+      // linked Better Auth account; SitePulse users retain email/password auth.
+      accountLinking: {
+        enabled: true,
+        disableImplicitLinking: true,
+        allowUnlinkingAll: true,
+      },
     },
     socialProviders:
       env.GOOGLE_DRIVE_CLIENT_ID && env.GOOGLE_DRIVE_CLIENT_SECRET

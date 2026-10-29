@@ -287,19 +287,19 @@ export async function registerDriveRoutes(
           eq(schema.accounts.providerId, 'google'),
         ),
       );
-    try {
-      for (const row of rows)
-        await auth.api.unlinkAccount({
-          headers: headers(request),
-          body: { accountId: row.id },
-        });
-    } catch {
-      throw new HttpError(
-        409,
-        'DRIVE_UNAVAILABLE',
-        'Sign in again before disconnecting Google Drive.',
-      );
-    }
+    // The request is already authenticated and the query is scoped to this user.
+    // Remove only the Google account rows; Better Auth's unlink endpoint can
+    // reject a valid request when its fresh-session middleware disagrees with
+    // the outer SitePulse session (for example after a proxy/session refresh).
+    if (rows.length > 0)
+      await db
+        .delete(schema.accounts)
+        .where(
+          and(
+            eq(schema.accounts.userId, user.id),
+            eq(schema.accounts.providerId, 'google'),
+          ),
+        );
     await db.insert(schema.auditLogs).values({
       actorUserId: user.id,
       action: 'drive.disconnected',

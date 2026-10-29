@@ -5,6 +5,7 @@ import { softwareSlug } from '@sitepulse/api-contracts';
 
 export const SCANNER_VERSION = 'sitepulse-static-1';
 export const PACKAGE_LIMIT = 8 * 1024 * 1024;
+export const MAX_ARCHIVE_ENTRIES = 10_000;
 const crcTable = Array.from({ length: 256 }, (_, value) => {
   for (let bit = 0; bit < 8; bit++)
     value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
@@ -65,7 +66,7 @@ export async function scanPackage(
   const centralOffset = bytes.readUInt32LE(end + 16);
   if (centralOffset + bytes.readUInt32LE(end + 12) !== end)
     throw new Error('ZIP central-directory offset is inconsistent.');
-  if (bytes.readUInt16LE(end + 10) > 2000)
+  if (bytes.readUInt16LE(end + 10) > MAX_ARCHIVE_ENTRIES)
     throw new Error('ZIP contains too many entries.');
   const zip = await new Promise<ZipFile>((resolve, reject) =>
     fromBuffer(
@@ -157,7 +158,7 @@ export async function scanPackage(
           throw new Error('File used as a directory.');
         total += entry.uncompressedSize;
         if (
-          ++count > 2000 ||
+          ++count > MAX_ARCHIVE_ENTRIES ||
           total > 40 * 1024 * 1024 ||
           entry.uncompressedSize > 2 * 1024 * 1024 ||
           path.length > 240 ||

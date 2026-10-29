@@ -1,5 +1,11 @@
 # SitePulse
 
+## 站点信息速览
+
+站点目录提供当前搜索/工作区结果的 HTTP 正常、需安全审查、活跃 Connector 数量；三个指标独立计算，不将心跳当作 HTTP 可用性。Monitoring / Security 状态区域可直接进入详情。时间分为日期与时刻，保留秒和当时的 GMT 偏移，区域时区统一显示在列表上方；悬停可查看完整本地时间与 UTC，辅助技术也可读取完整时间。
+
+Plugins & themes 的站点卡片展示已上报的插件、主题、可用更新数量；未收到库存时显示 `—`，不当作零。上次成功采集时间、同步状态和 Sync inventory 按钮保持可见，轮询、请求和尝试时间放在可展开的 Sync details 中。同步失败仍显示原因并保留旧库存；数量仅描述最近已保存的库存。本次界面优化无需数据库迁移或 Connector 升级。
+
 ## 邮件品牌与白牌 LOGO
 
 邮件提供带品牌页头、状态说明、操作按钮和备用链接的 HTML 模板，并保留纯文本版本。平台管理员在 **Platform administration → Platform email branding** 设置平台名称和 LOGO；Free/Pro、未设置白牌的 Agency 工作区，以及注册验证/密码重置邮件使用平台品牌。

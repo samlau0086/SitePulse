@@ -1,12 +1,14 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
+import { JSDOM } from 'jsdom';
 import type { SoftwareDirectory } from '@sitepulse/api-contracts';
 import { SoftwareManager } from '../components/software-manager';
 
 function render(
   status: SoftwareDirectory['sites'][number]['inventorySync']['status'],
   canManage = true,
+  overrides: Partial<SoftwareDirectory['sites'][number]> = {},
 ) {
   const initial: SoftwareDirectory = {
     canManage,
@@ -28,6 +30,7 @@ function render(
           attemptedAt: null,
           error: status === 'failed' ? 'collection' : null,
         },
+        ...overrides,
       },
     ],
   };
@@ -50,6 +53,45 @@ it('separates never received inventory from healthy management and explicit read
   for (const label of html.matchAll(/<label\b[^>]*>([\s\S]*?)<\/label>/g)) {
     expect(label[1]).not.toContain('<button');
   }
+});
+it('keeps unknown inventory distinct from zero and counts saved plugin/theme updates', () => {
+  const unknown = new JSDOM(render('not_received')).window.document;
+  expect(
+    [...unknown.querySelectorAll('.software-site-counts dd')].map(
+      (node) => node.textContent,
+    ),
+  ).toEqual(['—', '—', '—']);
+  const component = {
+    identifier: 'example',
+    name: 'Example',
+    version: '1.0',
+    source: 'wordpress.org' as const,
+    active: true,
+    updateVersion: null,
+  };
+  const saved = new JSDOM(
+    render('failed', true, {
+      plugins: [
+        component,
+        { ...component, identifier: 'other', updateVersion: '2.0' },
+      ],
+      themes: [{ ...component, updateVersion: '3.0' }],
+    }),
+  ).window.document;
+  expect(
+    [...saved.querySelectorAll('.software-site-counts dd')].map(
+      (node) => node.textContent,
+    ),
+  ).toEqual(['2', '1', '2']);
+  expect(saved.querySelector('.software-sync-details')?.textContent).toContain(
+    'Management poll',
+  );
+  expect(
+    saved.querySelector('.software-sync-details')?.hasAttribute('open'),
+  ).toBe(false);
+  expect(saved.querySelector('.software-sync')?.textContent).toContain(
+    'Last successful inventory is retained',
+  );
 });
 it('shows failures without losing last success or implying the site is offline', () => {
   const html = render('failed');

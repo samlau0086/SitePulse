@@ -8,7 +8,7 @@ import type {
 import { api } from '../lib/api';
 import { Icon } from './icon';
 import { SoftwareOperationDialog } from './software-operation-dialog';
-import { Timestamp } from './user-preferences';
+import { Timestamp, TimeZoneNote } from './user-preferences';
 import {
   actionable,
   executeSoftwarePlans,
@@ -285,7 +285,7 @@ export function SoftwareManager({
           access is read-only.
         </p>
       )}
-      <section className="card">
+      <section className="card software-sites-panel">
         <div className="section-heading">
           <h2>
             <Icon name="globe" /> {siteScoped ? 'Current site' : 'Select sites'}{' '}
@@ -302,9 +302,11 @@ export function SoftwareManager({
           </button>
         </div>
         <p className="data-note">
-          Sync inventory collects fresh plugin and theme data. Reload results
-          displays the latest saved data.
+          {!siteScoped && 'Select sites to view their plugins and themes. '}
+          Sync inventory collects fresh data; Reload results only refreshes this
+          view.
         </p>
+        <TimeZoneNote />
         <div className="software-site-grid">
           {data.sites
             .filter((site) => !siteScoped || site.id === initialSite)
@@ -352,7 +354,6 @@ export function SoftwareManager({
                     </label>
                   )}
                   <div className="software-site-readiness">
-                    <span className="muted">Remote management</span>
                     <span
                       className={`status-badge ${site.enabled ? 'status-healthy' : 'status-warning'}`}
                     >
@@ -363,22 +364,49 @@ export function SoftwareManager({
                     </span>
                   </div>
                 </div>
+                <dl
+                  className="software-site-counts"
+                  aria-label={`Installed software for ${site.name}`}
+                >
+                  <div>
+                    <dt>
+                      <Icon name="connection" /> Plugins
+                    </dt>
+                    <dd>{site.inventoryAt ? site.plugins.length : '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <Icon name="overview" /> Themes
+                    </dt>
+                    <dd>{site.inventoryAt ? site.themes.length : '—'}</dd>
+                  </div>
+                  <div
+                    className={
+                      site.inventoryAt &&
+                      [...site.plugins, ...site.themes].some(
+                        (item) => item.updateVersion,
+                      )
+                        ? 'has-updates'
+                        : ''
+                    }
+                  >
+                    <dt>
+                      <Icon name="refresh" /> Updates
+                    </dt>
+                    <dd>
+                      {site.inventoryAt
+                        ? [...site.plugins, ...site.themes].filter(
+                            (item) => item.updateVersion,
+                          ).length
+                        : '—'}
+                    </dd>
+                  </div>
+                </dl>
                 <dl className="software-site-meta">
                   <div>
                     <dt>Last inventory received</dt>
                     <dd>
-                      <Timestamp value={site.inventoryAt} />
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Management poll</dt>
-                    <dd>
-                      {site.polledAt &&
-                      new Date(site.polledAt).getTime() > 0 ? (
-                        <Timestamp value={site.polledAt} />
-                      ) : (
-                        'Not received'
-                      )}
+                      <Timestamp compact value={site.inventoryAt} />
                     </dd>
                   </div>
                 </dl>
@@ -439,18 +467,40 @@ export function SoftwareManager({
                       Last successful inventory is retained.
                     </small>
                   )}
-                  {site.inventorySync.requestedAt && (
-                    <small className="muted">
-                      Requested:{' '}
-                      <Timestamp value={site.inventorySync.requestedAt} />
-                    </small>
-                  )}
-                  {site.inventorySync.attemptedAt && (
-                    <small className="muted">
-                      Last attempt:{' '}
-                      <Timestamp value={site.inventorySync.attemptedAt} />
-                    </small>
-                  )}
+                  <details className="software-sync-details">
+                    <summary>
+                      <Icon name="clock" /> Sync details
+                    </summary>
+                    <dl>
+                      <div>
+                        <dt>Management poll</dt>
+                        <dd>
+                          {site.polledAt &&
+                          new Date(site.polledAt).getTime() > 0 ? (
+                            <Timestamp value={site.polledAt} />
+                          ) : (
+                            'Not received'
+                          )}
+                        </dd>
+                      </div>
+                      {site.inventorySync.requestedAt && (
+                        <div>
+                          <dt>Requested</dt>
+                          <dd>
+                            <Timestamp value={site.inventorySync.requestedAt} />
+                          </dd>
+                        </div>
+                      )}
+                      {site.inventorySync.attemptedAt && (
+                        <div>
+                          <dt>Last attempt</dt>
+                          <dd>
+                            <Timestamp value={site.inventorySync.attemptedAt} />
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </details>
                 </div>
               </article>
             ))}

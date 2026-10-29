@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Site information at a glance
+
+- Add directory counts for matching HTTP-up sites, security-review sites and active Connectors, with direct monitoring/security links and separate hostname/workspace identity.
+- Add reported plugin, theme and available-update counts to software site cards; preserve missing inventory as unknown, visible sync failures and last-success data. Move poll/request/attempt timestamps into accessible Sync details disclosures.
+- Use compact date/time displays with seconds and instant-specific offsets, a shared zone label, full localized/UTC tooltips and accessible full timestamps. No API, migration or Connector changes.
+
 ## Unreleased — Incident filter display
 
 - Replace the single-site incident status dropdown with visible All statuses / Active / Resolved filter buttons to avoid clipped native popup text. Reuse the shared selected/focus styles and 44px targets, wrap on narrow screens and reset pagination when changing filters.

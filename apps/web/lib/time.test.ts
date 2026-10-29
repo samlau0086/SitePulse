@@ -74,3 +74,24 @@ it('keeps missing/invalid timestamps readable and preserves UTC evidence in mark
   expect(html).toContain(`dateTime="${value}"`);
   expect(html).toContain('UTC: 2026-10-28T00:00:00.000Z');
 });
+
+it('keeps compact repeated local hours distinguishable and exposes full zone and UTC evidence', () => {
+  for (const [value, offset] of [
+    ['2026-11-01T05:30:00Z', 'GMT-4'],
+    ['2026-11-01T06:30:00Z', 'GMT-5'],
+  ] as const) {
+    const html = renderToStaticMarkup(
+      createElement(TimeZoneProvider, {
+        timeZone: 'America/New_York',
+        children: createElement(Timestamp, { value, compact: true }),
+      }),
+    );
+    expect(html).toContain(
+      `<span>01 Nov 2026</span><span>01:30:00 ${offset}</span>`,
+    );
+    expect(html).toContain(
+      `aria-label="01 Nov 2026, 01:30:00 ${offset} (America/New_York)"`,
+    );
+    expect(html).toContain(`UTC: ${new Date(value).toISOString()}`);
+  }
+});

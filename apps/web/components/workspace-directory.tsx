@@ -13,7 +13,7 @@ import { IncidentSignal } from './incident-signal';
 import { api } from '../lib/api';
 import { PlanUsage } from './plan-usage';
 import { Icon } from './icon';
-import { Timestamp } from './user-preferences';
+import { Timestamp, TimeZoneNote } from './user-preferences';
 export { Timestamp } from './user-preferences';
 
 type DirectoryProps = {
@@ -81,7 +81,10 @@ export function WebsiteHealth({ site }: { site: DirectorySite }) {
       </span>
       <span className="table-subtitle">
         HTTP checked:{' '}
-        <Timestamp value={site.health?.availability.lastCheckedAt ?? null} />
+        <Timestamp
+          compact
+          value={site.health?.availability.lastCheckedAt ?? null}
+        />
       </span>
     </div>
   );
@@ -118,11 +121,18 @@ export function SecurityHealth({ site }: { site: DirectorySite }) {
         </span>
       )}
       <span className="table-subtitle">
-        {health?.status ?? 'pending'}
-        {health && !complete ? ' · incomplete coverage or freshness' : ''}
+        {!health || health.status === 'pending'
+          ? 'Assessment pending'
+          : health.status === 'unavailable'
+            ? 'Assessment unavailable'
+            : health.status === 'stale'
+              ? 'Assessment out of date'
+              : !complete
+                ? 'Partial coverage'
+                : 'Coverage complete'}
       </span>
       <span className="table-subtitle">
-        Assessed: <Timestamp value={health?.checkedAt ?? null} />
+        Assessed: <Timestamp compact value={health?.checkedAt ?? null} />
       </span>
     </div>
   );
@@ -160,7 +170,10 @@ export function SiteDirectory({
   const [workspace, setWorkspace] = useState('');
   const filtered = filterSites(sites, query, workspace);
   return (
-    <section className="directory" aria-label="Sites">
+    <section
+      className={`directory${compact ? '' : ' site-directory'}`}
+      aria-label="Sites"
+    >
       {!compact && (
         <div className="directory-toolbar">
           <label className="filter-label search-field">
@@ -180,6 +193,46 @@ export function SiteDirectory({
           <span className="muted" role="status">
             {filtered.length} sites
           </span>
+        </div>
+      )}
+      {!compact && filtered.length > 0 && (
+        <div
+          className="directory-snapshot"
+          aria-label="Status of matching sites"
+        >
+          <span>
+            <Icon name="pulse" />
+            <strong>
+              {
+                filtered.filter(
+                  (site) => site.health?.availability.state === 'up',
+                ).length
+              }
+            </strong>{' '}
+            HTTP up
+          </span>
+          <span>
+            <Icon name="shield" />
+            <strong>
+              {
+                filtered.filter(
+                  (site) =>
+                    (site.health?.security.environmentRisks ?? 0) +
+                      (site.health?.security.vulnerabilities ?? 0) >
+                      0 || (site.health?.security.localIndicators ?? 0) > 0,
+                ).length
+              }
+            </strong>{' '}
+            Security review
+          </span>
+          <span>
+            <Icon name="connection" />
+            <strong>
+              {filtered.filter((site) => site.status === 'active').length}
+            </strong>{' '}
+            Active connectors
+          </span>
+          <TimeZoneNote />
         </div>
       )}
       {!filtered.length ? (
@@ -291,8 +344,9 @@ export function SiteDirectory({
                     <Link className="site-name" href={`/app/sites/${site.id}`}>
                       {site.name}
                     </Link>
-                    <span className="table-subtitle">
-                      {site.hostname} ·{' '}
+                    <span className="table-subtitle">{site.hostname}</span>
+                    <span className="workspace-label">
+                      <Icon name="workspace" />
                       {
                         organizations.find(
                           (organization) =>
@@ -302,15 +356,33 @@ export function SiteDirectory({
                     </span>
                   </td>
                   <td data-label="Website">
-                    <WebsiteHealth site={site} />
+                    <Link
+                      className="health-detail-link"
+                      aria-label={`Monitoring for ${site.name}`}
+                      href={`/app/sites/${site.id}?view=monitoring`}
+                    >
+                      <WebsiteHealth site={site} />
+                      <span className="health-detail-action">
+                        View monitoring <Icon name="arrow" />
+                      </span>
+                    </Link>
                   </td>
                   <td data-label="Security">
-                    <SecurityHealth site={site} />
+                    <Link
+                      className="health-detail-link"
+                      aria-label={`Security for ${site.name}`}
+                      href={`/app/sites/${site.id}?view=security`}
+                    >
+                      <SecurityHealth site={site} />
+                      <span className="health-detail-action">
+                        Review security <Icon name="arrow" />
+                      </span>
+                    </Link>
                   </td>
                   <td data-label="Connector">
                     <StatusBadge status={site.status} />
                     <span className="table-subtitle">
-                      Heartbeat: <Timestamp value={site.lastSeenAt} />
+                      Heartbeat: <Timestamp compact value={site.lastSeenAt} />
                     </span>
                     <span className="table-subtitle">
                       Recent unresolved:{' '}

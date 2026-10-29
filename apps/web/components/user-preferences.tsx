@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { UserPreferences } from '@sitepulse/api-contracts';
 import { api } from '../lib/api';
 import { formatTimestamp } from '../lib/time';
+import { Icon } from './icon';
 
 const TimeZoneContext = createContext('UTC');
 export function TimeZoneProvider({
@@ -19,13 +20,42 @@ export function TimeZoneProvider({
 export function useTimeZone() {
   return useContext(TimeZoneContext);
 }
-export function Timestamp({ value }: { value: string | null | undefined }) {
+export function Timestamp({
+  value,
+  compact = false,
+}: {
+  value: string | null | undefined;
+  compact?: boolean;
+}) {
   const timeZone = useTimeZone();
   if (!value || Number.isNaN(Date.parse(value))) return <>Not received</>;
+  const formatted = formatTimestamp(value, timeZone);
+  const [date, clock] = formatted.replace(` (${timeZone})`, '').split(', ');
   return (
-    <time dateTime={value} title={`UTC: ${new Date(value).toISOString()}`}>
-      {formatTimestamp(value, timeZone)}
+    <time
+      className={compact ? 'timestamp-compact' : undefined}
+      dateTime={value}
+      aria-label={compact ? formatted : undefined}
+      title={`${formatted} · UTC: ${new Date(value).toISOString()}`}
+    >
+      {compact ? (
+        <>
+          <span>{date}</span>
+          <span>{clock}</span>
+        </>
+      ) : (
+        formatted
+      )}
     </time>
+  );
+}
+
+export function TimeZoneNote() {
+  const timeZone = useTimeZone();
+  return (
+    <span className="time-zone-note">
+      <Icon name="clock" /> Times in {timeZone.replaceAll('_', ' ')}
+    </span>
   );
 }
 

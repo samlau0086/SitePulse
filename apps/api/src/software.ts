@@ -1060,8 +1060,10 @@ export async function registerSoftwareRoutes(
           .send(bytes);
       } catch (error) {
         if (error instanceof HttpError && error.code === 'DRIVE_UNAVAILABLE') {
+          // Keep the existing conflict status for Connector/API compatibility;
+          // the response header carries the more specific storage diagnosis.
           return reply
-            .code(424)
+            .code(409)
             .header('x-sitepulse-error-code', 'package_storage')
             .send({
               error: {

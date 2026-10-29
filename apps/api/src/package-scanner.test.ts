@@ -59,6 +59,20 @@ it('inspects WordPress plugin and theme headers and immutable digest', async () 
     ).version,
   ).toBe('2.0');
 });
+it('accepts ZIP entries without Unix mode bits', async () => {
+  await expect(
+    scanPackage(
+      packageFixture([
+        {
+          path: 'sample/main.php',
+          mode: 0,
+          content: '<?php\n/* Plugin Name: Sample\nVersion: 1.0 */',
+        },
+      ]),
+      'plugin',
+    ),
+  ).resolves.toMatchObject({ slug: 'sample', name: 'Sample', version: '1.0' });
+});
 it.each([
   '../escape.php',
   'sample/../escape.php',

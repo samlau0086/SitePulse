@@ -117,6 +117,7 @@ export async function scanPackage(
         slug = root!;
         const canonical = path.toLowerCase().replace(/\/$/, '');
         const mode = entry.externalFileAttributes >>> 16;
+        const fileType = mode & 0xf000;
         const offset = entry.relativeOffsetOfLocalHeader;
         if (
           offset < 0 ||
@@ -170,7 +171,10 @@ export async function scanPackage(
             .split('/')
             .some((part) => !part || /[. ]$/.test(part)) ||
           paths.has(canonical) ||
-          ![0, 0x8000, 0x4000].includes(mode & 0xf000) ||
+          // ZIPs created on Windows commonly omit Unix mode bits entirely.
+          // Treat mode 0 as an ordinary entry, while still rejecting declared
+          // symlinks and other special file types.
+          (mode !== 0 && ![0x8000, 0x4000].includes(fileType)) ||
           entry.generalPurposeBitFlag & 1 ||
           ![0, 8].includes(entry.compressionMethod)
         )

@@ -133,7 +133,7 @@ try {
     $api_info = (object) array('slug'=>'new-theme','version'=>'1.0','download_link'=>'https://downloads.wordpress.org/theme/new-theme.1.0.zip');
     check(SitePulse_Management::execute(array_merge($command,array('kind'=>'theme','slug'=>'new-theme','action'=>'install'))) === 'ok' && end($upgrader)[0] === 'theme-install', 'Install official theme package');
     $api_info = (object) array('slug'=>'wrong','version'=>'3.0','download_link'=>'https://downloads.wordpress.org/plugin/wrong.3.0.zip');
-    check(SitePulse_Management::execute(array_merge($command,array('slug'=>'hello','action'=>'update'))) === 'package', 'Reject mismatched API package');
+    check(SitePulse_Management::execute(array_merge($command,array('slug'=>'hello','action'=>'update'))) === 'package_source', 'Reject mismatched API package');
     update_option(SitePulse_Connector::OPTION, array('site_id'=>'11111111-1111-4111-8111-111111111111','origin'=>'https://pulse.example.com','credential'=>'secret'));
     update_option(SitePulse_Management::OPTION, array('enabled'=>true,'packages'=>true,'user_id'=>7));
     $attachment_result = SitePulse_Management::execute($attachment); $uploaded_install = end($upgrader);

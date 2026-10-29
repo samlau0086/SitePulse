@@ -51,7 +51,9 @@ LOGO 使用公开 HTTPS 图片地址（推荐 PNG/JPEG、360 × 128），由邮�
 
 安装来源支持 WordPress.org 官方包，以及工作区 **Attachment library** 中由管理员明确上传、完成静态扫描且未命中阻止规则的 ZIP；不支持任意 URL、付费源或 shell。更新仍只使用 WordPress.org 官方更新路径，不会用上传包覆盖更新。卸载前必须先停用；主题停用需要指定已安装的替代主题，活动主题及父主题受保护。Connector 自身在 WordPress 后台维护。安装/更新可能破坏兼容性，卸载可能删除业务数据；此功能不提供 WordPress 自动备份或回滚。
 
-安装失败时 **Recent operations** 会显示可执行的原因：下载/出站 HTTPS、8 MiB 大小或临时写入、SHA-256 校验、WordPress 原生安装器、权限未开启或结果未知。旧版 Connector 返回的 `package` 仍会显示为兼容性提示；不会展示原始 PHP 输出、服务器路径或响应内容。
+安装失败时 **Recent operations** 会显示可执行的原因：WordPress.org 官方包不可用、下载/出站 HTTPS、8 MiB 大小或临时写入、SHA-256 校验、WordPress 原生安装器、权限未开启或结果未知。商业/自定义插件应先上传到 Attachment library 并选择 ZIP 安装；更新仍只使用 WordPress.org 官方更新路径。旧队列或未带 Attachment 引用的旧 Connector 可能返回 `package`，此时应取消旧操作、重新选择 ZIP 并创建新的预览；不会展示原始 PHP 输出、服务器路径或响应内容。
+
+操作记录使用紧凑圆角矩形状态标签，颜色、图标与文字一起表示结果：成功为绿色对勾、失败为红色叉号、排队为蓝色时钟、执行中为蓝色刷新、过期为橙色沙漏、结果不明为橙色警告、取消为灰色叉号、预览为灰色清单。成功结果显示完成说明，不再提示重试。
 
 ### 附件库与上传包扫描
 

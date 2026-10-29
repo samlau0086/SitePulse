@@ -4,9 +4,10 @@ import type {
   SoftwareCommand,
   SoftwareDirectory,
   SoftwareAttachment,
+  SoftwareOperation,
 } from '@sitepulse/api-contracts';
 import { api } from '../lib/api';
-import { Icon } from './icon';
+import { Icon, type IconName } from './icon';
 import { SoftwareOperationDialog } from './software-operation-dialog';
 import { Timestamp, TimeZoneNote } from './user-preferences';
 import {
@@ -26,8 +27,24 @@ const actions: SoftwareCommand['action'][] = [
   'uninstall',
 ];
 
+const operationStates = {
+  preview: { tone: 'neutral', icon: 'inventory' },
+  queued: { tone: 'info', icon: 'clock' },
+  running: { tone: 'info', icon: 'refresh' },
+  succeeded: { tone: 'success', icon: 'check' },
+  failed: { tone: 'danger', icon: 'close' },
+  unknown: { tone: 'warning', icon: 'alert' },
+  cancelled: { tone: 'neutral', icon: 'close' },
+  expired: { tone: 'warning', icon: 'hourglass' },
+} satisfies Record<
+  SoftwareOperation['status'],
+  { tone: string; icon: IconName }
+>;
+
 export function operationResultMessage(code: string | null) {
   switch (code) {
+    case 'ok':
+      return 'The Connector reported that the operation completed successfully.';
     case 'package_download':
       return "WordPress could not download the package from SitePulse. Check the site's outbound HTTPS access, Connector pairing and firewall, then retry.";
     case 'package_size':
@@ -35,7 +52,9 @@ export function operationResultMessage(code: string | null) {
     case 'package_checksum':
       return 'The downloaded package failed its integrity check and was not installed. Retry; if it continues, upload the package again.';
     case 'package':
-      return 'The Connector rejected the package before installation. Update the Connector, verify the package permission and retry.';
+      return 'This operation was not received as a current uploaded-package command. It may be an older queued operation or a slug-based installation. Cancel it, select the ZIP again from Attachment library, create a new preview, and retry after the next Connector poll.';
+    case 'package_source':
+      return 'WordPress.org did not provide a matching official package. For premium or custom plugins, upload the ZIP to Attachment library and select it for installation; updates remain official-only.';
     case 'filesystem':
       return 'WordPress could not create or use its temporary directory. Check disk space and WordPress file permissions.';
     case 'wordpress_error':
@@ -1001,19 +1020,11 @@ export function SoftwareManager({
                   {op.reason} · <Timestamp value={op.createdAt} />
                 </small>
               </div>
-              <div>
+              <div className="software-result-detail">
                 <span
-                  className={`status-badge ${op.status === 'succeeded' ? 'success' : ['failed', 'unknown'].includes(op.status) ? 'warning' : ''}`}
+                  className={`status-badge software-result-status tone-${operationStates[op.status].tone}`}
                 >
-                  <Icon
-                    name={
-                      op.status === 'succeeded'
-                        ? 'check'
-                        : ['failed', 'unknown'].includes(op.status)
-                          ? 'alert'
-                          : 'clock'
-                    }
-                  />
+                  <Icon name={operationStates[op.status].icon} />
                   {op.status}
                 </span>
                 {op.resultCode && (

@@ -2708,9 +2708,8 @@ h3 {
   padding-top: 16px;
 }
 .software-results article {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 400px);
   gap: 16px;
   padding: 16px 0;
   border-top: 1px solid var(--hairline);
@@ -2718,10 +2717,31 @@ h3 {
 }
 .software-results article > div {
   display: grid;
+  align-content: start;
+  justify-items: start;
+  min-width: 0;
   gap: 8px;
+}
+.app-shell .software-result-status {
+  flex: none;
+  width: fit-content;
+  height: 30px;
+  align-self: start;
+  border-radius: var(--radius-product-control);
+  border-color: currentColor;
+  line-height: 20px;
+  padding: 4px 10px;
+}
+.software-result-status svg {
+  flex-shrink: 0;
 }
 .software-results p {
   margin: 0;
+}
+@media (max-width: 760px) {
+  .software-results article {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (max-width: 1000px) {
   .software-layout {

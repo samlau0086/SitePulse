@@ -13,6 +13,8 @@ const paths = {
   up: 'M12 20V4 M5 11l7-7 7 7',
   down: 'M12 4v16 M5 13l7 7 7-7',
   check: 'M5 12l4 4L19 6',
+  close: 'M6 6l12 12 M18 6 6 18',
+  hourglass: 'M5 3h14 M5 21h14 M7 3v4l10 10v4 M17 3v4L7 17v4',
   clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2',
   inventory: 'M4 3h16v18H4z M8 7h8 M8 12h8 M8 17h5',
   connection: 'M8 3v5 M16 3v5 M5 8h14v3a7 7 0 0 1-14 0V8 M12 18v4',

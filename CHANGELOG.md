@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Clear software operation states
+
+- Show all eight Recent operations states with shared semantic colors, distinct icons and visible labels in compact rounded rectangles. Prevent grid stretching into circles or full-width bars; keep result guidance and actions aligned below the badge and wrap long content on small screens.
+- Explain the Connector's `ok` result as successful completion without suggesting a retry.
+
 ## Unreleased — Sync details alignment
 
 - Keep the software site card's Sync details clock icon inline with its disclosure arrow and label instead of splitting the control across multiple lines.
@@ -8,6 +13,8 @@
 
 - Split Connector package failures into safe download, size/write and SHA-256 integrity result codes while retaining the legacy `package` fallback for older Connectors.
 - Show Recent operations guidance for package download, temporary filesystem, checksum, native WordPress installer, disabled-consent and uncertain-result failures instead of exposing a bare error code.
+- Distinguish WordPress.org source-resolution failures (`package_source`) from uploaded-package download failures, including guidance for premium/custom plugins such as packages without an official WordPress.org download.
+- Clarify the legacy `package` message as an old queued or slug-based command, directing operators to create a fresh preview from Attachment library.
 
 ## Unreleased — Personal Google Drive attachment storage
 

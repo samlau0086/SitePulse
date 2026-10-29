@@ -122,8 +122,11 @@ it('explains package installation failures without exposing raw connector output
   expect(operationResultMessage('package_checksum')).toContain(
     'integrity check',
   );
+  expect(operationResultMessage('package_source')).toContain(
+    'Attachment library',
+  );
   expect(operationResultMessage('wordpress_error')).toContain(
     'native installer',
   );
-  expect(operationResultMessage('package')).toContain('rejected');
+  expect(operationResultMessage('package')).toContain('older queued operation');
 });

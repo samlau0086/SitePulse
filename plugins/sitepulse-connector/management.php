@@ -205,7 +205,7 @@ final class SitePulse_Management {
             require_once ABSPATH . 'wp-admin/includes/theme-install.php';
             $info = themes_api('theme_information', array('slug' => $slug, 'fields' => array('sections' => false)));
         }
-        if (is_wp_error($info) || !is_object($info) || ($info->slug ?? '') !== $slug || !self::package_allowed($info->download_link ?? '', $kind, $slug)) { return 'package'; }
+        if (is_wp_error($info) || !is_object($info) || ($info->slug ?? '') !== $slug || !self::package_allowed($info->download_link ?? '', $kind, $slug)) { return 'package_source'; }
         if ($action === 'update') {
             $current_version = $kind === 'plugin' ? ($data['Version'] ?? '') : $theme->get('Version');
             if (!version_compare($info->version ?? '0', $current_version, '>')) { return 'ok'; }

@@ -81,6 +81,7 @@ export const softwareResultCode = z.enum([
   'dependency',
   'filesystem',
   'package',
+  'package_source',
   'package_download',
   'package_size',
   'package_checksum',

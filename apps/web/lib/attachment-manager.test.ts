@@ -93,6 +93,9 @@ it('uses personal Drive exclusively and keeps remote-original retention guidance
   expect(html).not.toContain('name="storage"');
   expect(html).not.toContain('value="database"');
   expect(html).toContain('New packages are stored only in your Google Drive');
+  expect(html).toContain('Drag and drop a ZIP package here');
+  expect(html).toContain('or click to choose a file · maximum 8 MiB');
+  expect(html).toContain('Upload and scan</button>');
   expect(html).not.toContain('<fieldset disabled="">');
   expect(html).toContain('Uploader’s Google Drive');
   expect(html).toContain('Drive originals are kept');

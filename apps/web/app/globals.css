@@ -2738,6 +2738,74 @@ h3 {
   display: grid;
   gap: 24px;
 }
+.attachment-dropzone {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 180px;
+  margin: 8px 0 16px;
+  padding: 28px 20px;
+  border: 2px dashed var(--product-border);
+  border-radius: var(--radius-product-control);
+  background: var(--product-background);
+  color: var(--product-ink);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.attachment-dropzone:hover,
+.attachment-dropzone:focus-within,
+.attachment-dropzone.is-dragging {
+  border-color: var(--product-primary);
+  background: var(--info-surface);
+}
+.attachment-dropzone:focus-within {
+  outline: 3px solid color-mix(in srgb, var(--product-primary) 30%, transparent);
+  outline-offset: 2px;
+}
+.attachment-dropzone input[type='file'] {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+fieldset:disabled .attachment-dropzone,
+.attachment-dropzone input[type='file']:disabled {
+  cursor: not-allowed;
+}
+fieldset:disabled .attachment-dropzone {
+  opacity: 0.64;
+}
+.attachment-dropzone-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--info-surface);
+  color: var(--product-primary);
+}
+.attachment-dropzone-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.attachment-dropzone-title {
+  max-width: 100%;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.attachment-dropzone-help {
+  color: var(--muted);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
 .email-branding {
   margin-top: 24px;
 }

@@ -11,6 +11,7 @@ import { SoftwareOperationDialog } from './software-operation-dialog';
 import { Timestamp, TimeZoneNote } from './user-preferences';
 import {
   actionable,
+  blockingOperations,
   executeSoftwarePlans,
   planOperations,
   type OperationPlan,
@@ -86,6 +87,7 @@ export function SoftwareManager({
   const [checkedSlugs, setCheckedSlugs] = useState<string[]>([]);
   const [dialogPlans, setDialogPlans] = useState<OperationPlan[] | null>(null);
   const execution = useRef<AbortController | null>(null);
+  const directoryRevision = useRef(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -103,9 +105,10 @@ export function SoftwareManager({
   useEffect(() => {
     let active = true;
     const interval = setInterval(() => {
+      const revision = directoryRevision.current;
       api<SoftwareDirectory>(base, undefined, 'GET')
         .then((next) => {
-          if (active) setData(next);
+          if (active && revision === directoryRevision.current) setData(next);
         })
         .catch(() => {
           if (active)
@@ -176,6 +179,30 @@ export function SoftwareManager({
           request: api,
           onDirectory: setData,
           onProgress: setMessage,
+          onQueued: (plan, preview) => {
+            directoryRevision.current++;
+            // Acknowledged queue submission remains visible even if the following
+            // reload fails. The next successful read replaces these local rows.
+            setData((current) => ({
+              ...current,
+              operations: [
+                ...plan.targets.map((target) => ({
+                  ...plan.command,
+                  id: `${preview.batchId}:${target.siteId}`,
+                  batchId: preview.batchId,
+                  siteId: target.siteId,
+                  siteName: target.name,
+                  status: 'queued' as const,
+                  resultCode: null,
+                  reason: changeReason,
+                  createdAt: new Date().toISOString(),
+                })),
+                ...current.operations.filter(
+                  (op) => op.batchId !== preview.batchId,
+                ),
+              ],
+            }));
+          },
         });
         setMessage(
           'Approved items submitted. Queued is not completed: check each site in Recent operations.',
@@ -192,6 +219,10 @@ export function SoftwareManager({
     });
   }
   const selected = data.sites.filter((site) => siteIds.includes(site.id));
+  const blockers = blockingOperations(data.operations);
+  const available = selected.filter(
+    (site) => !blockers.some((op) => op.siteId === site.id),
+  );
   const visibleOperations = data.operations.filter(
     (op) => !siteScoped || op.siteId === initialSite,
   );
@@ -246,7 +277,7 @@ export function SoftwareManager({
   const selectable = components.filter(
     (item) =>
       item.slug !== 'sitepulse-connector' &&
-      selected.some(
+      available.some(
         (site) =>
           site.enabled &&
           (kind === 'plugin' ? site.plugins : site.themes).some(
@@ -603,6 +634,13 @@ export function SoftwareManager({
           {!selected.length && (
             <p>Select one or more sites to view installed software.</p>
           )}
+          {selected.some((site) => !available.includes(site)) && (
+            <p className="notice-warning">
+              Sites with queued, running or unknown operations are excluded from
+              new actions. Check Recent operations below; wait for completion or
+              cancel queued work. Unknown outcomes require WordPress review.
+            </p>
+          )}
           {selected.length > 0 && !components.length && (
             <p>
               {selected.some((site) => !site.inventoryAt)
@@ -663,6 +701,30 @@ export function SoftwareManager({
                             {site.updateVersion}
                           </span>
                         )}
+                        {blockers
+                          .filter((op) => op.siteId === site.id)
+                          .map((op) => (
+                            <span
+                              key={op.id}
+                              className="status-badge status-warning software-operation-status"
+                              role="status"
+                            >
+                              <Icon
+                                name={
+                                  op.status === 'unknown' ? 'alert' : 'clock'
+                                }
+                              />
+                              <span>
+                                {op.status === 'queued'
+                                  ? 'Queued · awaiting Connector'
+                                  : op.status === 'running'
+                                    ? 'Running · awaiting result'
+                                    : 'Unknown · review in WordPress'}
+                                {' · '}
+                                {op.action} {op.slug}
+                              </span>
+                            </span>
+                          ))}
                       </span>
                     </li>
                   ))}
@@ -676,14 +738,14 @@ export function SoftwareManager({
                         disabled={
                           pending ||
                           !data.canManage ||
-                          !planOperations(selected, kind, value, [item.slug])
+                          !planOperations(available, kind, value, [item.slug])
                             .length
                         }
                         key={value}
                         aria-label={`${value} ${item.name}`}
                         onClick={() =>
                           openPlans(
-                            planOperations(selected, kind, value, [item.slug]),
+                            planOperations(available, kind, value, [item.slug]),
                           )
                         }
                       >
@@ -752,7 +814,7 @@ export function SoftwareManager({
           )}
           {checkedSlugs.length > 0 && (
             <p className="muted">
-              {planOperations(selected, kind, bulkAction, checkedSlugs).length}{' '}
+              {planOperations(available, kind, bulkAction, checkedSlugs).length}{' '}
               eligible component(s) for {bulkAction}. Active components are
               excluded from uninstall; update requires an available
               WordPress.org update; already-active/inactive targets are excluded
@@ -763,7 +825,7 @@ export function SoftwareManager({
             onSubmit={(event) => {
               event.preventDefault();
               const plans = planOperations(
-                selected,
+                available,
                 kind,
                 bulkAction,
                 checkedSlugs.length
@@ -873,7 +935,18 @@ export function SoftwareManager({
                 break a site; uninstall may permanently delete plugin data.
                 There is no automatic rollback.
               </p>
-              <button disabled={!selected.some((site) => site.enabled)}>
+              <button
+                disabled={
+                  !planOperations(
+                    available,
+                    kind,
+                    bulkAction,
+                    checkedSlugs.length
+                      ? checkedSlugs
+                      : [chosenAttachment?.slug ?? slug.trim()],
+                  ).length
+                }
+              >
                 <Icon name="info" /> Review{' '}
                 {checkedSlugs.length ? 'selected items' : 'installation'}
               </button>

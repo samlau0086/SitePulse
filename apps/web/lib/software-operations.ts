@@ -2,6 +2,7 @@ import type {
   InstalledComponent,
   SoftwareCommand,
   SoftwareDirectory,
+  SoftwareOperation,
 } from '@sitepulse/api-contracts';
 
 export type OperationPlan = {
@@ -19,6 +20,11 @@ export type SoftwarePreviewResult = {
   command: SoftwareCommand;
   warning: string;
 };
+export function blockingOperations(operations: SoftwareOperation[]) {
+  return operations.filter((op) =>
+    ['queued', 'running', 'unknown'].includes(op.status),
+  );
+}
 export function actionable(
   item: InstalledComponent,
   action: SoftwareCommand['action'],
@@ -99,6 +105,7 @@ export async function executeSoftwarePlans({
   request,
   onDirectory,
   onProgress,
+  onQueued,
   wait = (signal: AbortSignal) =>
     new Promise<void>((resolve, reject) => {
       const abort = () => {
@@ -125,6 +132,7 @@ export async function executeSoftwarePlans({
   request: Transport;
   onDirectory: (directory: SoftwareDirectory) => void;
   onProgress: (value: string) => void;
+  onQueued?: (plan: OperationPlan, preview: SoftwarePreviewResult) => void;
   wait?: (signal: AbortSignal) => Promise<void>;
 }) {
   const check = () => {
@@ -155,6 +163,7 @@ export async function executeSoftwarePlans({
       `Submitting ${index + 1} / ${plans.length}: ${plan.command.action} ${plan.command.slug}`,
     );
     await request(`${base}/${preview.batchId}/confirm`, {});
+    onQueued?.(plan, preview);
     if (index === plans.length - 1) break;
     const deadline = Date.now() + 75 * 60_000;
     for (;;) {

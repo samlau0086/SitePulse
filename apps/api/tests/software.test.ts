@@ -784,6 +784,39 @@ it('previews and confirms a batch once, with per-site results and no tokens in r
   expect(logs.some((log) => log.action === 'software.completed')).toBe(true);
   expect(JSON.stringify(logs)).not.toContain(cmd.token);
 });
+it('retains outstanding operations beyond the recent history window without duplicates or foreign rows', async () => {
+  const batchId = await queued();
+  const [original] = await database.db.select().from(schema.softwareOperations);
+  const template = original!;
+  await database.db.insert(schema.softwareOperations).values(
+    Array.from({ length: 105 }, () => ({
+      ...template,
+      id: randomUUID(),
+      batchId: randomUUID(),
+      status: 'preview' as const,
+      createdAt: new Date(Date.now() + 1000),
+    })),
+  );
+  const response = await call(
+    'GET',
+    `/organizations/${organizationId}/software`,
+  );
+  expect(response.statusCode).toBe(200);
+  const operations = response.json().operations;
+  expect(operations).toHaveLength(101);
+  expect(
+    operations.filter((op: { batchId: string }) => op.batchId === batchId),
+  ).toHaveLength(1);
+  expect(response.body).not.toContain('token');
+  const foreign = await call(
+    'GET',
+    `/organizations/${foreignOrg}/software`,
+    undefined,
+    outsider.cookie,
+  );
+  expect(foreign.json().operations).toEqual([]);
+});
+
 it('serializes concurrent confirmations and concurrent claims', async () => {
   const first = (await preview([sites[0]!])).json().batchId;
   const second = (await preview([sites[0]!])).json().batchId;

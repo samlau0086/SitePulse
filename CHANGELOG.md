@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Persistent software queue feedback
+
+- Keep software actions, bulk targets and installation submission blocked per site while operations are queued, running or unknown. Show the action and queue state beside installed versions, retaining server-reported inventory.
+- Preserve acknowledged queue state if result reload fails and discard older in-flight polling responses. Polling and page reloads derive controls from outstanding operations; terminal results release controls and unknown outcomes require existing manual review.
+- Include outstanding operations alongside the latest 100 history entries so previews cannot hide live locks. Add interaction and tenant-scoped API regression tests; no migration or Connector change.
+
 ## Unreleased — Site information at a glance
 
 - Add directory counts for matching HTTP-up sites, security-review sites and active Connectors, with direct monitoring/security links and separate hostname/workspace identity.

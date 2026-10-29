@@ -449,19 +449,36 @@ export async function registerSoftwareRoutes(
             ),
           )
           .limit(1000);
-        const operations = await tx
-          .select({
-            operation: schema.softwareOperations,
-            siteName: schema.sites.name,
-          })
-          .from(schema.softwareOperations)
-          .innerJoin(
-            schema.sites,
-            eq(schema.sites.id, schema.softwareOperations.siteId),
-          )
+        const operationQuery = () =>
+          tx
+            .select({
+              operation: schema.softwareOperations,
+              siteName: schema.sites.name,
+            })
+            .from(schema.softwareOperations)
+            .innerJoin(
+              schema.sites,
+              eq(schema.sites.id, schema.softwareOperations.siteId),
+            );
+        // Preview history must never push a live site lock out of the UI feed.
+        const outstanding = await operationQuery().where(
+          and(
+            eq(schema.sites.organizationId, organizationId),
+            sql`${schema.softwareOperations.status} in ('queued','running','unknown')`,
+          ),
+        );
+        const recent = await operationQuery()
           .where(eq(schema.sites.organizationId, organizationId))
           .orderBy(desc(schema.softwareOperations.createdAt))
           .limit(100);
+        const operations = [
+          ...new Map(
+            [...outstanding, ...recent].map((row) => [row.operation.id, row]),
+          ).values(),
+        ].sort(
+          (a, b) =>
+            b.operation.createdAt.getTime() - a.operation.createdAt.getTime(),
+        );
         return {
           canManage:
             user.emailVerified && canManageOrganization(membership.role),

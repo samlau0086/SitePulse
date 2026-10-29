@@ -45,6 +45,8 @@ Missing plugin icons fall back to shared SVG artwork. Official plugin icon reque
 
 ## Direct actions and bulk selection
 
+Queued, running and unknown operations lock new actions for their site in the software manager. Cards show the outstanding action and waiting/running/manual-review state alongside the last reported inventory. Direct actions, bulk selection and install previews exclude these sites; other eligible selected sites remain available and exact targets are shown in confirmation. An acknowledged queue submission remains visible even if the following reload fails; older in-flight poll results cannot overwrite that acknowledgement. Successful reads, including after reopening the page, derive locks from server operation state. Completion/failure/cancellation/expiry releases the lock; unknown requires the existing explicit WordPress review. The directory returns the latest 100 history records plus all outstanding queued/running/unknown records, deduplicated and ordered by creation time. No schema or Connector change is needed.
+
 Card activate/deactivate/update/uninstall buttons open a modal for that component and its eligible installations among the selected sites. They do not populate or modify the bulk form. The dialog requires a change reason, shows the exact component/site pairs, validates with the existing server preview endpoint, and queues only after explicit confirmation. Cancelling or pressing Escape does not confirm. Editing the reason or replacement theme invalidates the preview. Theme deactivation requires an installed replacement on every affected site.
 
 Checkboxes and the separate **Add to bulk →** action prepare the adjacent **Bulk operation** panel without requesting execution. **Select visible** applies to the current search results; hidden selections remain counted and listed. Site/type changes clear component selection. Choose up to 20 components and a shared action, then **Review selected items**. Only eligible installed targets are included: active components are not uninstalled, already active/inactive targets are excluded from activation/deactivation, and update requires an available WordPress.org update. The Connector remains protected. Install-by-slug remains available when no installed components are selected.
@@ -55,22 +57,22 @@ The browser coordinates existing one-component server batches, not a new durable
 
 ## API endpoints
 
-| Endpoint under `/api/v1`                                        | Authorization / purpose                                                                            |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `GET /organizations/:organizationId/software`                   | Membership; current inventory/capability and latest 100 operations; no command tokens              |
-| `POST /organizations/:organizationId/software/preview`          | Verified owner/admin; `{siteIds, command:{kind,action,slug,replacement?}, reason}`                 |
-| `POST /organizations/:organizationId/software/:batchId/confirm` | Verified preview author; `{}`                                                                      |
-| `POST /organizations/:organizationId/software/:batchId/cancel`  | Verified owner/admin; cancel preview/queued entries                                                |
-| `POST /organizations/:organizationId/software/:batchId/resolve` | Verified owner/admin; confirm manual review of unknown entries                                     |
-| `POST /connector/software-poll`                                 | Current site bearer; `{siteId,enabled}`; one command or null                                       |
-| `POST /connector/software-result`                               | Same site bearer, credential version and command token; `{siteId,operationId,token,code}`          |
-| `POST /organizations/:organizationId/software/inventory-sync`   | Verified owner/admin; `{siteId}`; returns deduplicated `requestId`                                 |
-| `GET /organizations/:organizationId/attachments`                | Member; package metadata, scan findings, fingerprints and quota only                               |
-| `POST /organizations/:organizationId/attachments/:kind`         | Verified owner/admin; raw `application/zip`, bounded scan/store or deduplicated reuse              |
-| `DELETE /organizations/:organizationId/attachments/:id`         | Verified owner/admin; delete only when no live operation references the package                    |
-| `POST /connector/inventory`                                     | Current site bearer; inventory plus optional `inventoryRequestId`; accepted upload records success |
-| `POST /connector/inventory-failure`                             | Current site bearer; `{siteId,inventoryRequestId?,code}`; bounded failure code only                |
-| `POST /connector/software-package`                              | Exact site bearer and running-operation lease; return approved ZIP bytes, never a public URL       |
+| Endpoint under `/api/v1`                                        | Authorization / purpose                                                                                |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET /organizations/:organizationId/software`                   | Membership; inventory/capability, latest 100 operations plus outstanding operations; no command tokens |
+| `POST /organizations/:organizationId/software/preview`          | Verified owner/admin; `{siteIds, command:{kind,action,slug,replacement?}, reason}`                     |
+| `POST /organizations/:organizationId/software/:batchId/confirm` | Verified preview author; `{}`                                                                          |
+| `POST /organizations/:organizationId/software/:batchId/cancel`  | Verified owner/admin; cancel preview/queued entries                                                    |
+| `POST /organizations/:organizationId/software/:batchId/resolve` | Verified owner/admin; confirm manual review of unknown entries                                         |
+| `POST /connector/software-poll`                                 | Current site bearer; `{siteId,enabled}`; one command or null                                           |
+| `POST /connector/software-result`                               | Same site bearer, credential version and command token; `{siteId,operationId,token,code}`              |
+| `POST /organizations/:organizationId/software/inventory-sync`   | Verified owner/admin; `{siteId}`; returns deduplicated `requestId`                                     |
+| `GET /organizations/:organizationId/attachments`                | Member; package metadata, scan findings, fingerprints and quota only                                   |
+| `POST /organizations/:organizationId/attachments/:kind`         | Verified owner/admin; raw `application/zip`, bounded scan/store or deduplicated reuse                  |
+| `DELETE /organizations/:organizationId/attachments/:id`         | Verified owner/admin; delete only when no live operation references the package                        |
+| `POST /connector/inventory`                                     | Current site bearer; inventory plus optional `inventoryRequestId`; accepted upload records success     |
+| `POST /connector/inventory-failure`                             | Current site bearer; `{siteId,inventoryRequestId?,code}`; bounded failure code only                    |
+| `POST /connector/software-package`                              | Exact site bearer and running-operation lease; return approved ZIP bytes, never a public URL           |
 
 Result codes: `ok`, `disabled`, `unsupported`, `not_installed`, `already_installed`, `active`, `dependency`, `filesystem`, `package`, `wordpress_error`, `uncertain`. No plugin error messages are returned. Consult the site's protected WordPress logs for diagnostics without sharing secrets.
 

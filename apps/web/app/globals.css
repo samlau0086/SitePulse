@@ -2686,6 +2686,21 @@ h3 {
   gap: 8px;
   flex-wrap: wrap;
 }
+.software-versions li > span {
+  min-width: 0;
+  max-width: 100%;
+}
+.software-operation-status {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.software-operation-status > span {
+  min-width: 0;
+}
+.software-operation-status svg {
+  flex-shrink: 0;
+}
 .software-preview {
   margin-top: 24px;
   border-top: 1px solid var(--border-control);

@@ -57,19 +57,16 @@ export async function scanPackage(
       break;
     }
   }
-  if (
-    end < 0 ||
-    bytes.readUInt16LE(end + 4) ||
-    bytes.readUInt16LE(end + 6) ||
-    bytes.readUInt16LE(end + 8) !== bytes.readUInt16LE(end + 10)
-  )
-    throw new Error('Unsupported archive directory.');
+  if (end < 0) throw new Error('ZIP end-of-directory record was not found.');
+  if (bytes.readUInt16LE(end + 4) || bytes.readUInt16LE(end + 6))
+    throw new Error('Multi-disk ZIP archives are not supported.');
+  if (bytes.readUInt16LE(end + 8) !== bytes.readUInt16LE(end + 10))
+    throw new Error('ZIP central-directory entry counts do not match.');
   const centralOffset = bytes.readUInt32LE(end + 16);
-  if (
-    centralOffset + bytes.readUInt32LE(end + 12) !== end ||
-    bytes.readUInt16LE(end + 10) > 2000
-  )
-    throw new Error('Unsupported archive directory.');
+  if (centralOffset + bytes.readUInt32LE(end + 12) !== end)
+    throw new Error('ZIP central-directory offset is inconsistent.');
+  if (bytes.readUInt16LE(end + 10) > 2000)
+    throw new Error('ZIP contains too many entries.');
   const zip = await new Promise<ZipFile>((resolve, reject) =>
     fromBuffer(
       bytes,

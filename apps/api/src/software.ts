@@ -1002,57 +1002,78 @@ export async function registerSoftwareRoutes(
     { schema: { body: json(softwarePackage), tags: ['Connector'] } },
     async (request, reply) => {
       const input = softwarePackage.parse(request.body);
-      const bytes = await db.transaction(async (tx) => {
-        const { site, credential } = await connector(tx, request, input.siteId);
-        const [op] = await tx
-          .select()
-          .from(schema.softwareOperations)
-          .where(
-            and(
-              eq(schema.softwareOperations.id, input.operationId),
-              eq(schema.softwareOperations.siteId, site.id),
-            ),
+      try {
+        const bytes = await db.transaction(async (tx) => {
+          const { site, credential } = await connector(
+            tx,
+            request,
+            input.siteId,
+          );
+          const [op] = await tx
+            .select()
+            .from(schema.softwareOperations)
+            .where(
+              and(
+                eq(schema.softwareOperations.id, input.operationId),
+                eq(schema.softwareOperations.siteId, site.id),
+              ),
+            )
+            .for('share');
+          if (
+            !op ||
+            op.status !== 'running' ||
+            op.token !== input.token ||
+            op.secretVersion !== credential.secretVersion ||
+            !op.startedAt ||
+            op.startedAt < minutes(-2) ||
+            !op.command.attachmentId
           )
-          .for('share');
-        if (
-          !op ||
-          op.status !== 'running' ||
-          op.token !== input.token ||
-          op.secretVersion !== credential.secretVersion ||
-          !op.startedAt ||
-          op.startedAt < minutes(-2) ||
-          !op.command.attachmentId
-        )
-          throw unavailable();
-        const [actor] = await tx
-          .select({
-            id: schema.users.id,
-            emailVerified: schema.users.emailVerified,
-          })
-          .from(schema.users)
-          .where(eq(schema.users.id, op.actorUserId))
-          .for('share');
-        if (!actor) throw unavailable();
-        await member(tx, site.organizationId, actor, true);
-        const value = await context(tx, site.organizationId, site.id);
-        ready(value, op.command);
-        const row = (await attachment(tx, site.organizationId, op.command))!;
-        const data =
-          row.storage === 'google_drive'
-            ? await drive.download(row)
-            : Buffer.from(row.zipBase64!, 'base64');
-        if (
-          data.length !== row.byteSize ||
-          data.length > PACKAGE_LIMIT ||
-          createHash('sha256').update(data).digest('hex') !== row.sha256
-        )
-          throw conflict('Package integrity check failed.');
-        return data;
-      });
-      return reply
-        .type('application/zip')
-        .header('content-disposition', 'attachment; filename="package.zip"')
-        .send(bytes);
+            throw unavailable();
+          const [actor] = await tx
+            .select({
+              id: schema.users.id,
+              emailVerified: schema.users.emailVerified,
+            })
+            .from(schema.users)
+            .where(eq(schema.users.id, op.actorUserId))
+            .for('share');
+          if (!actor) throw unavailable();
+          await member(tx, site.organizationId, actor, true);
+          const value = await context(tx, site.organizationId, site.id);
+          ready(value, op.command);
+          const row = (await attachment(tx, site.organizationId, op.command))!;
+          const data =
+            row.storage === 'google_drive'
+              ? await drive.download(row)
+              : Buffer.from(row.zipBase64!, 'base64');
+          if (
+            data.length !== row.byteSize ||
+            data.length > PACKAGE_LIMIT ||
+            createHash('sha256').update(data).digest('hex') !== row.sha256
+          )
+            throw conflict('Package integrity check failed.');
+          return data;
+        });
+        return reply
+          .type('application/zip')
+          .header('content-disposition', 'attachment; filename="package.zip"')
+          .send(bytes);
+      } catch (error) {
+        if (error instanceof HttpError && error.code === 'DRIVE_UNAVAILABLE') {
+          return reply
+            .code(424)
+            .header('x-sitepulse-error-code', 'package_storage')
+            .send({
+              error: {
+                code: 'PACKAGE_STORAGE',
+                message:
+                  "SitePulse could not retrieve this package from the uploader's Google Drive. Reconnect the same Google account and verify that the original Drive file still exists.",
+                requestId: request.id,
+              },
+            });
+        }
+        throw error;
+      }
     },
   );
   app.post(

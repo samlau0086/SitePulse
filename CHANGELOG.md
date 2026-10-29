@@ -14,6 +14,7 @@
 - Split Connector package failures into safe download, size/write and SHA-256 integrity result codes while retaining the legacy `package` fallback for older Connectors.
 - Show Recent operations guidance for package download, temporary filesystem, checksum, native WordPress installer, disabled-consent and uncertain-result failures instead of exposing a bare error code.
 - Distinguish WordPress.org source-resolution failures (`package_source`) from uploaded-package download failures, including guidance for premium/custom plugins such as packages without an official WordPress.org download.
+- Distinguish personal Google Drive retrieval failures (`package_storage`) from WordPress-to-SitePulse download failures when installing Attachment library packages.
 - Clarify the legacy `package` message as an old queued or slug-based command, directing operators to create a fresh preview from Attachment library.
 
 ## Unreleased — Personal Google Drive attachment storage

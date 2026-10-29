@@ -119,6 +119,7 @@ it('explains package installation failures without exposing raw connector output
   expect(operationResultMessage('package_download')).toContain(
     'outbound HTTPS access',
   );
+  expect(operationResultMessage('package_storage')).toContain('Google Drive');
   expect(operationResultMessage('package_checksum')).toContain(
     'integrity check',
   );

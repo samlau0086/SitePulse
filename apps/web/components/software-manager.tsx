@@ -47,6 +47,8 @@ export function operationResultMessage(code: string | null) {
       return 'The Connector reported that the operation completed successfully.';
     case 'package_download':
       return "WordPress could not download the package from SitePulse. Check the site's outbound HTTPS access, Connector pairing and firewall, then retry.";
+    case 'package_storage':
+      return "SitePulse could not retrieve this package from the uploader's Google Drive. Reconnect the same Google account in Attachment library, verify that the original Drive file still exists and is accessible, then create a new preview and retry.";
     case 'package_size':
       return 'The downloaded package exceeded the 8 MiB limit or was not written completely. Retry; if it continues, upload the package again.';
     case 'package_checksum':

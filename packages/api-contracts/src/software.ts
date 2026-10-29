@@ -83,6 +83,7 @@ export const softwareResultCode = z.enum([
   'package',
   'package_source',
   'package_download',
+  'package_storage',
   'package_size',
   'package_checksum',
   'wordpress_error',

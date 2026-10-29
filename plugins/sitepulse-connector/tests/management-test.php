@@ -4,7 +4,7 @@ $root = sys_get_temp_dir() . '/sitepulse-management-' . bin2hex(random_bytes(6))
 mkdir($root . 'wp-admin/includes', 0700, true);
 foreach (array('plugin.php','theme.php','file.php','update.php','class-wp-upgrader.php','plugin-install.php','theme-install.php') as $name) { file_put_contents($root . 'wp-admin/includes/' . $name, '<?php'); }
 define('ABSPATH', $root);
-$options = array(); $tests = 0; $allowed = true; $user = 7; $multi = false; $active = array(); $installed = array('hello/hello.php' => array('Name' => 'Hello', 'Version' => '1.0', 'UpdateURI' => '')); $theme = 'theme-a'; $deleted = array(); $executions = 0; $fail_ack = false; $response_command = null; $dependent = false; $filesystem = 'direct'; $events = array(); $upgrader = array(); $transients = array(); $api_info = null; $poll_body = null; $package_bytes = 'attachment-zip-fixture'; $package_status = 200; $package_transport_error = false; $package_mutation = null; $package_request = null; $deleted_temp_files = array();
+$options = array(); $tests = 0; $allowed = true; $user = 7; $multi = false; $active = array(); $installed = array('hello/hello.php' => array('Name' => 'Hello', 'Version' => '1.0', 'UpdateURI' => '')); $theme = 'theme-a'; $deleted = array(); $executions = 0; $fail_ack = false; $response_command = null; $dependent = false; $filesystem = 'direct'; $events = array(); $upgrader = array(); $transients = array(); $api_info = null; $poll_body = null; $package_bytes = 'attachment-zip-fixture'; $package_status = 200; $package_error_header = ''; $package_transport_error = false; $package_mutation = null; $package_request = null; $deleted_temp_files = array();
 function check($condition, $message) { $GLOBALS['tests']++; if (!$condition) { throw new RuntimeException($message); } }
 function get_option($name, $default = false) { return $GLOBALS['options'][$name] ?? $default; }
 function update_option($name, $value, ...$args) { $GLOBALS['options'][$name] = $value; return true; }
@@ -32,9 +32,10 @@ function wp_safe_remote_post($url, $args) {
     if ($GLOBALS['package_transport_error']) { return new WP_Error(); }
     file_put_contents($args['filename'], $GLOBALS['package_bytes']);
     if (is_callable($GLOBALS['package_mutation'])) { ($GLOBALS['package_mutation'])(); }
-    return array('status' => $GLOBALS['package_status']);
+    return array('status' => $GLOBALS['package_status'], 'headers' => array('x-sitepulse-error-code' => $GLOBALS['package_error_header']));
 }
 function wp_remote_retrieve_response_code($response) { return $response['status'] ?? 0; }
+function wp_remote_retrieve_header($response, $header) { return $response['headers'][$header] ?? ''; }
 function wp_delete_file($path) { $GLOBALS['deleted_temp_files'][] = $path; if (is_file($path)) { unlink($path); } }
 class WP_Error { public function get_error_data() { return array('status' => 503); } }
 function is_wp_error($value) { return $value instanceof WP_Error; }
@@ -146,6 +147,9 @@ try {
     check(SitePulse_Management::execute($bad_hash) === 'package_checksum', 'Reject attachment digest mismatch');
     $package_status = 503;
     check(SitePulse_Management::execute($attachment) === 'package_download' && !is_file(end($deleted_temp_files)), 'Reject non-success package response and clean temporary file');
+    $package_error_header = 'package_storage';
+    check(SitePulse_Management::execute($attachment) === 'package_storage' && !is_file(end($deleted_temp_files)), 'Expose Drive package storage failure');
+    $package_error_header = '';
     $package_status = 200; $package_transport_error = true;
     check(SitePulse_Management::execute($attachment) === 'package_download' && !is_file(end($deleted_temp_files)), 'Reject package transport failure and clean temporary file');
     $package_transport_error = false; $package_bytes = str_repeat('x', 8388609);

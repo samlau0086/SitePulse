@@ -86,6 +86,23 @@ it('finds a plugin header in a nested PHP file', async () => {
     ),
   ).resolves.toMatchObject({ slug: 'sample', name: 'Sample', version: '1.0' });
 });
+it('prefers the unique root plugin header over nested PHP metadata', async () => {
+  await expect(
+    scanPackage(
+      packageFixture([
+        {
+          path: 'sample/main.php',
+          content: '<?php\n/* Plugin Name: Sample\nVersion: 1.0 */',
+        },
+        {
+          path: 'sample/vendor/example.php',
+          content: '<?php\n/* Plugin Name: Example\nVersion: 9.9 */',
+        },
+      ]),
+      'plugin',
+    ),
+  ).resolves.toMatchObject({ slug: 'sample', name: 'Sample', version: '1.0' });
+});
 it.each([
   '../escape.php',
   'sample/../escape.php',

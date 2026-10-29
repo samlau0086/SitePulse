@@ -11,6 +11,7 @@
 - Detect plugin headers in nested PHP files and return the scanner's safe rejection reason when an archive is invalid.
 - Split ZIP central-directory validation errors into actionable messages instead of reporting every directory parse failure as unsupported.
 - Raise the archive entry limit to 10,000 for legitimate plugins with vendor code or localization files while retaining compressed, expanded and per-file size limits.
+- Resolve plugin metadata from the unique root-level header before considering nested PHP files, avoiding false ambiguous-header rejections from bundled vendor/test code.
 - Replace the attachment file chooser with an accessible drag-and-drop ZIP target that displays the selected file and still requires explicit upload-and-scan submission.
 - Require personal Google Drive for all new attachment uploads, using Better Auth linking, encrypted OAuth tokens and `drive.file` permissions. Remove the storage selector and disable uploads until connected. Reject explicit database storage and never fall back to SitePulse ZIP storage when Drive is unavailable.
 - Preserve database attachments and the original Connector protocol. Proxy Drive downloads through tenant/site leases and verify size/SHA-256; bind files to the original Google account and recheck the uploader's verified administrator membership.

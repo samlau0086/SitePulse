@@ -82,7 +82,11 @@ export async function scanPackage(
   const regularPaths = new Set<string>();
   const ranges: Array<[number, number]> = [];
   const findings: AttachmentScan['findings'] = [];
-  let metadata: { name: string; version: string } | undefined;
+  const metadataCandidates: Array<{
+    name: string;
+    version: string;
+    path: string;
+  }> = [];
   await new Promise<void>((resolve, reject) => {
     let done = false;
     const finish = (error?: Error) => {
@@ -237,10 +241,12 @@ export async function scanPackage(
           const version = header.match(
             /^[ \t/*#]*Version:\s*([0-9a-zA-Z._+-]{1,80})/im,
           )?.[1];
-          if (name && version) {
-            if (metadata) throw new Error('Ambiguous package headers.');
-            metadata = { name: name.slice(0, 150), version };
-          }
+          if (name && version)
+            metadataCandidates.push({
+              name: name.slice(0, 150),
+              version,
+              path,
+            });
         }
         if (!done) zip.readEntry();
       })().catch((error: unknown) =>
@@ -249,10 +255,20 @@ export async function scanPackage(
     });
     zip.readEntry();
   });
-  if (!metadata)
+  const rootPluginHeaders = metadataCandidates.filter(
+    (candidate) => candidate.path.split('/').length === 2,
+  );
+  const selectedHeaders =
+    kind === 'plugin' && rootPluginHeaders.length
+      ? rootPluginHeaders
+      : metadataCandidates;
+  if (!selectedHeaders.length)
     throw new Error(
       'A single matching WordPress name/version header is required.',
     );
+  if (selectedHeaders.length !== 1)
+    throw new Error('Ambiguous package headers.');
+  const metadata = selectedHeaders[0]!;
   return {
     slug: slug!,
     ...metadata,

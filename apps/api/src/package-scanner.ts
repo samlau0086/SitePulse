@@ -225,7 +225,7 @@ export async function scanPackage(
           findings.push({ rule: 'embedded_executable_or_archive', path });
         const isHeader =
           kind === 'plugin'
-            ? new RegExp(`^[^/]+/[^/]+\\.php$`, 'i').test(path)
+            ? new RegExp(`^[^/]+/.+\\.php$`, 'i').test(path)
             : path === `${slug}/style.css`;
         if (isHeader) {
           const header = contents.slice(0, 8192);

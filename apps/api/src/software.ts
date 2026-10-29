@@ -304,11 +304,15 @@ export async function registerSoftwareRoutes(
       let inspected: Awaited<ReturnType<typeof scanPackage>>;
       try {
         inspected = await scanPackage(bytes, input.kind);
-      } catch {
+      } catch (error) {
+        const reason =
+          error instanceof Error && error.message
+            ? error.message
+            : 'check archive paths, limits and WordPress headers';
         throw new HttpError(
           400,
           'INVALID_PACKAGE',
-          'Package rejected: check archive paths, limits and WordPress headers.',
+          `Package rejected: ${reason}`,
         );
       }
       let uploaded: Awaited<ReturnType<DriveStorage['upload']>> | undefined;

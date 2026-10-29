@@ -73,6 +73,19 @@ it('accepts ZIP entries without Unix mode bits', async () => {
     ),
   ).resolves.toMatchObject({ slug: 'sample', name: 'Sample', version: '1.0' });
 });
+it('finds a plugin header in a nested PHP file', async () => {
+  await expect(
+    scanPackage(
+      packageFixture([
+        {
+          path: 'sample/includes/main.php',
+          content: '<?php\n/* Plugin Name: Sample\nVersion: 1.0 */',
+        },
+      ]),
+      'plugin',
+    ),
+  ).resolves.toMatchObject({ slug: 'sample', name: 'Sample', version: '1.0' });
+});
 it.each([
   '../escape.php',
   'sample/../escape.php',

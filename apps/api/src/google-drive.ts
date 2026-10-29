@@ -274,43 +274,39 @@ export async function registerDriveRoutes(
       return { url: data.url };
     },
   );
-  app.delete(
-    '/api/v1/me/google-drive',
-    { schema: { querystring: json } },
-    async (request) => {
-      const user = await verified(request);
-      // Credentials belong only to this authenticated user; attachment metadata and
-      // Drive originals survive so reconnecting the same Google subject restores access.
-      const rows = await db
-        .select({ id: schema.accounts.id })
-        .from(schema.accounts)
-        .where(
-          and(
-            eq(schema.accounts.userId, user.id),
-            eq(schema.accounts.providerId, 'google'),
-          ),
-        );
-      try {
-        for (const row of rows)
-          await auth.api.unlinkAccount({
-            headers: headers(request),
-            body: { accountId: row.id },
-          });
-      } catch {
-        throw new HttpError(
-          409,
-          'DRIVE_UNAVAILABLE',
-          'Sign in again before disconnecting Google Drive.',
-        );
-      }
-      await db.insert(schema.auditLogs).values({
-        actorUserId: user.id,
-        action: 'drive.disconnected',
-        requestId: request.id,
-      });
-      return { success: true };
-    },
-  );
+  app.delete('/api/v1/me/google-drive', async (request) => {
+    const user = await verified(request);
+    // Credentials belong only to this authenticated user; attachment metadata and
+    // Drive originals survive so reconnecting the same Google subject restores access.
+    const rows = await db
+      .select({ id: schema.accounts.id })
+      .from(schema.accounts)
+      .where(
+        and(
+          eq(schema.accounts.userId, user.id),
+          eq(schema.accounts.providerId, 'google'),
+        ),
+      );
+    try {
+      for (const row of rows)
+        await auth.api.unlinkAccount({
+          headers: headers(request),
+          body: { accountId: row.id },
+        });
+    } catch {
+      throw new HttpError(
+        409,
+        'DRIVE_UNAVAILABLE',
+        'Sign in again before disconnecting Google Drive.',
+      );
+    }
+    await db.insert(schema.auditLogs).values({
+      actorUserId: user.id,
+      action: 'drive.disconnected',
+      requestId: request.id,
+    });
+    return { success: true };
+  });
   app.get('/api/v1/auth/callback/google', async (request, reply) => {
     reply.header('referrer-policy', 'no-referrer');
     if (!drive.enabled) throw unavailable();

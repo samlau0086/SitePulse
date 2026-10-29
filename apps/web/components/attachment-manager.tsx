@@ -124,7 +124,7 @@ export function AttachmentManager({
                   )
                 )
                   void run(async () => {
-                    await api('/me/google-drive', undefined, 'DELETE');
+                    await api('/me/google-drive', {}, 'DELETE');
                     setDrive(
                       await api<DriveConnection>(
                         '/me/google-drive',

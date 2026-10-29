@@ -2,9 +2,9 @@
 
 ## Unreleased — Personal Google Drive attachment storage
 
-- Add optional per-user Google Drive linking through Better Auth, encrypted OAuth tokens and `drive.file` permissions. Add storage selection, connection state and disconnect confirmation to Attachments.
+- Require personal Google Drive for all new attachment uploads, using Better Auth linking, encrypted OAuth tokens and `drive.file` permissions. Remove the storage selector and disable uploads until connected. Reject explicit database storage and never fall back to SitePulse ZIP storage when Drive is unavailable.
 - Preserve database attachments and the original Connector protocol. Proxy Drive downloads through tenant/site leases and verify size/SHA-256; bind files to the original Google account and recheck the uploader's verified administrator membership.
-- Add migration 0017, paired optional OAuth configuration and deployment wiring. Deletion/disconnection retains Drive originals; existing bytes are not migrated. See `docs/GOOGLE_DRIVE_STORAGE.md` for setup and acceptance limits.
+- Add migration 0017 for Drive references and migration 0018 for the Drive storage default, paired OAuth configuration and deployment wiring. Unconfigured servers retain legacy reads but cannot create uploads. Deletion/disconnection retains Drive originals; existing bytes are not migrated. See `docs/GOOGLE_DRIVE_STORAGE.md` for setup and acceptance limits.
 
 ## Unreleased — Persistent software queue feedback
 

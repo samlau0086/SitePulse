@@ -104,7 +104,7 @@ export const attachmentParams = z
   .strict();
 export const attachmentUploadQuery = z
   .object({
-    storage: z.enum(['database', 'google_drive']).default('database'),
+    storage: z.literal('google_drive').default('google_drive'),
   })
   .strict();
 export const driveCallbackQuery = z

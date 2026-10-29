@@ -1,0 +1,1 @@
+ALTER TABLE "software_attachments" ALTER COLUMN "storage" SET DEFAULT 'google_drive';

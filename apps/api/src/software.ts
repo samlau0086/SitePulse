@@ -346,12 +346,11 @@ export async function registerSoftwareRoutes(
             throw conflict(
               'Attachment storage limit reached (64 MiB / 100 packages). Delete unused packages first.',
             );
-          if (storage === 'google_drive')
-            uploaded = await drive.upload(
-              user.id,
-              `${inspected.slug}-${inspected.version}.zip`,
-              bytes,
-            );
+          uploaded = await drive.upload(
+            user.id,
+            `${inspected.slug}-${inspected.version}.zip`,
+            bytes,
+          );
           const [row] = await tx
             .insert(schema.softwareAttachments)
             .values({
@@ -361,10 +360,9 @@ export async function registerSoftwareRoutes(
               ...inspected,
               byteSize: bytes.length,
               storage,
-              zipBase64:
-                storage === 'database' ? bytes.toString('base64') : null,
-              driveFileId: uploaded?.fileId ?? null,
-              driveAccountId: uploaded?.accountId ?? null,
+              zipBase64: null,
+              driveFileId: uploaded.fileId,
+              driveAccountId: uploaded.accountId,
             })
             .returning({ id: schema.softwareAttachments.id });
           await audit(

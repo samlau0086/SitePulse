@@ -1,14 +1,14 @@
 # Personal Google Drive attachment storage
 
-New plugin/theme ZIPs can use SitePulse PostgreSQL or the uploading user's Google Drive. Existing attachments stay in PostgreSQL. Identical bytes reuse the existing workspace entry regardless of the selected storage; this does not migrate an attachment. Both backends share the 8 MiB upload, 100-package and 64 MiB workspace limits.
+New plugin/theme ZIPs are stored exclusively in the uploading user's Google Drive. SitePulse processes bytes transiently for scanning and delivery and persists only metadata, scan results, SHA-256 and account/file references for new uploads. There is no database-byte fallback. Existing database attachments retain read/install compatibility and are not automatically migrated or deleted. Identical bytes reuse the existing workspace entry, including legacy packages; this does not create or migrate an attachment. All entries share the 8 MiB upload, 100-package and 64 MiB workspace limits.
 
 ## Setup and deployment
 
 1. Enable Google Drive API in a Google Cloud project, configure its OAuth consent audience/test users, and create an OAuth web application. Register exactly `APP_ORIGIN/api/v1/auth/callback/google` using the actual origin, including local development port where applicable.
-2. Configure both `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET`, or leave both empty to disable Drive. GitHub deployment reads them as environment secrets and passes them only to the API. Restart after configuration changes.
-3. Back up before applying migration `0017_bored_sunspot.sql` through the deployment workflow. Existing bytes are preserved with database storage as the default. Production migration/deployment requires explicit authorization.
+2. Configure both `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` to enable new uploads. Leaving both empty lets the app start with legacy reads but prevents creating attachments. GitHub deployment reads them as environment secrets and passes them only to the API. Restart after configuration changes.
+3. Back up before applying pending migrations, including `0017_bored_sunspot.sql` for references and `0018_flawless_veda.sql` for the Drive default, through the deployment workflow. Existing bytes are preserved. Production migration/deployment requires explicit authorization.
 4. Keep `BETTER_AUTH_SECRET` stable and backed up securely; Better Auth uses it to encrypt OAuth access/refresh tokens. Database backups contain encrypted credentials and references, not Drive ZIPs. Back up important Drive originals separately. Rolling back to an older API after Drive uploads requires a compatible API or explicit export/migration plan.
-5. In Attachments, connect the Google account matching the verified SitePulse email, grant offline file access, then select My Google Drive when uploading. The status shows saved credentials, not live provider availability. Reconnect the same account after authorization/refresh failure.
+5. In Attachments, connect the Google account matching the verified SitePulse email and grant offline file access before uploading. There is no storage selector. The status shows saved credentials, not live provider availability. Reconnect the same account after authorization/refresh failure. Missing connection/configuration or provider failures never switch uploads to database storage.
 
 ## Authorization and lifecycle
 
@@ -30,8 +30,8 @@ Failed uploads and database rollbacks attempt to delete newly created files. Pro
 - `POST /api/v1/me/google-drive/connect` with `{}`: verified session and trusted Origin; authorization URL/state cookie.
 - `DELETE /api/v1/me/google-drive`: verified fresh session and trusted Origin; disconnect own account only.
 - `GET /api/v1/auth/callback/google`: narrow Better Auth callback; final redirect strips OAuth codes/state/provider errors. Reverse proxies must not log callback query strings.
-- Existing attachment upload accepts `?storage=database|google_drive` (default database). Metadata gains `storage`; Connector package delivery is unchanged.
+- Attachment upload defaults to Google Drive when the query is omitted and still accepts `?storage=google_drive`. Explicit `?storage=database` is rejected with 400. New rows always have `zipBase64: null`. Metadata includes `storage` to distinguish legacy entries; Connector package delivery is unchanged.
 
-Automated tests use encrypted credential fixtures, mocked Google responses and dedicated disposable PostgreSQL. Coverage includes both plugin/theme leases, exact bytes, hash/size failures, missing files, disconnect/wrong-account/reconnect, authority changes, unauthorized uploads, deduplication, original retention and unsafe upload-session hosts. They do not validate real Google OAuth/token refresh or actual WordPress upgraders.
+Automated tests use encrypted credential fixtures, mocked Google responses and dedicated disposable PostgreSQL. Coverage includes Drive-only default uploads, explicit database rejection, disconnected/unconfigured upload failures without persisted bytes, legacy reads, both plugin/theme leases, exact bytes, hash/size failures, missing files, disconnect/wrong-account/reconnect, authority changes, unauthorized uploads, deduplication, original retention and unsafe upload-session hosts. They do not validate real Google OAuth/token refresh or actual WordPress upgraders.
 
 Before production enablement, verify real consent/callback/reconnect/refresh/revoke and both package types on disposable staging sites, including a near-8-MiB ZIP, file mutation/deletion and owner removal. Review desktop/mobile and keyboard interactions. This local implementation does not deploy or modify production data.

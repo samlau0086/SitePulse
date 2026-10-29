@@ -203,6 +203,7 @@ beforeEach(async () => {
     .set({ role: 'member' })
     .where(eq(schema.organizationMembers.userId, reader.id));
   await database.db.update(schema.users).set({ emailVerified: true });
+  await linkDrive();
   sites = (
     await database.db
       .insert(schema.sites)
@@ -324,7 +325,6 @@ async function driveLease(kind = 'plugin') {
 it.each(['plugin', 'theme'])(
   'installs Drive %s bytes through the existing lease without exposing Drive identifiers',
   async (kind) => {
-    await linkDrive();
     const { bytes, download } = await driveLease(kind);
     const result = await download();
     expect(result.statusCode, result.body).toBe(200);
@@ -353,7 +353,6 @@ it.each(['plugin', 'theme'])(
   },
 );
 it('binds Drive storage to the original account and current owner authority', async () => {
-  await linkDrive();
   const { download } = await driveLease();
   expect(
     (
@@ -380,7 +379,6 @@ it('binds Drive storage to the original account and current owner authority', as
   expect((await download()).statusCode).toBe(403);
 });
 it('rechecks the Drive owner even when another administrator runs the installation', async () => {
-  await linkDrive();
   await database.db
     .update(schema.organizationMembers)
     .set({ role: 'admin' })
@@ -425,7 +423,14 @@ it('rechecks the Drive owner even when another administrator runs the installati
   expect((await download()).statusCode).toBe(403);
 });
 it('authorizes Drive uploads before contacting Google and reuses existing fingerprints', async () => {
-  expect((await uploadDrive()).statusCode).toBe(409);
+  await database.db
+    .delete(schema.accounts)
+    .where(eq(schema.accounts.providerId, 'google'));
+  expect((await upload()).statusCode).toBe(409);
+  expect(
+    await database.db.select().from(schema.softwareAttachments),
+  ).toHaveLength(0);
+  expect(driveRequests).toHaveLength(0);
   await linkDrive();
   expect((await uploadDrive(pluginFixture(), reader.cookie)).statusCode).toBe(
     403,
@@ -435,8 +440,9 @@ it('authorizes Drive uploads before contacting Google and reuses existing finger
   );
   expect(driveRequests).toHaveLength(0);
   const id = (await upload()).json().id;
+  const requests = driveRequests.length;
   expect((await uploadDrive()).json()).toMatchObject({ id, reused: true });
-  expect(driveRequests).toHaveLength(0);
+  expect(driveRequests).toHaveLength(requests);
   await removeAttachment(id);
   const uploaded = await uploadDrive();
   expect(uploaded.statusCode).toBe(200);
@@ -444,7 +450,6 @@ it('authorizes Drive uploads before contacting Google and reuses existing finger
   expect(driveFiles.size).toBe(1);
 });
 it('refuses untrusted resumable upload hosts and leaves no library entry on failure', async () => {
-  await linkDrive();
   hostileDriveSession = true;
   expect((await uploadDrive()).statusCode).toBe(409);
   expect(
@@ -453,6 +458,83 @@ it('refuses untrusted resumable upload hosts and leaves no library entry on fail
   expect(
     driveRequests.every((url) => url.startsWith('https://www.googleapis.com/')),
   ).toBe(true);
+});
+it('rejects database storage requests without contacting Google or saving bytes', async () => {
+  const response = await app.inject({
+    method: 'POST',
+    url: `${libraryBase()}/plugin?storage=database`,
+    headers: {
+      origin,
+      cookie: owner.cookie,
+      'content-type': 'application/zip',
+    },
+    payload: pluginFixture(),
+  });
+  expect(response.statusCode).toBe(400);
+  expect(driveRequests).toHaveLength(0);
+  expect(
+    await database.db.select().from(schema.softwareAttachments),
+  ).toHaveLength(0);
+});
+it('refuses new uploads when Drive is not configured without a database fallback', async () => {
+  const unconfigured = await buildApp({
+    db: database.db,
+    env: parseEnvironment({
+      NODE_ENV: 'test',
+      DATABASE_URL: process.env.TEST_DATABASE_URL,
+      APP_ORIGIN: origin,
+      BETTER_AUTH_SECRET: authSecret,
+      LOG_LEVEL: 'silent',
+    }),
+    sendAuthMail: async () => {},
+    driveFetch,
+  });
+  try {
+    const response = await unconfigured.inject({
+      method: 'POST',
+      url: `${libraryBase()}/plugin`,
+      headers: {
+        origin,
+        cookie: owner.cookie,
+        'content-type': 'application/zip',
+      },
+      payload: pluginFixture(),
+    });
+    expect(response.statusCode, response.body).toBe(409);
+    expect(driveRequests).toHaveLength(0);
+    expect(
+      await database.db.select().from(schema.softwareAttachments),
+    ).toHaveLength(0);
+  } finally {
+    await unconfigured.close();
+  }
+});
+it('keeps legacy database packages installable and deduplicated without Drive access', async () => {
+  const { bytes, download, id } = await driveLease();
+  // Simulate a package saved before Drive-only uploads were introduced.
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({
+      storage: 'database',
+      zipBase64: bytes.toString('base64'),
+      driveFileId: null,
+      driveAccountId: null,
+    })
+    .where(eq(schema.softwareAttachments.id, id));
+  await database.db
+    .delete(schema.accounts)
+    .where(eq(schema.accounts.providerId, 'google'));
+  driveRequests.length = 0;
+  expect((await upload()).json()).toEqual({ id, reused: true });
+  const response = await download();
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.rawPayload.equals(bytes)).toBe(true);
+  expect(driveRequests).toHaveLength(0);
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({ zipBase64: Buffer.from('tampered').toString('base64') })
+    .where(eq(schema.softwareAttachments.id, id));
+  expect((await download()).statusCode).toBe(409);
 });
 it('protects Google account connection with session, Origin, verification and OAuth state', async () => {
   expect(
@@ -507,10 +589,16 @@ it('protects Google account connection with session, Origin, verification and OA
   );
 });
 
-it('stores scoped attachments, deduplicates and exposes metadata without source', async () => {
+it('defaults to Drive without storing ZIP bytes, deduplicates and exposes scoped metadata', async () => {
   const response = await upload();
   expect(response.statusCode, response.body).toBe(200);
   const id = response.json().id;
+  const [stored] = await database.db.select().from(schema.softwareAttachments);
+  expect(stored).toMatchObject({
+    storage: 'google_drive',
+    zipBase64: null,
+    driveFileId: 'drive-fixture',
+  });
   expect((await upload()).json()).toEqual({ id, reused: true });
   const list = await call(
     'GET',
@@ -709,9 +797,7 @@ it('rejects tampered bytes, old scans and expired package downloads', async () =
     .update(schema.softwareAttachments)
     .set({ byteSize: stored!.byteSize })
     .where(eq(schema.softwareAttachments.id, id));
-  await database.db
-    .update(schema.softwareAttachments)
-    .set({ zipBase64: Buffer.from('tampered').toString('base64') });
+  driveFiles.set('drive-fixture', Buffer.from('tampered'));
   expect(
     (await call('POST', '/connector/software-package', payload, '', credential))
       .statusCode,
@@ -765,6 +851,7 @@ it('enforces upload size, storage quota, verified identity and trusted Origin', 
       version: '1',
       sha256: String(index),
       byteSize: 8388608,
+      storage: 'database' as const,
       zipBase64: '',
       scan,
     })),

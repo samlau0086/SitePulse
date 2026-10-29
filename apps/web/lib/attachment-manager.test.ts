@@ -78,7 +78,7 @@ it('keeps attachment mutations disabled for read-only members', () => {
   expect(html).not.toContain('Choose sites &amp; install');
 });
 
-it('shows personal Drive connection, explicit storage and remote-original retention guidance', () => {
+it('uses personal Drive exclusively and keeps remote-original retention guidance', () => {
   const initial = fixture(true);
   initial.attachments[0]!.storage = 'google_drive';
   const html = renderToStaticMarkup(
@@ -90,9 +90,24 @@ it('shows personal Drive connection, explicit storage and remote-original retent
     }),
   );
   expect(html).toContain('Reconnect Google Drive');
-  expect(html).toContain('name="storage"');
-  expect(html).toContain('value="google_drive"');
+  expect(html).not.toContain('name="storage"');
+  expect(html).not.toContain('value="database"');
+  expect(html).toContain('New packages are stored only in your Google Drive');
+  expect(html).not.toContain('<fieldset disabled="">');
   expect(html).toContain('Uploader’s Google Drive');
   expect(html).toContain('Drive originals are kept');
   expect(html).toContain('Google Drive connection failed');
+});
+
+it('requires a Drive connection before enabling uploads', () => {
+  const html = renderToStaticMarkup(
+    createElement(AttachmentManager, {
+      organizationId: 'workspace-fixture',
+      initial: fixture(true),
+      initialDrive: { enabled: true, connected: false },
+    }),
+  );
+  expect(html).toContain('<fieldset disabled="">');
+  expect(html).toContain('Connect Google Drive before uploading a package');
+  expect(html).not.toContain('name="storage"');
 });

@@ -2,9 +2,9 @@
 
 ## 用户 Google Drive 附件存储
 
-Attachments 新增个人 Google Drive 连接和上传存储选择。原附件继续使用 SitePulse 存储；新附件可存入上传者的 Drive，插件/主题仍通过原来的预览、确认、队列和 Connector 接口安装，无需升级 Connector。两种存储共用扫描、SHA-256 校验和配额。断开授权、删除/修改 Drive 文件会导致后续安装失败；删除库记录保留 Drive 原文件。
+Attachments 新上传的附件只存入上传者的个人 Google Drive，SitePulse 仅保存元数据、扫描结果、SHA-256 和授权引用，不持久化新 ZIP 内容。上传仍通过 API 临时处理和扫描；插件/主题继续通过原来的预览、确认、队列和 Connector 接口安装，无需升级 Connector。断开授权、删除/修改 Drive 文件会导致后续安装失败；删除库记录保留 Drive 原文件。
 
-启用前需配置 `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET`，备份并应用迁移 `0017_bored_sunspot.sql`。未配置时原存储继续可用；旧附件不会自动迁移。配置及验收见 [Google Drive 存储](docs/GOOGLE_DRIVE_STORAGE.md)。本次开发不修改生产数据库。
+上传前需配置 `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` 并连接用户 Drive；未配置、未连接或 Drive 不可用时禁止新建上传，不回退到 SitePulse 存储。备份后依次应用迁移（含 `0017_bored_sunspot.sql` 和 `0018_flawless_veda.sql`）。旧附件保留读取和安装兼容，不会自动迁移或删除；相同 ZIP 仍复用已有记录。配置及验收见 [Google Drive 存储](docs/GOOGLE_DRIVE_STORAGE.md)。本次开发不修改生产数据库。
 
 ## 站点信息速览
 
@@ -55,7 +55,7 @@ LOGO 使用公开 HTTPS 图片地址（推荐 PNG/JPEG、360 × 128），由邮�
 
 侧栏 **Attachment library**（`/app/attachments`）允许已验证的工作区 owner/admin 上传并复用本地插件/主题 ZIP。上传时选择类型和 ZIP 文件；服务端扫描时自动读取 ZIP 唯一顶层目录作为 slug，无需手动填写；每个 ZIP 最大 8 MiB，每个工作区最多 100 个包、原始 ZIP 合计 64 MiB。成员可查看元数据和扫描结果，但不能上传、删除或安装。相同工作区内相同 SHA-256 的包会复用已有记录。
 
-服务端不会解压执行上传代码，而是以受限流式方式检查 ZIP 目录、路径、文件类型、大小、CRC、WordPress header 和部分高风险执行模式；嵌套归档/可执行文件、无效结构或命中规则的包会被阻止安装。**“未命中所选模式”不代表安全、无漏洞或兼容**。包以 base64 形式存入 PostgreSQL，约增加 33% 数据体积并进入数据库备份；当前设计仅适合小规模附件库。安装时没有公开下载 URL，只有对应站点凭据和短期运行任务令牌可以领取包，Connector 会再次校验独立授权、大小和 SHA-256，并始终清理临时文件。
+服务端不会解压执行上传代码，而是以受限流式方式检查 ZIP 目录、路径、文件类型、大小、CRC、WordPress header 和部分高风险执行模式；嵌套归档/可执行文件、无效结构或命中规则的包会被阻止安装。**“未命中所选模式”不代表安全、无漏洞或兼容**。新 ZIP 只存于用户 Google Drive，旧数据库附件继续兼容读取。安装时没有公开下载 URL，只有对应站点凭据和短期运行任务令牌可以领取包，Connector 会再次校验独立授权、大小和 SHA-256，并始终清理临时文件。
 
 生产反向代理必须允许略高于 8 MiB 的请求：示例 Caddy 已设为 9 MB；1Panel/Nginx 的 SitePulse server/location 设置 `client_max_body_size 9m`。API 仍执行精确的 8 MiB 限制，不要改成无限制。详见 [安全边界、API 与验收步骤](docs/SOFTWARE_MANAGEMENT.md)。
 

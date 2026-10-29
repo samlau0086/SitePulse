@@ -144,7 +144,7 @@ export function AttachmentManager({
             }
             void run(async () => {
               const response = await fetch(
-                `/api/v1${base}/${fields.get('kind')}?storage=${fields.get('storage')}`,
+                `/api/v1${base}/${fields.get('kind')}`,
                 {
                   method: 'POST',
                   credentials: 'same-origin',
@@ -164,18 +164,11 @@ export function AttachmentManager({
             });
           }}
         >
-          <fieldset disabled={pending || !data.canManage}>
-            <label htmlFor="attachment-storage">Package storage</label>
-            <select name="storage" id="attachment-storage">
-              <option value="database">SitePulse storage</option>
-              <option value="google_drive" disabled={!drive.connected}>
-                My Google Drive{!drive.connected ? ' (connect first)' : ''}
-              </option>
-            </select>
+          <fieldset disabled={pending || !data.canManage || !drive.connected}>
             <p>
-              Storage applies to new packages. Identical ZIPs reuse the existing
-              library entry. The workspace quota applies to both storage
-              options.
+              New packages are stored only in your Google Drive. SitePulse keeps
+              metadata and scan results. Identical ZIPs reuse the existing
+              library entry, including legacy packages.
             </p>
             <label htmlFor="attachment-kind">Package type</label>
             <select name="kind" id="attachment-kind">
@@ -197,6 +190,9 @@ export function AttachmentManager({
             <button>{pending ? 'Working…' : 'Upload and scan'}</button>
           </fieldset>
         </form>
+        {data.canManage && !drive.connected && (
+          <p>Connect Google Drive before uploading a package.</p>
+        )}
         {!data.canManage && (
           <p>
             Verified workspace administrator access is required to manage
@@ -241,7 +237,7 @@ export function AttachmentManager({
               <p className="muted">
                 {item.storage === 'google_drive'
                   ? 'Uploader’s Google Drive'
-                  : 'SitePulse storage'}{' '}
+                  : 'Legacy SitePulse storage'}{' '}
                 · {item.scan.scannedFiles} code files ·{' '}
                 {Math.ceil(item.byteSize / 1024)} KiB ·{' '}
                 <Timestamp value={item.createdAt} />

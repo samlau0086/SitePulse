@@ -6,7 +6,7 @@ Platform entitlement administration is isolated under `/api/v1/admin`. Every req
 
 Implemented controls:
 
-- Optional personal Google Drive storage uses Better Auth explicit account linking, encrypted access/refresh tokens and `drive.file` permissions. The narrow OAuth callback relies on Better Auth state/PKCE; other mutations retain exact Origin checks. Google tokens/IDs never enter package or library responses. File bytes are proxied through the existing tenant/site lease with original size/SHA-256 validation and current uploader authority checks. See [Drive storage](GOOGLE_DRIVE_STORAGE.md) for token backups, retained originals and staging acceptance.
+- Personal Google Drive is required for new attachment uploads, using Better Auth explicit account linking, encrypted access/refresh tokens and `drive.file` permissions. New ZIP bytes are never persisted in SitePulse or used as a fallback when Drive fails; only metadata/scan results and references are stored. Legacy database reads remain compatible. The narrow OAuth callback relies on Better Auth state/PKCE; other mutations retain exact Origin checks. Google tokens/IDs never enter package or library responses. File bytes are proxied through the existing tenant/site lease with original size/SHA-256 validation and current uploader authority checks. See [Drive storage](GOOGLE_DRIVE_STORAGE.md) for token backups, retained originals and staging acceptance.
 
 - Homepage and login/registration navigation validate sessions through the API on the server with no response caching. Cookie presence alone does not grant authenticated navigation; workspace APIs continue to enforce authorization independently.
 

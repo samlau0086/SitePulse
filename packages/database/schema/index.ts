@@ -368,7 +368,7 @@ export const softwareAttachments = pgTable(
     zipBase64: text('zip_base64'),
     storage: text('storage', { enum: ['database', 'google_drive'] })
       .notNull()
-      .default('database'),
+      .default('google_drive'),
     driveFileId: text('drive_file_id'),
     driveAccountId: text('drive_account_id'),
     scan: jsonb('scan')

@@ -71,6 +71,8 @@ Connector **0.4.0** 在升级后的首次 WordPress 请求、重新启用，以�
 
 界面独立显示尚未同步、排队等待、库存已收到、采集失败、等待超时，以及上次成功和尝试时间。失败保留旧库存，不影响独立的心跳状态；**Management ready** 不等于库存已收到。网络完全中断时，失败报告也可能无法送达：SitePulse 显示等待/超时，WordPress → Settings → SitePulse 可查看本地失败状态。修复 Cron/网络或 Connector 元数据后再次同步；Connector 0.4.0 的明确同步请求会使六小时本地安全扫描缓存失效，从而在下一次采集中重新扫描。
 
+站点卡片的 **Sync details** 将折叠箭头、时钟图标和文字显示在同一行；展开后查看轮询、请求和尝试时间，支持键盘操作。
+
 Deployment SSH verification: run `node scripts/test-deploy-ssh.mjs`. It uses local transport doubles; Linux also verifies deployment directory permissions. Windows requires Git Bash at `C:/Program Files/Git/bin/bash.exe`.
 
 ## WordPress security and inventory

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Sync details alignment
+
+- Keep the software site card's Sync details clock icon inline with its disclosure arrow and label instead of splitting the control across multiple lines.
+
 ## Unreleased — Personal Google Drive attachment storage
 
 - Require personal Google Drive for all new attachment uploads, using Better Auth linking, encrypted OAuth tokens and `drive.file` permissions. Remove the storage selector and disable uploads until connected. Reject explicit database storage and never fall back to SitePulse ZIP storage when Drive is unavailable.

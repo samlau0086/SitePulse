@@ -37,7 +37,7 @@ LOGO 使用公开 HTTPS 图片地址（推荐 PNG/JPEG、360 × 128），由邮�
 侧栏 **Plugins & themes**（`/app/software`）提供插件图标卡片、安装版本/启用/更新状态、站点选择与操作记录；站点详情也有直接入口。已验证的工作区 owner/admin 可以安装、启用、停用、卸载和更新插件/主题，并将同一个操作批量应用到最多 20 个站点。
 
 1. 通过现有备份优先的部署流程应用迁移（包含 `0012_tidy_sir_ram`、`0013_nappy_shinko_yamashiro` 和 `0014_dear_wrecker`），在 WordPress 后台升级 Connector 到 **0.4.0**。仓库源码位于 `plugins/sitepulse-connector/`；旧 ZIP 不会自动包含本次改动，需重新打包该目录。
-2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。若要安装附件库中的上传包，还需单独勾选 **Allow uploaded package installation**；普通远程管理不会隐式开启此权限。每站独立授权，不需要提供 WordPress 管理员密码。
+2. WordPress → **Settings → SitePulse**，勾选 **Enable remote management** 并保存。默认关闭；必须由仍有管理权限的 WordPress 管理员开启。若要安装附件库中的上传包，还需单独勾选 **Also allow installation of workspace ZIP attachments that passed the current static scan**，保存后等待 Connector 轮询，再在 SitePulse 重试预览。普通远程管理不会隐式开启此权限。每站独立授权，不需要提供 WordPress 管理员密码。
 3. 为 WordPress 配置每分钟执行到期事件的系统 Cron。Connector 每分钟拉取一次指令，受实际 Cron 执行频率影响；原来每 15 分钟的 Cron 会导致最长约 15 分钟等待。等待首次管理轮询及完整 inventory，界面显示 **Management ready**。
 4. 选择站点，点击已安装卡片的 **activate / deactivate / update / uninstall**，会直接弹出该组件的确认框，不改变批量表单。检查受影响站点及警告、填写变更原因，服务端预览通过后点击 **Confirm and queue**；取消不会提交执行。安装时在批量面板输入 WordPress.org slug（例如 `wordpress-seo`）。每站结果独立显示；提交前自行完成 WordPress 文件与数据库备份。
 

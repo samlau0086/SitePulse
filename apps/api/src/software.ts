@@ -115,7 +115,7 @@ export async function registerSoftwareRoutes(
     const { site, credential, capability, inventory } = value;
     if (command.attachmentId && !capability?.packageSupport)
       throw conflict(
-        'Update the Connector and allow uploaded packages locally in WordPress.',
+        'On the target WordPress site, update SitePulse Connector to 0.4.0+, open Settings > SitePulse, enable both "Enable remote management for this paired site" and "Also allow installation of workspace ZIP attachments that passed the current static scan", save, wait for a recent poll, then retry preview.',
       );
     if (
       site.status !== 'active' ||

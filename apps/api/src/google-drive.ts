@@ -288,12 +288,21 @@ export async function registerDriveRoutes(
         ),
       );
     // The request is already authenticated and the query is scoped to this user.
-    // Remove only the Google account rows; Better Auth's unlink endpoint can
-    // reject a valid request when its fresh-session middleware disagrees with
-    // the outer SitePulse session (for example after a proxy/session refresh).
+    // Clear OAuth credentials but retain the provider/account identity so
+    // reconnecting the same Google account restores existing Drive bindings.
+    // Better Auth's unlink endpoint can reject a valid request when its
+    // fresh-session middleware disagrees with the outer SitePulse session.
     if (rows.length > 0)
       await db
-        .delete(schema.accounts)
+        .update(schema.accounts)
+        .set({
+          accessToken: null,
+          refreshToken: null,
+          idToken: null,
+          accessTokenExpiresAt: null,
+          refreshTokenExpiresAt: null,
+          scope: null,
+        })
         .where(
           and(
             eq(schema.accounts.userId, user.id),

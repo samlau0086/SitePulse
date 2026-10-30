@@ -1069,7 +1069,7 @@ export async function registerSoftwareRoutes(
               error: {
                 code: 'PACKAGE_STORAGE',
                 message:
-                  "SitePulse could not retrieve this package from the uploader's Google Drive. Reconnect the same Google account and verify that the original Drive file still exists.",
+                  "SitePulse could not retrieve this package from the uploader's Google Drive. Reconnect the same Google account with the same Google OAuth app, then verify that the original Drive file still exists.",
                 requestId: request.id,
               },
             });

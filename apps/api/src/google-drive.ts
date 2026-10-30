@@ -40,7 +40,12 @@ export function createDriveStorage(
     return !!(
       enabled &&
       row?.refreshToken &&
-      row.scope?.split(/[ ,]+/).includes(SCOPE)
+      // Better Auth does not rewrite the stored scope when an existing
+      // account is linked again. Older disconnects therefore have a null
+      // scope even though the freshly issued token was granted drive.file.
+      // The token is the authoritative credential here; when a scope is
+      // present, still require the expected Drive scope.
+      (!row.scope || row.scope.split(/[ ,]+/).includes(SCOPE))
     );
   }
   async function token(userId: string, accountId: string) {
@@ -301,7 +306,6 @@ export async function registerDriveRoutes(
           idToken: null,
           accessTokenExpiresAt: null,
           refreshTokenExpiresAt: null,
-          scope: null,
         })
         .where(
           and(

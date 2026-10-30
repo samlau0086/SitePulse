@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { symmetricEncrypt } from 'better-auth/crypto';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { createDatabase, eq, schema, sql } from '@sitepulse/database';
+import { and, createDatabase, eq, schema, sql } from '@sitepulse/database';
 import { migrateDatabase } from '@sitepulse/database/migrate';
 import { parseEnvironment } from '@sitepulse/config';
 import { buildApp } from '../src/app';
@@ -365,6 +365,29 @@ it('binds Drive storage to the original account and current owner authority', as
   ).toBe(200);
   expect(driveFiles.size).toBe(1);
   expect((await download()).statusCode).toBe(409);
+  // Better Auth refreshes the tokens when the same account is linked again,
+  // but may leave the historical scope column empty after an older disconnect.
+  await database.db
+    .update(schema.accounts)
+    .set({
+      accessToken: await symmetricEncrypt({
+        key: authSecret,
+        data: 'fixture-access',
+      }),
+      refreshToken: await symmetricEncrypt({
+        key: authSecret,
+        data: 'fixture-refresh',
+      }),
+      accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+      scope: null,
+    })
+    .where(
+      and(
+        eq(schema.accounts.userId, owner.id),
+        eq(schema.accounts.providerId, 'google'),
+      ),
+    );
+  expect((await download()).statusCode).toBe(200);
   await linkDrive('other-account');
   expect((await download()).statusCode).toBe(409);
   await database.db

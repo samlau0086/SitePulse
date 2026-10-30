@@ -173,6 +173,7 @@ export function createDriveStorage(
     url: string,
     accessToken: string,
     init: RequestInit = {},
+    timeoutMs = 10_000,
   ) {
     // Only fixed Google endpoints; never accept a package URL, follow redirects,
     // or send a bearer credential to a host supplied by a browser/Drive file.
@@ -181,7 +182,7 @@ export function createDriveStorage(
       response = await transport(url, {
         ...init,
         redirect: 'manual',
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { ...init.headers, Authorization: `Bearer ${accessToken}` },
       });
     } catch (error) {
@@ -323,6 +324,10 @@ export function createDriveStorage(
       const response = await request(
         `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(row.driveFileId)}?alt=media`,
         accessToken,
+        {},
+        // Drive can take over 20 seconds to prepare valid media. Keep a finite
+        // headers + body budget below the Connector's 60-second download limit.
+        45_000,
       );
       return bounded(response, Math.min(row.byteSize, PACKAGE_LIMIT));
     },

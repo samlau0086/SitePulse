@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SitePulse Connector
  * Description: Reports inventory and heartbeats, with optional plugin and theme management.
- * Version: 0.4.0
+ * Version: 0.4.1
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * License: GPL-2.0-or-later
@@ -16,7 +16,7 @@ final class SitePulse_Connector {
     const HOOK = 'sitepulse_heartbeat';
     const LOCK = 'sitepulse_heartbeat_lock';
     const SECURITY_SCAN = 'sitepulse_security_scan';
-    const VERSION = '0.4.0';
+    const VERSION = '0.4.1';
     const INVENTORY_HOOK = 'sitepulse_inventory_sync';
     const INVENTORY_STATUS = 'sitepulse_inventory_status';
     const INVENTORY_LOCK = 'sitepulse_inventory_lock';

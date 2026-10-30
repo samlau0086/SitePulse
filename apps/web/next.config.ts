@@ -8,6 +8,8 @@ const config: NextConfig = {
   outputFileTracingRoot: path.resolve(import.meta.dirname, '../..'),
   poweredByHeader: false,
   experimental: {
+    // Allow the bounded Drive fetch and subsequent Connector response to finish.
+    proxyTimeout: 75_000,
     // Keep enough framing headroom for the API's exact 8 MiB ZIP limit.
     proxyClientMaxBodySize: '9mb',
   },

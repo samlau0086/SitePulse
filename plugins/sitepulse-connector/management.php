@@ -128,7 +128,7 @@ final class SitePulse_Management {
             $response = wp_safe_remote_post($origin . '/api/v1/connector/software-package', array(
                 'headers' => array('Content-Type' => 'application/json', 'Origin' => $origin, 'Authorization' => 'Bearer ' . $state['credential']),
                 'body' => wp_json_encode(array('siteId' => $state['site_id'], 'operationId' => $command['id'], 'token' => $command['token'])),
-                'timeout' => 30, 'redirection' => 0, 'sslverify' => true, 'stream' => true, 'filename' => $temp, 'limit_response_size' => 8388609,
+                'timeout' => 60, 'redirection' => 0, 'sslverify' => true, 'stream' => true, 'filename' => $temp, 'limit_response_size' => 8388609,
             ));
             if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
                 if (!is_wp_error($response) && strtolower((string) wp_remote_retrieve_header($response, 'x-sitepulse-error-code')) === 'package_storage') { return 'package_storage'; }

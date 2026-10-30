@@ -140,6 +140,7 @@ try {
     $attachment_result = SitePulse_Management::execute($attachment); $uploaded_install = end($upgrader);
     check($attachment_result === 'ok' && $uploaded_install[0] === 'plugin-install' && $uploaded_install[2] === $package_bytes, 'Install authenticated attachment through native upgrader');
     check($package_request[0] === 'https://pulse.example.com/api/v1/connector/software-package' && $package_request[1]['redirection'] === 0 && $package_request[1]['sslverify'] === true && $package_request[1]['stream'] === true && $package_request[1]['limit_response_size'] === 8388609 && $package_request[1]['headers']['Authorization'] === 'Bearer secret', 'Use bounded authenticated TLS package request without redirects');
+    check($package_request[1]['timeout'] === 60, 'Allow the bounded Drive retrieval plus SitePulse delivery to finish');
     check(!is_file(end($deleted_temp_files)), 'Always remove downloaded attachment temp file');
     $theme_attachment = array_merge($attachment,array('kind'=>'theme','slug'=>'uploaded-theme'));
     check(SitePulse_Management::execute($theme_attachment) === 'ok' && end($upgrader)[0] === 'theme-install', 'Install authenticated theme attachment through native upgrader');

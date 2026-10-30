@@ -368,7 +368,9 @@ export function AttachmentManager({
                       )
                     )
                       void run(async () => {
-                        await api(`${base}/${item.id}`, undefined, 'DELETE');
+                        // Send an explicit empty JSON object so Fastify does not
+                        // try to parse an empty request as invalid JSON.
+                        await api(`${base}/${item.id}`, {}, 'DELETE');
                         setMessage('Attachment deleted.');
                       });
                   }}

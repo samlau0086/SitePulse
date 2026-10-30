@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Drive package preview diagnostics
+
+- Read and verify Google Drive package size and SHA-256 during installation preview, rejecting unavailable or changed files before confirmation and queueing. Recheck the original file during Connector delivery.
+- Return actionable, sanitized configuration, account, token, network, HTTP and stream failure messages during preview. Record only failure categories, provider HTTP status and request IDs for preview/download diagnostics; keep the existing Connector protocol.
+
 ## Unreleased — Clear software operation states
 
 - Show all eight Recent operations states with shared semantic colors, distinct icons and visible labels in compact rounded rectangles. Prevent grid stretching into circles or full-width bars; keep result guidance and actions aligned below the badge and wrap long content on small screens.

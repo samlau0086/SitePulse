@@ -13,6 +13,7 @@ const authSecret = randomBytes(48).toString('base64url');
 const driveFiles = new Map<string, Buffer>();
 const driveRequests: string[] = [];
 let hostileDriveSession = false;
+let driveDownloadFailure: number | 'network' | undefined;
 const driveFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   driveRequests.push(url.href);
@@ -40,6 +41,12 @@ const driveFetch: typeof fetch = async (input, init) => {
     driveFiles.delete('drive-fixture');
     return new Response(null, { status: 204 });
   }
+  if (driveDownloadFailure === 'network')
+    throw new Error('private transport detail');
+  if (driveDownloadFailure)
+    return new Response('private Google response', {
+      status: driveDownloadFailure,
+    });
   const bytes = driveFiles.get('drive-fixture');
   return bytes
     ? new Response(new Uint8Array(bytes))
@@ -189,6 +196,7 @@ beforeEach(async () => {
   driveFiles.clear();
   driveRequests.length = 0;
   hostileDriveSession = false;
+  driveDownloadFailure = undefined;
   await database.db
     .delete(schema.accounts)
     .where(eq(schema.accounts.providerId, 'google'));
@@ -352,6 +360,48 @@ it.each(['plugin', 'theme'])(
     expect((await download()).statusCode).toBe(409);
   },
 );
+it.each([
+  [401, 'HTTP 401'],
+  [403, 'HTTP 403'],
+  [404, 'HTTP 404'],
+  [429, 'HTTP 429'],
+  [503, 'unexpected HTTP'],
+  ['network', 'outbound HTTPS'],
+] as const)(
+  'rejects previews before queuing when Drive fails with %s',
+  async (failure, message) => {
+    const uploaded = await uploadDrive();
+    expect(uploaded.statusCode, uploaded.body).toBe(200);
+    await packagePoll();
+    driveDownloadFailure = failure;
+    const response = await preview(
+      [sites[0]!],
+      uploadedCommand(uploaded.json().id),
+    );
+    expect(response.statusCode, response.body).toBe(409);
+    expect(response.json().error.message).toContain(message);
+    expect(response.body).not.toMatch(
+      /private|fixture-access|fixture-refresh|google-original|drive-fixture/,
+    );
+    expect(
+      await database.db.select().from(schema.softwareOperations),
+    ).toHaveLength(0);
+  },
+);
+it('checks Drive bytes during preview and rechecks storage at download time', async () => {
+  const { bytes, download, id } = await driveLease();
+  driveFiles.set('drive-fixture', Buffer.alloc(bytes.length));
+  const changed = await preview([sites[0]!], uploadedCommand(id));
+  expect(changed.statusCode).toBe(409);
+  expect(changed.json().error.message).toContain(
+    'differs from the scanned attachment',
+  );
+  driveDownloadFailure = 403;
+  const rejected = await download();
+  expect(rejected.statusCode).toBe(409);
+  expect(rejected.headers['x-sitepulse-error-code']).toBe('package_storage');
+  expect(rejected.json().error.message).toContain('HTTP 403');
+});
 it('binds Drive storage to the original account and current owner authority', async () => {
   const { download } = await driveLease();
   expect(

@@ -21,7 +21,7 @@ import {
 import { HttpError } from './http-error';
 import { hashCredential } from './sites';
 import { scanPackage, PACKAGE_LIMIT, SCANNER_VERSION } from './package-scanner';
-import type { DriveStorage } from './google-drive';
+import { DriveStorageError, type DriveStorage } from './google-drive';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 type User = { id: string; emailVerified: boolean };
@@ -683,7 +683,31 @@ export async function registerSoftwareRoutes(
       return db.transaction(async (tx) => {
         await member(tx, organizationId, user, true);
         const impact = [];
-        await attachment(tx, organizationId, input.command);
+        const source = await attachment(tx, organizationId, input.command);
+        if (source?.storage === 'google_drive') {
+          try {
+            const bytes = await drive.download(source);
+            if (
+              bytes.length !== source.byteSize ||
+              createHash('sha256').update(bytes).digest('hex') !== source.sha256
+            )
+              throw conflict(
+                'The Drive file differs from the scanned attachment. Restore the original ZIP or upload a new attachment.',
+              );
+          } catch (error) {
+            if (error instanceof DriveStorageError)
+              app.log.warn(
+                {
+                  event: 'drive.preview.failed',
+                  reason: error.reason,
+                  providerStatus: error.providerStatus,
+                  requestId: request.id,
+                },
+                'Drive package preview failed',
+              );
+            throw error;
+          }
+        }
         for (const siteId of [...input.siteIds].sort()) {
           const value = await context(tx, organizationId, siteId);
           const fingerprint = ready(value, input.command);
@@ -1060,6 +1084,16 @@ export async function registerSoftwareRoutes(
           .send(bytes);
       } catch (error) {
         if (error instanceof HttpError && error.code === 'DRIVE_UNAVAILABLE') {
+          if (error instanceof DriveStorageError)
+            app.log.warn(
+              {
+                event: 'drive.download.failed',
+                reason: error.reason,
+                providerStatus: error.providerStatus,
+                requestId: request.id,
+              },
+              'Drive package download failed',
+            );
           // Keep the existing conflict status for Connector/API compatibility;
           // the response header carries the more specific storage diagnosis.
           return reply
@@ -1068,8 +1102,7 @@ export async function registerSoftwareRoutes(
             .send({
               error: {
                 code: 'PACKAGE_STORAGE',
-                message:
-                  "SitePulse could not retrieve this package from the uploader's Google Drive. Reconnect the same Google account with the same Google OAuth app, then verify that the original Drive file still exists.",
+                message: error.message,
                 requestId: request.id,
               },
             });

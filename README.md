@@ -2,6 +2,8 @@
 
 ## 用户 Google Drive 附件存储
 
+安装预览会实际下载 Drive 附件并校验大小和 SHA-256；失败时直接显示授权、Google HTTP 状态、网络或文件变更等具体原因，并阻止生成预览。正式安装仍会重新读取和校验文件。API 日志仅记录脱敏失败分类与请求编号，不记录 Google 凭据或原始响应。
+
 Attachments 新上传的附件只存入上传者的个人 Google Drive，SitePulse 仅保存元数据、扫描结果、SHA-256 和授权引用，不持久化新 ZIP 内容。上传仍通过 API 临时处理和扫描；插件/主题继续通过原来的预览、确认、队列和 Connector 接口安装，无需升级 Connector。断开授权、删除/修改 Drive 文件会导致后续安装失败；断开授权会清除当前用户的 Google OAuth 凭据但保留账号身份绑定，不删除 Drive 原文件或 SitePulse 附件元数据；删除库记录也保留 Drive 原文件。
 
 上传前需配置 `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` 并连接用户 Drive；未配置、未连接或 Drive 不可用时禁止新建上传，不回退到 SitePulse 存储。上传后请保持同一个 Google OAuth app（尤其是 `GOOGLE_DRIVE_CLIENT_ID`）；更换 OAuth app 可能使旧的 `drive.file` 文件无法访问。备份后依次应用迁移（含 `0017_bored_sunspot.sql` 和 `0018_flawless_veda.sql`）。旧附件保留读取和安装兼容，不会自动迁移或删除；相同 ZIP 仍复用已有记录。配置及验收见 [Google Drive 存储](docs/GOOGLE_DRIVE_STORAGE.md)。本次开发不修改生产数据库。

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Recent operations filters and pagination
+
+- Display five operations per page with matching loaded-record counts, previous/next controls and filter reset. Clamp the displayed page when polling reduces results.
+- Filter all operation states, including cancelled, and combine with Today, Yesterday or inclusive calendar dates in the saved account time zone. Filters use creation time and the existing latest-100-plus-outstanding window; hidden outstanding work continues to lock site actions.
+
 ## Unreleased — Drive package preview diagnostics
 
 - Allow 45 seconds for Drive media response headers and body, keeping other Drive requests at 10 seconds. Set Web proxy timeout to 75 seconds and Connector 0.4.1 attachment retrieval to 60 seconds so slow valid media can complete through the full delivery chain. Preserve all byte limits, redirect blocking, permission and hash checks.

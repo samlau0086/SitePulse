@@ -1454,6 +1454,24 @@ h3 {
   gap: 8px;
   margin-top: 16px;
 }
+.operation-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-block: 16px;
+}
+.operation-history-filters label {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.operation-history-filters select,
+.operation-history-filters input {
+  width: 100%;
+  min-width: 0;
+}
 .monitor-pagination span {
   margin-right: auto;
   font-size: 14px;

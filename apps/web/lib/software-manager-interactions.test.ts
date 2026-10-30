@@ -160,6 +160,82 @@ async function input(selector: string, value: string) {
 const confirms = () =>
   request.mock.calls.filter(([path]) => path.endsWith('/confirm'));
 
+async function historySelect(index: number, value: string) {
+  await act(async () => {
+    const element = host.querySelectorAll<HTMLSelectElement>(
+      '.operation-history-filters select',
+    )[index]!;
+    element.value = value;
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+it('paginates filtered history and retains locks for hidden outstanding work', async () => {
+  const data = fixture();
+  data.operations = Array.from({ length: 12 }, (_, index) => ({
+    ...operation(
+      index === 11 ? 'queued' : index < 6 ? 'cancelled' : 'succeeded',
+    ),
+    id: `op-${index}`,
+    createdAt: `2026-10-29T00:${String(index).padStart(2, '0')}:00Z`,
+  }));
+  request.mockResolvedValue(data);
+  await mount(data);
+  const history = host.querySelector('[aria-label="Recent operations"]')!;
+  expect(history.querySelectorAll('article')).toHaveLength(5);
+  await click(button('Next', history));
+  expect(history.textContent).toContain('6–10 of 12');
+  await historySelect(0, 'cancelled');
+  expect(history.textContent).toContain('1–5 of 6');
+  expect(labeled<HTMLButtonElement>('activate alpha').disabled).toBe(true);
+  await click(button('Next', history));
+  expect(history.querySelectorAll('article')).toHaveLength(1);
+  request.mockResolvedValue({
+    ...data,
+    operations: data.operations.filter((op) => op.status !== 'cancelled'),
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(10_000));
+  expect(history.textContent).toContain('No operations match these filters');
+  expect(button('Next', history).disabled).toBe(true);
+  await click(button('Clear filters', history));
+  expect(history.textContent).toContain('1–5 of 6');
+});
+
+it('combines status with today, yesterday and calendar ranges', async () => {
+  vi.setSystemTime(new Date('2026-10-30T12:00:00Z'));
+  const data = fixture();
+  data.operations = [
+    { ...operation('failed'), id: 'today', createdAt: '2026-10-30T00:00:00Z' },
+    {
+      ...operation('failed'),
+      id: 'yesterday',
+      createdAt: '2026-10-29T23:59:59Z',
+    },
+    { ...operation('expired'), id: 'older', createdAt: '2026-10-28T23:59:59Z' },
+  ];
+  await mount(data);
+  const history = host.querySelector('[aria-label="Recent operations"]')!;
+  await historySelect(0, 'failed');
+  await historySelect(1, 'today');
+  expect(history.querySelectorAll('article')).toHaveLength(1);
+  expect(history.querySelector('time')?.dateTime).toBe('2026-10-30T00:00:00Z');
+  await historySelect(1, 'yesterday');
+  expect(history.querySelector('time')?.dateTime).toBe('2026-10-29T23:59:59Z');
+  await historySelect(1, 'range');
+  await input('.operation-history-filters input', '2026-10-29');
+  await act(async () => {
+    const end = history.querySelectorAll('input')[1]!;
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(end, '2026-10-30');
+    end.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(history.querySelectorAll('article')).toHaveLength(2);
+  await historySelect(0, 'expired');
+  expect(history.textContent).toContain('No operations match these filters');
+});
+
 function operation(status: SoftwareOperation['status']): SoftwareOperation {
   return {
     id: 'op-alpha',

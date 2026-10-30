@@ -1,5 +1,7 @@
 # SitePulse
 
+Recent operations 每页显示 5 条，支持状态筛选（含 Succeeded / Failed / Expired / Cancelled 及未完成状态）、Today / Yesterday 和日历起止日期。按账户保存的时区及操作创建时间筛选，起止日期均包含当天；更改筛选回到第一页，可 Clear filters 重置。范围限于接口已加载的最近 100 条及所有未完成操作，不是完整历史查询；筛选不影响站点操作锁定，无需数据库迁移或 Connector 升级。
+
 ## 用户 Google Drive 附件存储
 
 Drive 附件下载允许最多 45 秒（响应头与正文共用预算），其他 Drive 请求仍为 10 秒。Web 转发超时为 75 秒；Connector **0.4.1** 将附件下载等待时间调整为 60 秒。部署 API/Web 后，请重新打包并升级 WordPress Connector；外部反向代理的读取超时也应至少为 75 秒。无需重新授权或上传未变更的文件。

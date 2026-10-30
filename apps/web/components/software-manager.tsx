@@ -9,7 +9,11 @@ import type {
 import { api } from '../lib/api';
 import { Icon, type IconName } from './icon';
 import { SoftwareOperationDialog } from './software-operation-dialog';
-import { Timestamp, TimeZoneNote } from './user-preferences';
+import { Timestamp, TimeZoneNote, useTimeZone } from './user-preferences';
+import {
+  filterOperationHistory,
+  type OperationPeriod,
+} from '../lib/operation-history';
 import {
   actionable,
   blockingOperations,
@@ -119,6 +123,15 @@ export function SoftwareManager({
   initialAttachment?: string;
 }) {
   const [data, setData] = useState(initial);
+  const timeZone = useTimeZone();
+  const [operationStatus, setOperationStatus] = useState<
+    SoftwareOperation['status'] | 'all'
+  >('all');
+  const [operationPeriod, setOperationPeriod] =
+    useState<OperationPeriod>('all');
+  const [operationStart, setOperationStart] = useState('');
+  const [operationEnd, setOperationEnd] = useState('');
+  const [operationPage, setOperationPage] = useState(0);
   const [siteIds, setSiteIds] = useState<string[]>(
     initial.sites.some((site) => site.id === initialSite) ? [initialSite!] : [],
   );
@@ -271,6 +284,27 @@ export function SoftwareManager({
   );
   const visibleOperations = data.operations.filter(
     (op) => !siteScoped || op.siteId === initialSite,
+  );
+  const invalidOperationRange =
+    operationPeriod === 'range' &&
+    !!operationStart &&
+    !!operationEnd &&
+    operationStart > operationEnd;
+  const filteredOperations = invalidOperationRange
+    ? []
+    : filterOperationHistory(
+        visibleOperations,
+        operationStatus,
+        operationPeriod,
+        operationStart,
+        operationEnd,
+        timeZone,
+      );
+  const operationPages = Math.max(1, Math.ceil(filteredOperations.length / 5));
+  const currentOperationPage = Math.min(operationPage, operationPages - 1);
+  const pagedOperations = filteredOperations.slice(
+    currentOperationPage * 5,
+    (currentOperationPage + 1) * 5,
   );
   const bulkAction = checkedSlugs.length
     ? action === 'install'
@@ -1000,7 +1034,7 @@ export function SoftwareManager({
           </form>
         </section>
       </div>
-      <section className="card">
+      <section className="card" aria-label="Recent operations">
         <h2>
           <Icon name="clock" /> Recent operations
         </h2>
@@ -1009,9 +1043,109 @@ export function SoftwareManager({
           hour. Unknown means execution may have happened; inspect WordPress
           before resolving or trying another operation.
         </p>
-        {!visibleOperations.length && <p>No operations yet.</p>}
+        <p className="muted">
+          Latest 100 operations plus all outstanding operations. Filters apply
+          to loaded records by creation time. <TimeZoneNote />
+        </p>
+        <div className="operation-history-filters">
+          <label>
+            Status
+            <select
+              value={operationStatus}
+              onChange={(event) => {
+                setOperationStatus(
+                  event.target.value as SoftwareOperation['status'] | 'all',
+                );
+                setOperationPage(0);
+              }}
+            >
+              <option value="all">All statuses</option>
+              {(
+                [
+                  'succeeded',
+                  'failed',
+                  'expired',
+                  'cancelled',
+                  'preview',
+                  'queued',
+                  'running',
+                  'unknown',
+                ] as const
+              ).map((status) => (
+                <option key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Created
+            <select
+              value={operationPeriod}
+              onChange={(event) => {
+                setOperationPeriod(event.target.value as OperationPeriod);
+                setOperationPage(0);
+              }}
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="range">Date range</option>
+            </select>
+          </label>
+          {operationPeriod === 'range' && (
+            <>
+              <label>
+                From
+                <input
+                  type="date"
+                  value={operationStart}
+                  max={operationEnd || undefined}
+                  onChange={(event) => {
+                    setOperationStart(event.target.value);
+                    setOperationPage(0);
+                  }}
+                />
+              </label>
+              <label>
+                Through
+                <input
+                  type="date"
+                  value={operationEnd}
+                  min={operationStart || undefined}
+                  onChange={(event) => {
+                    setOperationEnd(event.target.value);
+                    setOperationPage(0);
+                  }}
+                />
+              </label>
+            </>
+          )}
+          <button
+            className="secondary"
+            onClick={() => {
+              setOperationStatus('all');
+              setOperationPeriod('all');
+              setOperationStart('');
+              setOperationEnd('');
+              setOperationPage(0);
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+        {invalidOperationRange && (
+          <p role="alert">The end date must be on or after the start date.</p>
+        )}
+        {!filteredOperations.length && (
+          <p>
+            {visibleOperations.length
+              ? 'No operations match these filters in the loaded records.'
+              : 'No operations yet.'}
+          </p>
+        )}
         <div className="software-results">
-          {visibleOperations.map((op) => (
+          {pagedOperations.map((op) => (
             <article key={op.id}>
               <div>
                 <strong>{op.siteName}</strong>
@@ -1066,6 +1200,27 @@ export function SoftwareManager({
             </article>
           ))}
         </div>
+        <nav className="monitor-pagination" aria-label="Operations pagination">
+          <span aria-live="polite">
+            {filteredOperations.length
+              ? `${currentOperationPage * 5 + 1}–${Math.min(filteredOperations.length, (currentOperationPage + 1) * 5)} of ${filteredOperations.length} matching loaded records · Page ${currentOperationPage + 1} of ${operationPages}`
+              : 'No matching records'}
+          </span>
+          <button
+            className="secondary"
+            disabled={currentOperationPage === 0}
+            onClick={() => setOperationPage(currentOperationPage - 1)}
+          >
+            Previous
+          </button>
+          <button
+            className="secondary"
+            disabled={currentOperationPage + 1 >= operationPages}
+            onClick={() => setOperationPage(currentOperationPage + 1)}
+          >
+            Next
+          </button>
+        </nav>
       </section>
     </div>
   );

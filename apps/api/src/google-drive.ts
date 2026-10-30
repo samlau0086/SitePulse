@@ -248,6 +248,14 @@ export function createDriveStorage(
     async status(userId: string) {
       return { enabled, connected: usable(await account(userId)) };
     },
+    async delete(row: Attachment) {
+      if (!row.driveFileId || !row.driveAccountId)
+        throw unavailable('reference');
+      // Always use the stored uploader/account binding, never the deleting
+      // administrator's Google account or a client-supplied file identifier.
+      const accessToken = await token(row.actorUserId, row.driveAccountId);
+      await remove(row.driveFileId, accessToken);
+    },
     async upload(userId: string, name: string, bytes: Buffer) {
       const row = await account(userId);
       if (!row || !usable(row)) throw unavailable();

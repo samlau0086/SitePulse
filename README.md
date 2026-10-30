@@ -10,9 +10,29 @@ Drive 下载会区分超时、DNS、TLS、连接失败与被阻止的重定向�
 
 安装预览会实际下载 Drive 附件并校验大小和 SHA-256；失败时直接显示授权、Google HTTP 状态、网络或文件变更等具体原因，并阻止生成预览。正式安装仍会重新读取和校验文件。API 日志仅记录脱敏失败分类与请求编号，不记录 Google 凭据或原始响应。
 
-Attachments 新上传的附件只存入上传者的个人 Google Drive，SitePulse 仅保存元数据、扫描结果、SHA-256 和授权引用，不持久化新 ZIP 内容。上传仍通过 API 临时处理和扫描；插件/主题继续通过原来的预览、确认、队列和 Connector 接口安装，无需升级 Connector。断开授权、删除/修改 Drive 文件会导致后续安装失败；断开授权会清除当前用户的 Google OAuth 凭据但保留账号身份绑定，不删除 Drive 原文件或 SitePulse 附件元数据；删除库记录也保留 Drive 原文件。
+Attachments 新上传的附件只存入上传者的个人 Google Drive，SitePulse 仅保存元数据、扫描结果、SHA-256 和授权引用，不持久化新 ZIP 内容。上传仍通过 API 临时处理和扫描；插件/主题继续通过原来的预览、确认、队列和 Connector 接口安装，无需升级 Connector。断开授权、删除/修改 Drive 文件会导致后续安装失败；断开授权会清除当前用户的 Google OAuth 凭据但保留账号身份绑定，不删除 Drive 原文件或 SitePulse 附件元数据。删除附件时，会使用原上传者的授权先永久删除对应的 Google Drive 文件，再删除库记录；远端删除失败则保留库记录，原上传者应重新连接同一 Google 账号、确认文件权限后重试。Drive 返回文件不存在时允许清理库记录；进行中的安装操作仍会阻止删除。已安装到 WordPress 的插件/主题不受影响，旧数据库附件仅删除库记录。
 
 上传前需配置 `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` 并连接用户 Drive；未配置、未连接或 Drive 不可用时禁止新建上传，不回退到 SitePulse 存储。上传后请保持同一个 Google OAuth app（尤其是 `GOOGLE_DRIVE_CLIENT_ID`）；更换 OAuth app 可能使旧的 `drive.file` 文件无法访问。备份后依次应用迁移（含 `0017_bored_sunspot.sql` 和 `0018_flawless_veda.sql`）。旧附件保留读取和安装兼容，不会自动迁移或删除；相同 ZIP 仍复用已有记录。配置及验收见 [Google Drive 存储](docs/GOOGLE_DRIVE_STORAGE.md)。本次开发不修改生产数据库。
+
+### 1Panel / OpenResty 反向代理超时
+
+SitePulse 的超时预算为：Drive 附件下载 45 秒（含响应头和正文）、Connector 0.4.1 附件请求 60 秒、Web 转发 75 秒。外部反向代理的上游读取超时建议设为 **90 秒**，避免代理先于应用终止慢响应。
+
+1. 在 1Panel 的 **网站 → 网站** 中，找到 SitePulse 域名，进入 **设置/配置 → 反向代理**（不同版本的入口名称可能略有区别）。
+2. 编辑转发到 SitePulse 的现有规则，打开其 **配置文件/源文**。在实际处理 SitePulse 请求的现有 `location` 块内添加 `proxy_read_timeout 90s;`；若已有该指令，修改原值，避免在同一块内重复添加。若 `/api/` 使用独立规则，也需检查该规则的有效配置。
+3. 保留现有 `proxy_pass`、请求头及其他配置。保存，通过面板配置检查后应用/重载 OpenResty；若检查失败，修正后再重载。
+
+以下仅展示指令位置，**不要整段覆盖现有配置**，尤其不要将示例端口替换进实际站点：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3000; # 示例：保留实际站点原有的上游地址
+    # 保留其他已有配置
+    proxy_read_timeout 90s;
+}
+```
+
+`proxy_read_timeout` 控制两次上游读取之间的等待时间，并非整次下载的总时长限制。它不会替代代码中的 45/60/75 秒预算；需同时部署匹配的 API/Web 并升级 Connector 到 0.4.1。若前面还有其他代理，也需检查其超时。配置完成后重新生成安装预览并重试；未变更的 Drive 文件无需重新授权或上传。
 
 ## 站点信息速览
 

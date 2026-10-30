@@ -364,7 +364,7 @@ export function AttachmentManager({
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Delete ${item.name} v${item.version} from this workspace library? Installed sites are unaffected.${item.storage === 'google_drive' ? ' The original Google Drive file is kept.' : ''}`,
+                        `Delete ${item.name} v${item.version} from this workspace library? Installed sites are unaffected.${item.storage === 'google_drive' ? ' This also permanently deletes the original file from the uploader’s Google Drive.' : ''}`,
                       )
                     )
                       void run(async () => {

@@ -406,7 +406,7 @@ export async function registerSoftwareRoutes(
       return db.transaction(async (tx) => {
         await member(tx, organizationId, user, true);
         const [row] = await tx
-          .select({ id: schema.softwareAttachments.id })
+          .select()
           .from(schema.softwareAttachments)
           .where(
             and(
@@ -427,6 +427,34 @@ export async function registerSoftwareRoutes(
           throw conflict(
             'Cancel or resolve pending operations before deleting this attachment.',
           );
+        if (row.storage === 'google_drive') {
+          try {
+            // Delete remotely before removing the retryable local reference.
+            // A retry after remote success / database failure tolerates 404.
+            await drive.delete(row);
+          } catch (error) {
+            app.log.warn(
+              {
+                event: 'drive.delete.failed',
+                reason:
+                  error instanceof DriveStorageError
+                    ? error.reason
+                    : 'unavailable',
+                providerStatus:
+                  error instanceof DriveStorageError
+                    ? error.providerStatus
+                    : undefined,
+                requestId: request.id,
+              },
+              'Drive package deletion failed',
+            );
+            throw new HttpError(
+              409,
+              'DRIVE_DELETE_FAILED',
+              'Could not delete the original Google Drive file. The attachment record was kept. Ask the original uploader to reconnect the same Google account, check file access and retry.',
+            );
+          }
+        }
         await tx
           .delete(schema.softwareAttachments)
           .where(eq(schema.softwareAttachments.id, attachmentId));

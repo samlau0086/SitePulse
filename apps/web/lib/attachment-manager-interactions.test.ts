@@ -43,12 +43,12 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function mount() {
+async function mount(initial = fixture()) {
   await act(async () =>
     root.render(
       createElement(AttachmentManager, {
         organizationId: 'workspace',
-        initial: fixture(),
+        initial,
         initialDrive: { enabled: true, connected: true },
       }),
     ),
@@ -122,4 +122,57 @@ it('rejects non-ZIP and multiple-file drops before any upload request', async ()
   );
   expect(host.textContent).toContain('Drop one ZIP package at a time.');
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('warns about permanent Drive deletion, honors cancellation and retains entries after failure', async () => {
+  const initial = fixture();
+  initial.attachments.push({
+    id: '11111111-1111-4111-8111-111111111111',
+    storage: 'google_drive',
+    kind: 'plugin',
+    slug: 'sample',
+    name: 'Sample Plugin',
+    version: '1.0',
+    sha256: 'a'.repeat(64),
+    byteSize: 1024,
+    scan: {
+      version: 'sitepulse-static-1',
+      status: 'complete',
+      scannedFiles: 1,
+      findings: [],
+    },
+    createdAt: '2026-10-30T00:00:00Z',
+  });
+  await mount(initial);
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  const button = [...host.querySelectorAll('button')].find(
+    (item) => item.textContent === 'Delete',
+  )!;
+  await act(async () => button.click());
+  expect(confirm).toHaveBeenCalledWith(
+    expect.stringContaining('permanently deletes the original file'),
+  );
+  expect(request).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true);
+  request.mockRejectedValueOnce(
+    new Error(
+      'Could not delete the original Google Drive file. The attachment record was kept.',
+    ),
+  );
+  await act(async () => button.click());
+  expect(request).toHaveBeenCalledWith(
+    '/organizations/workspace/attachments/11111111-1111-4111-8111-111111111111',
+    {},
+    'DELETE',
+  );
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    'attachment record was kept',
+  );
+  expect(host.textContent).toContain('Sample Plugin');
+  request
+    .mockResolvedValueOnce({ success: true })
+    .mockResolvedValueOnce(fixture());
+  await act(async () => button.click());
+  expect(host.textContent).toContain('Attachment deleted.');
+  expect(host.textContent).not.toContain('Sample Plugin');
 });

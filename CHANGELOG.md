@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Synchronize attachment deletion with Google Drive
+
+- Permanently delete the original Drive file through the stored uploader/account binding before deleting attachment metadata. Keep failed deletions retryable, tolerate already-missing files and preserve membership, Origin and pending-operation checks. Legacy database attachments need no Drive access.
+- Warn about permanent Drive deletion in the confirmation; disconnect still retains originals and installed WordPress packages are unaffected.
+
 ## Unreleased — Recent operations filters and pagination
 
 - Display five operations per page with matching loaded-record counts, previous/next controls and filter reset. Clamp the displayed page when polling reduces results.

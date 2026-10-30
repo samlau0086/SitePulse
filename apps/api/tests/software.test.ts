@@ -15,6 +15,7 @@ const driveRequests: string[] = [];
 let hostileDriveSession = false;
 let driveDownloadFailure: number | 'network' | undefined;
 let driveTransportError: Error | undefined;
+let driveDeleteFailure: number | 'network' | undefined;
 const driveFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   driveRequests.push(url.href);
@@ -39,6 +40,10 @@ const driveFetch: typeof fetch = async (input, init) => {
     return Response.json({ id: 'drive-fixture' });
   }
   if (init?.method === 'DELETE') {
+    if (driveDeleteFailure === 'network')
+      throw new Error('private delete details');
+    if (driveDeleteFailure)
+      return new Response(null, { status: driveDeleteFailure });
     driveFiles.delete('drive-fixture');
     return new Response(null, { status: 204 });
   }
@@ -201,6 +206,7 @@ beforeEach(async () => {
   hostileDriveSession = false;
   driveDownloadFailure = undefined;
   driveTransportError = undefined;
+  driveDeleteFailure = undefined;
   await database.db
     .delete(schema.accounts)
     .where(eq(schema.accounts.providerId, 'google'));
@@ -591,7 +597,86 @@ it('authorizes Drive uploads before contacting Google and reuses existing finger
   const uploaded = await uploadDrive();
   expect(uploaded.statusCode).toBe(200);
   expect((await removeAttachment(uploaded.json().id)).statusCode).toBe(200);
-  expect(driveFiles.size).toBe(1);
+  expect(driveFiles.size).toBe(0);
+});
+it.each([403, 429, 503, 'network'] as const)(
+  'keeps the attachment and Drive file retryable when deletion fails with %s',
+  async (failure) => {
+    const id = (await upload()).json().id;
+    const deletedAudits = await database.db
+      .select()
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.action, 'attachment.deleted'));
+    driveDeleteFailure = failure;
+    const result = await removeAttachment(id);
+    expect(result.statusCode).toBe(409);
+    expect(result.body).toContain('attachment record was kept');
+    expect(result.body).not.toMatch(
+      /private delete|fixture-access|drive-fixture/,
+    );
+    expect(
+      await database.db.select().from(schema.softwareAttachments),
+    ).toHaveLength(1);
+    expect(driveFiles.size).toBe(1);
+    expect(
+      await database.db
+        .select()
+        .from(schema.auditLogs)
+        .where(eq(schema.auditLogs.action, 'attachment.deleted')),
+    ).toHaveLength(deletedAudits.length);
+    driveDeleteFailure = undefined;
+    expect((await removeAttachment(id)).statusCode).toBe(200);
+    expect(driveFiles.size).toBe(0);
+  },
+);
+it('keeps disconnected uploader references and deletes after reconnect, even for another administrator', async () => {
+  const id = (await upload()).json().id;
+  await database.db
+    .update(schema.organizationMembers)
+    .set({ role: 'admin' })
+    .where(eq(schema.organizationMembers.userId, reader.id));
+  await database.db
+    .delete(schema.accounts)
+    .where(eq(schema.accounts.providerId, 'google'));
+  const count = driveRequests.length;
+  expect((await removeAttachment(id, reader.cookie)).statusCode).toBe(409);
+  expect(driveRequests).toHaveLength(count);
+  expect(
+    await database.db.select().from(schema.softwareAttachments),
+  ).toHaveLength(1);
+  await linkDrive();
+  expect((await removeAttachment(id, reader.cookie)).statusCode).toBe(200);
+  expect(driveFiles.size).toBe(0);
+});
+it('allows deleting a reference when Drive reports the original file missing', async () => {
+  const id = (await upload()).json().id;
+  driveFiles.clear();
+  driveDeleteFailure = 404;
+  expect((await removeAttachment(id)).statusCode).toBe(200);
+  expect(
+    await database.db.select().from(schema.softwareAttachments),
+  ).toHaveLength(0);
+});
+it('deletes legacy database attachments without Google credentials or requests', async () => {
+  const id = (await upload()).json().id;
+  await database.db
+    .update(schema.softwareAttachments)
+    .set({
+      storage: 'database',
+      zipBase64: pluginFixture().toString('base64'),
+      driveFileId: null,
+      driveAccountId: null,
+    })
+    .where(eq(schema.softwareAttachments.id, id));
+  await database.db
+    .delete(schema.accounts)
+    .where(eq(schema.accounts.providerId, 'google'));
+  const count = driveRequests.length;
+  expect((await removeAttachment(id)).statusCode).toBe(200);
+  expect(driveRequests).toHaveLength(count);
+  expect(
+    await database.db.select().from(schema.softwareAttachments),
+  ).toHaveLength(0);
 });
 it('refuses untrusted resumable upload hosts and leaves no library entry on failure', async () => {
   hostileDriveSession = true;
@@ -770,9 +855,13 @@ it('defaults to Drive without storing ZIP bytes, deduplicates and exposes scoped
   expect(
     (await upload(pluginFixture(), owner.cookie, foreignOrg)).statusCode,
   ).toBe(404);
+  const requestCount = driveRequests.length;
   expect((await removeAttachment(id, outsider.cookie)).statusCode).toBe(404);
   expect((await removeAttachment(id, reader.cookie)).statusCode).toBe(403);
+  expect(driveRequests).toHaveLength(requestCount);
+  expect(driveFiles.size).toBe(1);
   expect((await removeAttachment(id)).statusCode).toBe(200);
+  expect(driveFiles.size).toBe(0);
 });
 it('stores the inferred ZIP root slug without a client-supplied slug', async () => {
   const bytes = packageFixture([
@@ -834,7 +923,10 @@ it('delivers exact bytes only to a live site-scoped lease and locks pending atta
   const response = await preview([sites[0]!], uploadedCommand(id));
   expect(response.statusCode, response.body).toBe(200);
   const batch = response.json().batchId;
+  const requestCount = driveRequests.length;
   expect((await removeAttachment(id)).statusCode).toBe(409);
+  expect(driveRequests).toHaveLength(requestCount);
+  expect(driveFiles.size).toBe(1);
   expect((await confirm(batch)).statusCode).toBe(200);
   const cmd = (await packagePoll()).json().command;
   expect(cmd.packageSha256).toMatch(/^[a-f0-9]{64}$/);

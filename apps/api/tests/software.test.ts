@@ -14,11 +14,12 @@ const driveFiles = new Map<string, Buffer>();
 const driveRequests: string[] = [];
 let hostileDriveSession = false;
 let driveDownloadFailure: number | 'network' | undefined;
+let driveTransportError: Error | undefined;
 const driveFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   driveRequests.push(url.href);
   expect(url.origin).toBe('https://www.googleapis.com');
-  expect(init?.redirect).toBe('error');
+  expect(init?.redirect).toBe('manual');
   expect(new Headers(init?.headers).get('authorization')).toBe(
     'Bearer fixture-access',
   );
@@ -41,11 +42,13 @@ const driveFetch: typeof fetch = async (input, init) => {
     driveFiles.delete('drive-fixture');
     return new Response(null, { status: 204 });
   }
+  if (driveTransportError) throw driveTransportError;
   if (driveDownloadFailure === 'network')
     throw new Error('private transport detail');
   if (driveDownloadFailure)
     return new Response('private Google response', {
       status: driveDownloadFailure,
+      headers: { location: 'https://evil.example/private?token=private' },
     });
   const bytes = driveFiles.get('drive-fixture');
   return bytes
@@ -197,6 +200,7 @@ beforeEach(async () => {
   driveRequests.length = 0;
   hostileDriveSession = false;
   driveDownloadFailure = undefined;
+  driveTransportError = undefined;
   await database.db
     .delete(schema.accounts)
     .where(eq(schema.accounts.providerId, 'google'));
@@ -366,6 +370,7 @@ it.each([
   [404, 'HTTP 404'],
   [429, 'HTTP 429'],
   [503, 'unexpected HTTP'],
+  [302, 'redirect'],
   ['network', 'outbound HTTPS'],
 ] as const)(
   'rejects previews before queuing when Drive fails with %s',
@@ -374,6 +379,63 @@ it.each([
     expect(uploaded.statusCode, uploaded.body).toBe(200);
     await packagePoll();
     driveDownloadFailure = failure;
+    const requestCount = driveRequests.length;
+    const response = await preview(
+      [sites[0]!],
+      uploadedCommand(uploaded.json().id),
+    );
+    expect(response.statusCode, response.body).toBe(409);
+    expect(response.json().error.message).toContain(message);
+    expect(driveRequests).toHaveLength(requestCount + 1);
+    expect(response.body).not.toMatch(
+      /private|fixture-access|fixture-refresh|google-original|drive-fixture/,
+    );
+    expect(
+      await database.db.select().from(schema.softwareOperations),
+    ).toHaveLength(0);
+  },
+);
+it.each([
+  [new DOMException('private timeout', 'TimeoutError'), 'timed out'],
+  [
+    new TypeError('private fetch failure', { cause: { code: 'ENOTFOUND' } }),
+    'DNS inside',
+  ],
+  [
+    new TypeError('private fetch failure', {
+      cause: { code: 'CERT_HAS_EXPIRED' },
+    }),
+    'TLS connection',
+  ],
+  [
+    new TypeError('private fetch failure', { cause: { code: 'ECONNRESET' } }),
+    'reset or unreachable',
+  ],
+  [
+    new TypeError('private fetch failure', {
+      cause: new AggregateError([
+        { code: 'ETIMEDOUT' },
+        { code: 'UND_ERR_CONNECT_TIMEOUT' },
+      ]),
+    }),
+    'timed out',
+  ],
+  [
+    new TypeError('private fetch failure', {
+      cause: new AggregateError([
+        { code: 'ETIMEDOUT' },
+        { code: 'ENETUNREACH' },
+      ]),
+    }),
+    'outbound HTTPS',
+  ],
+] as const)(
+  'classifies transport failure %s without leaking raw errors',
+  async (failure, message) => {
+    const uploaded = await uploadDrive();
+    expect(uploaded.statusCode, uploaded.body).toBe(200);
+    await packagePoll();
+    driveTransportError = failure;
     const response = await preview(
       [sites[0]!],
       uploadedCommand(uploaded.json().id),

@@ -19,6 +19,14 @@ const driveFailures = {
     'SitePulse could not obtain a valid Google access token for the uploader. Reconnect Google Drive. If this persists, check the API OAuth configuration and token encryption secret.',
   network:
     'The SitePulse API could not reach Google Drive or the request timed out. Check the API server’s outbound HTTPS, DNS and firewall.',
+  timeout:
+    'The SitePulse API request to Google Drive timed out. Check API container connectivity and latency to Google, then retry preview.',
+  dns: 'The SitePulse API could not resolve Google Drive’s hostname. Check DNS inside the API container.',
+  tls: 'The SitePulse API could not verify Google Drive’s TLS connection. Check the server clock, trusted CA certificates and any HTTPS proxy.',
+  connection:
+    'The SitePulse API connection to Google Drive was refused, reset or unreachable. Check API container routing, outbound HTTPS and any proxy or firewall.',
+  redirect:
+    'Google Drive returned a redirect that SitePulse blocked for package security. This is not a DNS or connection failure. Check API logs for the HTTP status; SitePulse did not follow the redirect.',
   unauthorized:
     'Google Drive rejected the uploader’s access token (HTTP 401). Reconnect the original Google account.',
   forbidden:
@@ -47,6 +55,65 @@ const unavailable = (
   reason: keyof typeof driveFailures = 'unavailable',
   status?: number,
 ) => new DriveStorageError(reason, status);
+
+// Inspect only known error names/codes; never expose transport messages, URLs,
+// socket details or arbitrary provider-controlled values. Bound nested causes.
+function transportFailure(error: unknown, depth = 0): DriveStorageError {
+  if (!error || typeof error !== 'object' || depth > 3)
+    return unavailable('network');
+  const value = error as {
+    name?: unknown;
+    code?: unknown;
+    cause?: unknown;
+    errors?: unknown;
+  };
+  if (
+    value.name === 'TimeoutError' ||
+    value.name === 'AbortError' ||
+    [
+      'ETIMEDOUT',
+      'UND_ERR_CONNECT_TIMEOUT',
+      'UND_ERR_HEADERS_TIMEOUT',
+      'UND_ERR_BODY_TIMEOUT',
+    ].includes(String(value.code))
+  )
+    return unavailable('timeout');
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(String(value.code)))
+    return unavailable('dns');
+  if (
+    [
+      'CERT_HAS_EXPIRED',
+      'DEPTH_ZERO_SELF_SIGNED_CERT',
+      'SELF_SIGNED_CERT_IN_CHAIN',
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+      'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+      'ERR_TLS_CERT_ALTNAME_INVALID',
+    ].includes(String(value.code))
+  )
+    return unavailable('tls');
+  if (
+    [
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ENETUNREACH',
+      'EHOSTUNREACH',
+      'UND_ERR_SOCKET',
+    ].includes(String(value.code))
+  )
+    return unavailable('connection');
+  const nested = [
+    value.cause,
+    ...(Array.isArray(value.errors) ? value.errors.slice(0, 8) : []),
+  ].map((cause) => transportFailure(cause, depth + 1));
+  // A mixed AggregateError is inconclusive; do not pick a misleading cause.
+  const known = nested.filter((failure) => failure.reason !== 'network');
+  if (
+    known.length &&
+    known.every((failure) => failure.reason === known[0]!.reason)
+  )
+    return known[0]!;
+  return unavailable('network');
+}
 type Attachment = typeof schema.softwareAttachments.$inferSelect;
 type User = { id: string; emailVerified: boolean };
 
@@ -109,16 +176,22 @@ export function createDriveStorage(
   ) {
     // Only fixed Google endpoints; never accept a package URL, follow redirects,
     // or send a bearer credential to a host supplied by a browser/Drive file.
+    let response: Response;
     try {
-      return await transport(url, {
+      response = await transport(url, {
         ...init,
-        redirect: 'error',
+        redirect: 'manual',
         signal: AbortSignal.timeout(10_000),
         headers: { ...init.headers, Authorization: `Bearer ${accessToken}` },
       });
-    } catch {
-      throw unavailable('network');
+    } catch (error) {
+      throw transportFailure(error);
     }
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      await response.body?.cancel().catch(() => {});
+      throw unavailable('redirect', response.status);
+    }
+    return response;
   }
   async function bounded(response: Response, limit: number) {
     if (!response.ok) {
@@ -153,6 +226,8 @@ export function createDriveStorage(
       return Buffer.concat(chunks);
     } catch (error) {
       if (error instanceof DriveStorageError) throw error;
+      const failure = transportFailure(error);
+      if (failure.reason !== 'network') throw failure;
       throw unavailable('stream');
     } finally {
       await reader.cancel().catch(() => {});

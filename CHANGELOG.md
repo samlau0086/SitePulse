@@ -2,6 +2,7 @@
 
 ## Unreleased — Drive package preview diagnostics
 
+- Distinguish blocked redirects from transport failures without following them. Classify known timeout, DNS, TLS and connection errors from bounded nested causes, retaining a generic message for unknown/mixed failures and never exposing raw transport details.
 - Read and verify Google Drive package size and SHA-256 during installation preview, rejecting unavailable or changed files before confirmation and queueing. Recheck the original file during Connector delivery.
 - Return actionable, sanitized configuration, account, token, network, HTTP and stream failure messages during preview. Record only failure categories, provider HTTP status and request IDs for preview/download diagnostics; keep the existing Connector protocol.
 

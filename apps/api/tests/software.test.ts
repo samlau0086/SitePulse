@@ -388,6 +388,15 @@ it('binds Drive storage to the original account and current owner authority', as
       ),
     );
   expect((await download()).statusCode).toBe(200);
+  // Clear the restored original credentials before connecting a different
+  // account: adding another account must not revoke a still-valid original.
+  const disconnected = await app.inject({
+    method: 'DELETE',
+    url: '/api/v1/me/google-drive',
+    headers: { origin, cookie: owner.cookie },
+  });
+  expect(disconnected.statusCode, disconnected.body).toBe(200);
+  expect((await download()).statusCode).toBe(409);
   await linkDrive('other-account');
   expect((await download()).statusCode).toBe(409);
   await database.db

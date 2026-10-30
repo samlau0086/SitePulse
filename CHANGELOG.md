@@ -32,6 +32,7 @@
 - Allow users to disconnect Google Drive without re-authenticating in a second Better Auth unlink flow; OAuth credentials are cleared while Drive originals, attachment metadata and the provider identity remain.
 - Preserve the Google provider identity when disconnecting by clearing credentials instead of deleting the account row, so reconnecting the same account restores existing attachment bindings; package retrieval guidance now also calls out keeping the same OAuth app configured.
 - Keep Drive account rows usable after reconnecting an account whose historical scope was cleared by an earlier disconnect; Better Auth refreshes the OAuth tokens but does not always rewrite the stored scope.
+- Correct the Drive reconnect integration fixture to disconnect the restored original account before testing another account; adding an account alone does not invalidate existing credentials.
 - Add migration 0017 for Drive references and migration 0018 for the Drive storage default, paired OAuth configuration and deployment wiring. Unconfigured servers retain legacy reads but cannot create uploads. Deletion/disconnection retains Drive originals; existing bytes are not migrated. See `docs/GOOGLE_DRIVE_STORAGE.md` for setup and acceptance limits.
 
 ## Unreleased — Persistent software queue feedback

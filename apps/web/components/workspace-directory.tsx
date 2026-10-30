@@ -14,6 +14,7 @@ import { api } from '../lib/api';
 import { PlanUsage } from './plan-usage';
 import { Icon } from './icon';
 import { Timestamp, TimeZoneNote } from './user-preferences';
+import { PerformanceScore } from './performance-panel';
 export { Timestamp } from './user-preferences';
 
 type DirectoryProps = {
@@ -134,6 +135,39 @@ export function SecurityHealth({ site }: { site: DirectorySite }) {
       <span className="table-subtitle">
         Assessed: <Timestamp compact value={health?.checkedAt ?? null} />
       </span>
+    </div>
+  );
+}
+export function PerformanceHealth({ site }: { site: DirectorySite }) {
+  return (
+    <div className="site-health-summary">
+      {!site.performance?.enabled ? (
+        <span>Not enabled</span>
+      ) : (
+        site.performance.devices.map((device) => (
+          <div key={device.strategy}>
+            <span className="table-subtitle">
+              {device.strategy === 'mobile' ? 'Mobile' : 'Desktop'} · Last
+              successful score
+            </span>
+            <PerformanceScore device={device} />
+            <span className="table-subtitle">
+              {device.state === 'ready'
+                ? 'Current'
+                : device.state === 'error'
+                  ? 'Latest attempt failed'
+                  : device.state === 'stale'
+                    ? 'Out of date'
+                    : device.state === 'pending'
+                      ? 'Not checked'
+                      : device.state === 'running'
+                        ? 'Running'
+                        : 'Queued'}{' '}
+              · <Timestamp compact value={device.report?.analyzedAt ?? null} />
+            </span>
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -290,6 +324,12 @@ export function SiteDirectory({
                     <span className="table-subtitle">Security</span>
                     <SecurityHealth site={site} />
                   </div>
+                  <div>
+                    <Link href={`/app/sites/${site.id}?view=performance`}>
+                      Performance
+                    </Link>
+                    <PerformanceHealth site={site} />
+                  </div>
                 </div>
                 <dl className="site-card-facts">
                   <div>
@@ -332,6 +372,7 @@ export function SiteDirectory({
               <tr>
                 <th scope="col">Site / workspace</th>
                 <th scope="col">Website</th>
+                <th scope="col">Performance</th>
                 <th scope="col">Security</th>
                 <th scope="col">Connector</th>
                 <th scope="col">Quick access</th>
@@ -364,6 +405,18 @@ export function SiteDirectory({
                       <WebsiteHealth site={site} />
                       <span className="health-detail-action">
                         View monitoring <Icon name="arrow" />
+                      </span>
+                    </Link>
+                  </td>
+                  <td data-label="Performance">
+                    <Link
+                      className="health-detail-link"
+                      aria-label={`Performance for ${site.name}`}
+                      href={`/app/sites/${site.id}?view=performance`}
+                    >
+                      <PerformanceHealth site={site} />
+                      <span className="health-detail-action">
+                        View performance <Icon name="arrow" />
                       </span>
                     </Link>
                   </td>

@@ -89,6 +89,8 @@ Generate `NOTIFICATION_ENCRYPTION_KEY` independently with `node -e "console.log(
 
 Add these **Environment variables** in the same environment:
 
+For performance monitoring, add the Environment Secret `PAGESPEED_API_KEY` and Variables `PERFORMANCE_ENABLED=true`, `PERFORMANCE_MAX_DAILY_REQUESTS=500` (optional budget override), and `PERFORMANCE_INTERVAL_SECONDS=86400` (optional automatic interval; 3600–2592000 seconds, default 24 hours). Default is disabled; no customer Google authorization is needed. Redeploy to apply changes. Follow [PageSpeed setup](PERFORMANCE.md), including migration 0019 and controlled post-deployment acceptance.
+
 Optional `PLATFORM_ADMIN_USER_IDS`: comma-separated verified Better Auth user UUIDs, empty by default (no platform administrators). Log in, open `/api/v1/auth/session` and copy `user.id`; add the UUID in this GitHub Environment and redeploy. This enables `/app/admin` workspace entitlement administration only. Organization roles do not grant platform authority. Removing a UUID and redeploying revokes its platform permission. See README and [ENTITLEMENTS.md](ENTITLEMENTS.md) for preview, audit and concurrency behavior. No manual VPS file editing is needed.
 
 | Variable                       | Value                                                                                                                       |

@@ -1,5 +1,9 @@
 # SitePulse
 
+已支持通过平台 API Key 直连 Google PageSpeed Insights，显示移动端/桌面端 Lighthouse 评分、关键指标和历史。无需客户安装 Site Kit 或授权 Google。默认关闭；管理员需配置 `PAGESPEED_API_KEY`、`PERFORMANCE_ENABLED=true`，备份后通过正常部署流程应用迁移 `0019`。每日自动检查、15 分钟手动刷新冷却及平台总配额生效；详情见 [Performance 配置与限制](docs/PERFORMANCE.md)。
+
+首次配置请查看 [获取 PAGESPEED_API_KEY](docs/PERFORMANCE.md#获取-pagespeed_api_key)，包含 Google Cloud 项目/API 启用、密钥创建与限制，以及 GitHub Environment Secret/Variables 填写位置。自动检查间隔可通过 `PERFORMANCE_INTERVAL_SECONDS` 调整（默认 86400 秒/24 小时，允许 3600–2592000 秒/1 小时至 30 天），修改后重新部署生效。
+
 Recent operations 每页显示 5 条，支持状态筛选（含 Succeeded / Failed / Expired / Cancelled 及未完成状态）、Today / Yesterday 和日历起止日期。按账户保存的时区及操作创建时间筛选，起止日期均包含当天；更改筛选回到第一页，可 Clear filters 重置。范围限于接口已加载的最近 100 条及所有未完成操作，不是完整历史查询；筛选不影响站点操作锁定，无需数据库迁移或 Connector 升级。
 
 ## 用户 Google Drive 附件存储

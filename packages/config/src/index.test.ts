@@ -11,6 +11,32 @@ const valid = {
   BETTER_AUTH_SECRET: 'a'.repeat(48),
 };
 describe('environment validation', () => {
+  it('requires a server API key when performance is enabled and bounds its shared budget', () => {
+    for (const parse of [parseEnvironment, parseWorkerEnvironment]) {
+      expect(parse(valid).PERFORMANCE_ENABLED).toBe(false);
+      expect(parse(valid).PERFORMANCE_INTERVAL_SECONDS).toBe(86400);
+      expect(() => parse({ ...valid, PERFORMANCE_ENABLED: 'true' })).toThrow();
+      expect(
+        parse({
+          ...valid,
+          PERFORMANCE_ENABLED: 'true',
+          PAGESPEED_API_KEY: 'fixture_key_123456789012345',
+        }).PERFORMANCE_ENABLED,
+      ).toBe(true);
+      for (const budget of ['0', '1', '25001', '1.5'])
+        expect(() =>
+          parse({ ...valid, PERFORMANCE_MAX_DAILY_REQUESTS: budget }),
+        ).toThrow();
+      for (const interval of ['3599', '2592001', '1.5'])
+        expect(() =>
+          parse({ ...valid, PERFORMANCE_INTERVAL_SECONDS: interval }),
+        ).toThrow();
+      expect(
+        parse({ ...valid, PERFORMANCE_INTERVAL_SECONDS: '604800' })
+          .PERFORMANCE_INTERVAL_SECONDS,
+      ).toBe(604800);
+    }
+  });
   it('requires paired optional Google Drive OAuth credentials', () => {
     expect(
       parseEnvironment({

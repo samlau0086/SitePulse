@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Google PageSpeed performance
+
+- Document step-by-step Google Cloud API enablement, API key creation/restrictions and GitHub Environment configuration, with Chinese menu guidance and troubleshooting.
+- Make automatic per-device checks configurable with `PERFORMANCE_INTERVAL_SECONDS` (1 hour–30 days, default 24 hours); interval changes recalculate existing schedules after worker restart.
+- Add platform-key PageSpeed Insights lab checks for connected sites on mobile and desktop, directory scores, metrics, bounded suggestions, automatic polling and paginated attempt history. Site Kit and customer Google OAuth are unnecessary.
+- Add daily durable worker jobs, tenant-scoped owner/admin refresh with cooldown, shared rolling request budget, SSRF input validation, lease fencing and retained last-success reports on failure.
+- Default disabled; add validated backend/deployment settings and additive migration 0019. See `docs/PERFORMANCE.md` for configuration, privacy, retention and rollout limits.
+
 ## Unreleased — Synchronize attachment deletion with Google Drive
 
 - Permanently delete the original Drive file through the stored uploader/account binding before deleting attachment metadata. Keep failed deletions retryable, tolerate already-missing files and preserve membership, Origin and pending-operation checks. Legacy database attachments need no Drive access.

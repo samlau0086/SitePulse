@@ -1,5 +1,7 @@
 # Deployment, backups, and rollback
 
+PageSpeed performance is disabled by default. Configure backend-only `PAGESPEED_API_KEY`, `PERFORMANCE_ENABLED=true`, optional `PERFORMANCE_MAX_DAILY_REQUESTS` (default 500), and `PERFORMANCE_INTERVAL_SECONDS` (default 86400, allowed 3600–2592000). GitHub uses a secret for the key and variables for the other settings. Changing the interval takes effect after redeployment and recalculates existing schedules. Back up before migration 0019, deploy API/worker/web together and perform controlled Google acceptance. See [PERFORMANCE.md](PERFORMANCE.md); no Site Kit authorization or Connector update is required.
+
 This repository supplies deployment configuration and an opt-in GitHub Actions VPS workflow. No VPS is contacted until its GitHub environment/SSH settings are configured and a deployment is triggered. Production changes require explicit authorization; the workflow requires a manual production confirmation. See [GitHub Actions VPS setup](GITHUB_ACTIONS_VPS.md).
 
 ## Local containers

@@ -1,5 +1,11 @@
 # SitePulse API
 
+## Page performance
+
+`GET /api/v1/sites/:siteId/performance` returns `{ performance }` with feature/connection availability, manual-refresh eligibility/cooldown, mobile/desktop latest successful reports and the latest 30 attempts within 30 days. A live session and server-checked tenant membership are required; nonmembers/unknown/deleted sites return 404. Reports contain selected Lighthouse lab metrics, not real-user Core Web Vitals.
+
+`POST /api/v1/sites/:siteId/performance/refresh` accepts only `{}` and returns 202 `{ queued: true }`. Requires a trusted Origin and verified owner/admin membership. Both devices queue atomically and audit `performance.refresh_requested`; a queued/running job or 15-minute cooldown returns 409 `PERFORMANCE_BUSY`. Disabled configuration returns 409 `PERFORMANCE_DISABLED`; disconnected/revoked sites return 409 `SITE_NOT_CONNECTED`. The browser cannot choose URLs, API keys or strategies. See [performance operations](PERFORMANCE.md).
+
 ## Personal preferences
 
 `GET /api/v1/auth/session` includes `user.timeZone` (default `UTC`). `PATCH /api/v1/users/me/preferences` accepts strict `{ "timeZone": "America/New_York" }` and returns `{ preferences: { timeZone } }`. A live Better Auth session and trusted mutation Origin are required; no organization membership or verified email is needed to change one's own display preference. The target user always comes from the session. Invalid/unsupported named zones, numeric offsets and additional fields (including user/organization IDs) return 400. Anonymous requests return 401, untrusted Origin returns 403. Values must be recognized named IANA zones (including UTC) on the server. This does not change tenant access, timestamp serialization, worker schedules or notification delivery.

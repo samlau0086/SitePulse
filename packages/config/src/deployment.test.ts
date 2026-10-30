@@ -10,6 +10,38 @@ const valid = {
   BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
 };
 describe('GitHub deployment configuration', () => {
+  it('passes the configurable automatic performance interval to backend configuration', () => {
+    const output = prepareDeploymentConfiguration({
+      ...valid,
+      PERFORMANCE_INTERVAL_SECONDS: '604800',
+    })['.env'];
+    expect(output).toContain("PERFORMANCE_INTERVAL_SECONDS='604800'\n");
+    expect(prepareDeploymentConfiguration(valid)['.env']).toContain(
+      "PERFORMANCE_INTERVAL_SECONDS='86400'\n",
+    );
+    expect(() =>
+      prepareDeploymentConfiguration({
+        ...valid,
+        PERFORMANCE_INTERVAL_SECONDS: '60',
+      }),
+    ).toThrow();
+  });
+  it('transfers validated platform performance configuration privately', () => {
+    const output = prepareDeploymentConfiguration({
+      ...valid,
+      PERFORMANCE_ENABLED: 'true',
+      PAGESPEED_API_KEY: 'fixture_key_123456789012345',
+      PERFORMANCE_MAX_DAILY_REQUESTS: '250',
+    })['.env'];
+    expect(output).toContain("PERFORMANCE_ENABLED='true'\n");
+    expect(output).toContain(
+      "PAGESPEED_API_KEY='fixture_key_123456789012345'\n",
+    );
+    expect(output).toContain("PERFORMANCE_MAX_DAILY_REQUESTS='250'\n");
+    expect(() =>
+      prepareDeploymentConfiguration({ ...valid, PERFORMANCE_ENABLED: 'true' }),
+    ).toThrow();
+  });
   it('transfers paired Drive credentials and rejects dotenv injection', () => {
     const drive = {
       GOOGLE_DRIVE_CLIENT_ID: 'fixture-client',

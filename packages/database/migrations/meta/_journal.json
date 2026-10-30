@@ -134,6 +134,13 @@
       "when": 1793245305296,
       "tag": "0018_flawless_veda",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793373722046,
+      "tag": "0019_charming_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }

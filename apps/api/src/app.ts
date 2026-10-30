@@ -617,7 +617,7 @@ export async function buildApp({
       return { auditLogs: logs };
     },
   );
-  await registerSiteRoutes(app, { db, requireUser, resolveHost });
+  await registerSiteRoutes(app, { db, env, requireUser, resolveHost });
   const drive = createDriveStorage(db, auth, env, driveFetch);
   await registerDriveRoutes(app, { db, auth, env, drive, requireUser });
   await registerSoftwareRoutes(app, { db, requireUser, drive });

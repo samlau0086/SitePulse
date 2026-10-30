@@ -12,6 +12,7 @@ export function SiteTabs({
 }) {
   const tabs: Array<{ id: string; label: string; icon: IconName }> = [
     { id: 'monitoring', label: 'Monitoring', icon: 'pulse' },
+    { id: 'performance', label: 'Performance', icon: 'pulse' },
     { id: 'software', label: 'Plugins & themes', icon: 'connection' },
     { id: 'security', label: 'Security', icon: 'shield' },
     { id: 'inventory', label: 'Inventory', icon: 'inventory' },

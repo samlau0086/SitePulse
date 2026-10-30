@@ -2862,3 +2862,21 @@ fieldset:disabled .attachment-dropzone {
   height: auto;
   margin-bottom: 16px;
 }
+/* Performance details reuse monitoring cards and product tokens. */
+.performance-metrics {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+}
+.performance-metrics > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 8px;
+}
+.performance-metrics dd {
+  margin: 0;
+  font-weight: 700;
+}

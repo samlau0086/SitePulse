@@ -16,6 +16,8 @@ import {
   updateSite,
 } from '@sitepulse/api-contracts';
 import { canManageOrganization } from '@sitepulse/shared';
+import type { Environment } from '@sitepulse/config';
+import { performanceDevices, readPerformance } from './performance';
 import { buildSecurityReport } from './security-report';
 import { directoryHealth } from './site-health';
 import { HttpError } from './http-error';
@@ -46,10 +48,12 @@ export async function registerSiteRoutes(
     db,
     requireUser,
     resolveHost,
+    env,
   }: {
     db: Database;
     requireUser: (request: FastifyRequest) => Promise<User>;
     resolveHost?: ResolveHost;
+    env: Environment;
   },
 ) {
   const jsonSchema = (input: z.ZodType) => {
@@ -146,6 +150,9 @@ export async function registerSiteRoutes(
     });
   const resetMonitoring = async (tx: Transaction, siteId: string) => {
     await tx
+      .delete(schema.performanceJobs)
+      .where(eq(schema.performanceJobs.siteId, siteId));
+    await tx
       .delete(schema.monitorJobs)
       .where(eq(schema.monitorJobs.siteId, siteId));
     await tx
@@ -183,6 +190,81 @@ export async function registerSiteRoutes(
       .values({ siteId, challengeHash: hashCredential(code), expiresAt });
     return { challenge: code, expiresAt };
   };
+  const performanceAvailable = async (
+    tx: Transaction,
+    site: typeof schema.sites.$inferSelect,
+  ) => {
+    const [credential] = await tx
+      .select({ id: schema.siteCredentials.id })
+      .from(schema.siteCredentials)
+      .where(
+        and(
+          eq(schema.siteCredentials.siteId, site.id),
+          sql`${schema.siteCredentials.revokedAt} is null`,
+        ),
+      );
+    return ['active', 'degraded'].includes(site.status) && !!credential;
+  };
+  app.get('/api/v1/sites/:siteId/performance', options(siteParams), (request) =>
+    withSite(request, false, async (tx, site) => ({
+      performance: await readPerformance(
+        tx,
+        site.id,
+        env.PERFORMANCE_ENABLED,
+        await performanceAvailable(tx, site),
+      ),
+    })),
+  );
+  app.post(
+    '/api/v1/sites/:siteId/performance/refresh',
+    options(siteParams, emptyRequest),
+    async (request, reply) => {
+      emptyRequest.parse(request.body);
+      const result = await withSite(request, true, async (tx, site, user) => {
+        if (!env.PERFORMANCE_ENABLED)
+          throw new HttpError(
+            409,
+            'PERFORMANCE_DISABLED',
+            'The platform administrator must enable performance monitoring and configure a Google API key.',
+          );
+        const available = await performanceAvailable(tx, site);
+        if (!available)
+          throw new HttpError(
+            409,
+            'SITE_NOT_CONNECTED',
+            'Connect this site before requesting performance checks.',
+          );
+        const current = await readPerformance(tx, site.id, true, available);
+        if (!current.canRefresh)
+          throw new HttpError(
+            409,
+            'PERFORMANCE_BUSY',
+            'A check is queued/running or the 15-minute refresh cooldown has not elapsed.',
+          );
+        for (const strategy of ['mobile', 'desktop'] as const) {
+          await tx
+            .insert(schema.performanceJobs)
+            .values({ siteId: site.id, strategy, requestedAt: sql`now()` })
+            .onConflictDoUpdate({
+              target: [
+                schema.performanceJobs.siteId,
+                schema.performanceJobs.strategy,
+              ],
+              set: { requestedAt: sql`now()`, nextRunAt: sql`now()` },
+            });
+        }
+        await audit(
+          tx,
+          site,
+          request,
+          'performance.refresh_requested',
+          user.id,
+        );
+        return { queued: true };
+      });
+      return reply.code(202).send(result);
+    },
+  );
   app.get(
     '/api/v1/organizations/:organizationId/sites',
     options(organizationParams),
@@ -225,9 +307,30 @@ export async function registerSiteRoutes(
             ),
           )
           .limit(1000);
+        const performance = await tx
+          .select()
+          .from(schema.performanceJobs)
+          .innerJoin(
+            schema.sites,
+            eq(schema.sites.id, schema.performanceJobs.siteId),
+          )
+          .where(
+            and(
+              eq(schema.sites.organizationId, organizationId),
+              sql`${schema.sites.deletedAt} is null`,
+            ),
+          );
         return {
           sites: rows.map(({ site, inventory, assessment, uptime }) => ({
             ...site,
+            performance: {
+              enabled: env.PERFORMANCE_ENABLED,
+              devices: performanceDevices(
+                performance
+                  .filter((p) => p.performance_jobs.siteId === site.id)
+                  .map((p) => p.performance_jobs),
+              ),
+            },
             health: directoryHealth(
               site,
               inventory,

@@ -10,10 +10,12 @@ import type {
   MonitorCheck,
   Incident,
   SiteSecurityReport,
+  SitePerformance,
 } from '@sitepulse/api-contracts';
 import { serverApi } from '../../../../lib/server-api';
 import { SiteControls } from '../../../../components/sites-panel';
 import { MonitoringPanel } from '../../../../components/monitoring-panel';
+import { PerformancePanel } from '../../../../components/performance-panel';
 import { SecurityPanel } from '../../../../components/security-panel';
 import { SiteTabs } from '../../../../components/site-tabs';
 import { Timestamp } from '../../../../components/user-preferences';
@@ -29,6 +31,7 @@ export default async function SitePage({
   const requestedView = (await searchParams).view;
   const view =
     requestedView === 'inventory' ||
+    requestedView === 'performance' ||
     requestedView === 'security' ||
     requestedView === 'connection'
       ? requestedView
@@ -57,6 +60,14 @@ export default async function SitePage({
     serverApi<{ checks: MonitorCheck[] }>(`/sites/${siteId}/checks`),
     serverApi<{ incidents: Incident[] }>(`/sites/${siteId}/incidents`),
   ]);
+  const performance =
+    view === 'performance'
+      ? (
+          await serverApi<{ performance: SitePerformance }>(
+            `/sites/${siteId}/performance`,
+          )
+        ).performance
+      : null;
   return (
     <main>
       <div className="page-heading">
@@ -92,6 +103,13 @@ export default async function SitePage({
           checks={checks}
           incidents={incidents}
           https={site.canonicalUrl.startsWith('https://')}
+          canManage={organization.role !== 'member' && user.emailVerified}
+        />
+      )}
+      {performance && (
+        <PerformancePanel
+          siteId={siteId}
+          initial={performance}
           canManage={organization.role !== 'member' && user.emailVerified}
         />
       )}

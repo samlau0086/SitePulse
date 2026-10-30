@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { validLogoUrl } from '@sitepulse/shared/email';
 export { validLogoUrl } from '@sitepulse/shared/email';
 export * from './software';
+export * from './performance';
 
 export const emailBrandInput = z
   .object({
@@ -444,7 +445,13 @@ export type SiteHealthSummary = {
     localIndicators: number;
   };
 };
-export type DirectorySite = Site & { health?: SiteHealthSummary };
+export type DirectorySite = Site & {
+  health?: SiteHealthSummary;
+  performance?: Pick<
+    import('./performance').SitePerformance,
+    'enabled' | 'devices'
+  >;
+};
 export type ApiError = {
   error: { code: string; message: string; requestId: string };
 };

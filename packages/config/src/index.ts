@@ -16,6 +16,31 @@ const postgresUrl = z
     'Expected a PostgreSQL URL',
   );
 export const databaseEnvironment = z.object({ DATABASE_URL: postgresUrl });
+const performanceEnvironment = {
+  PERFORMANCE_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  PAGESPEED_API_KEY: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{20,200}$/)
+      .optional(),
+  ),
+  PERFORMANCE_MAX_DAILY_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(2)
+    .max(25000)
+    .default(500),
+  PERFORMANCE_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(3600)
+    .max(2592000)
+    .default(86400),
+};
 const barkEncryptionKey = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z
@@ -24,6 +49,7 @@ const barkEncryptionKey = z.preprocess(
     .optional(),
 );
 export const workerEnvironment = databaseEnvironment.extend({
+  ...performanceEnvironment,
   NOTIFICATION_ENCRYPTION_KEY: barkEncryptionKey,
   BARK_ENCRYPTION_KEY: barkEncryptionKey,
   NODE_ENV: z
@@ -73,6 +99,10 @@ export function parseWorkerEnvironment(
 ) {
   const result = workerEnvironment.safeParse(input);
   if (!result.success) throw new Error('Invalid worker environment variables');
+  if (result.data.PERFORMANCE_ENABLED && !result.data.PAGESPEED_API_KEY)
+    throw new Error(
+      'PAGESPEED_API_KEY is required when performance monitoring is enabled',
+    );
   if (
     result.data.AUTH_MAIL_TRANSPORT === 'resend' &&
     !result.data.RESEND_API_KEY
@@ -93,6 +123,7 @@ export function parseWorkerEnvironment(
   return result.data;
 }
 const schema = databaseEnvironment.extend({
+  ...performanceEnvironment,
   GOOGLE_DRIVE_CLIENT_ID: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z.string().min(1).optional(),
@@ -159,6 +190,10 @@ export function parseEnvironment(input: Record<string, string | undefined>) {
   )
     throw new Error(
       'Configure both GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET',
+    );
+  if (result.data.PERFORMANCE_ENABLED && !result.data.PAGESPEED_API_KEY)
+    throw new Error(
+      'PAGESPEED_API_KEY is required when performance monitoring is enabled',
     );
   if (
     result.data.NODE_ENV === 'production' &&

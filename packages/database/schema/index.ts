@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+export { performanceJobs, performanceChecks } from './performance';
 import {
   boolean,
   check,
